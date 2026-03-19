@@ -1,0 +1,86 @@
+#usda 1.0
+(
+    defaultPrim = "World"
+    metersPerUnit = 1
+    upAxis = "Z"
+)
+
+def Xform "World"
+{
+    def Xform "HopeJrRightArm"
+    {
+        float3 xformOp:rotateXYZ = (180, 0, 0)
+        uniform token[] xformOpOrder = ["xformOp:rotateXYZ"]
+
+        def Xform "Visuals"
+        {
+            def Xform "Chest"
+            {
+                def Xform "chest" (references = @./assets/usd/chest.usd@) {}
+            }
+
+            def Xform "ShoulderSupport"
+            {
+                def Xform "shoulder_support_bottom" (references = @./assets/usd/shoulder_support_bottom.usd@) {}
+                def Xform "shoulder_support_top" (references = @./assets/usd/shoulder_support_top.usd@) {}
+                def Xform "pitch_holder" (references = @./assets/usd/pitch_holder.usd@) {}
+            }
+
+            def Xform "ShoulderPitch"
+            {
+                def Xform "shoulder_pitch_servo_s85" (references = @./assets/usd/shoulder_pitch_servo_s85.usd@) {}
+                def Xform "pitch_roller_clip_bottom" (references = @./assets/usd/pitch_roller_clip_bottom.usd@) {}
+                def Xform "pitch_roller_clip_left_side" (references = @./assets/usd/pitch_roller_clip_left_side.usd@) {}
+                def Xform "pitch_roller_clip_right_side" (references = @./assets/usd/pitch_roller_clip_right_side.usd@) {}
+                def Xform "pitch_roller_clip_up" (references = @./assets/usd/pitch_roller_clip_up.usd@) {}
+            }
+
+            def Xform "ShoulderYaw"
+            {
+                def Xform "shoulder_yaw_servo_sts3215" (references = @./assets/usd/shoulder_yaw_servo_sts3215.usd@) {}
+                def Xform "shoulder_yaw" (references = @./assets/usd/shoulder_yaw.usd@) {}
+            }
+
+            def Xform "UpperArm"
+            {
+                def Xform "humreal_up_fixed" (references = @./assets/usd/humreal_up_fixed.usd@) {}
+                def Xform "humreal_down" (references = @./assets/usd/humreal_down.usd@) {}
+            }
+
+            def Xform "Elbow"
+            {
+                def Xform "elbow_servo_sts3215" (references = @./assets/usd/elbow_servo_sts3215.usd@) {}
+                def Xform "upper_elbow_roll_servo_sts3215" (references = @./assets/usd/upper_elbow_roll_servo_sts3215.usd@) {}
+                def Xform "elbow_up" (references = @./assets/usd/elbow_up.usd@) {}
+                def Xform "elbow_down" (references = @./assets/usd/elbow_down.usd@) {}
+                def Xform "lower_elbow_inner" (references = @./assets/usd/lower_elbow_inner.usd@) {}
+                def Xform "lower_elbow_outer" (references = @./assets/usd/lower_elbow_outer.usd@) {}
+                def Xform "lower_elbow_side_l" (references = @./assets/usd/lower_elbow_side_l.usd@) {}
+                def Xform "lower_elbow_side_r" (references = @./assets/usd/lower_elbow_side_r.usd@) {}
+                def Xform "lower_elbow_roll_servo_sts3215" (references = @./assets/usd/lower_elbow_roll_servo_sts3215.usd@) {}
+            }
+
+            def Xform "Forearm"
+            {
+                def Xform "forearm_front" (references = @./assets/usd/forearm_front.usd@) {}
+                def Xform "forearm_back" (references = @./assets/usd/forearm_back.usd@) {}
+                def Xform "forearm_to_wrist_servo_sts3215" (references = @./assets/usd/forearm_to_wrist_servo_sts3215.usd@) {}
+            }
+
+            def Xform "Wrist"
+            {
+                def Xform "wrist_servo_sts3215" (references = @./assets/usd/wrist_servo_sts3215.usd@) {}
+                def Xform "wrist_yaw_pitch" (references = @./assets/usd/wrist_yaw_pitch.usd@) {}
+            }
+
+            def Xform "Hand"
+            {
+                def Xform "palm_base" (references = @./assets/usd/palm_base.usd@) {}
+                def Xform "thumb_servo_sts3215" (references = @./assets/usd/thumb_servo_sts3215.usd@) {}
+                def Xform "thumb" (references = @./assets/usd/thumb.usd@) {}
+                def Xform "index_servo_sts3215" (references = @./assets/usd/index_servo_sts3215.usd@) {}
+                def Xform "index" (references = @./assets/usd/index.usd@) {}
+            }
+        }
+    }
+}
