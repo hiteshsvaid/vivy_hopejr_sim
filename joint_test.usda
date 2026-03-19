@@ -1,0 +1,103 @@
+#usda 1.0
+(
+    defaultPrim = "World"
+    metersPerUnit = 1
+    upAxis = "Z"
+)
+
+def Xform "World"
+{
+    def PhysicsScene "PhysicsScene"
+    {
+        float3 physics:gravityDirection = (0, 0, -1)
+        float physics:gravityMagnitude = 9.81
+    }
+
+    def Xform "JointTest" (
+        prepend apiSchemas = ["PhysicsArticulationRootAPI"]
+    )
+    {
+        def Xform "ChestBody" (
+            prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]
+        )
+        {
+            float physics:mass = 1
+
+            def Cube "Collider" (
+                prepend apiSchemas = ["PhysicsCollisionAPI"]
+            )
+            {
+                token visibility = "invisible"
+                double size = 1
+                float3 xformOp:scale = (0.13014, 0.2, 0.14951)
+                float3 xformOp:translate = (0, 0.100275, -0.106247)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+            }
+        }
+
+        def Xform "ChestVisual" (
+            references = @./assets/usd/chest.usd@
+        )
+        {
+            float3 xformOp:rotateXYZ = (180, 0, 0)
+            float3 xformOp:scale = (0.001, 0.001, 0.001)
+            uniform token[] xformOpOrder = ["xformOp:rotateXYZ", "xformOp:scale"]
+        }
+
+        def Xform "ShoulderPitchChild" (
+            prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]
+        )
+        {
+            float physics:mass = 0.5
+            float3 xformOp:translate = (0.22, 0, 0.24)
+            uniform token[] xformOpOrder = ["xformOp:translate"]
+
+            def Cube "Visual"
+            {
+                color3f[] primvars:displayColor = [(0.9, 0.55, 0.2)]
+                double size = 0.14
+                float3 xformOp:scale = (0.7, 0.7, 1.8)
+                float3 xformOp:translate = (0.08, 0, 0)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+            }
+
+            def Cube "Collider" (
+                prepend apiSchemas = ["PhysicsCollisionAPI"]
+            )
+            {
+                token visibility = "invisible"
+                double size = 0.14
+                float3 xformOp:scale = (0.7, 0.7, 1.8)
+                float3 xformOp:translate = (0.08, 0, 0)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+            }
+        }
+
+        def PhysicsFixedJoint "world_to_chest"
+        {
+            rel physics:body1 = </World/JointTest/ChestBody>
+            point3f physics:localPos0 = (0, 0.100275, -0.106247)
+            point3f physics:localPos1 = (0, 0.100275, -0.106247)
+            quatf physics:localRot0 = (1, 0, 0, 0)
+            quatf physics:localRot1 = (1, 0, 0, 0)
+        }
+
+        def PhysicsRevoluteJoint "right_shoulder_pitch" (
+            prepend apiSchemas = ["PhysicsDriveAPI:angular"]
+        )
+        {
+            uniform token axis = "Y"
+            float drive:angular:physics:damping = 5
+            float drive:angular:physics:stiffness = 20
+            float drive:angular:physics:targetPosition = 0
+            float physics:lowerLimit = -60
+            float physics:upperLimit = 60
+            rel physics:body0 = </World/JointTest/ChestBody>
+            rel physics:body1 = </World/JointTest/ShoulderPitchChild>
+            point3f physics:localPos0 = (0.06507, 0.000275, -0.031492)
+            point3f physics:localPos1 = (0, 0, 0)
+            quatf physics:localRot0 = (1, 0, 0, 0)
+            quatf physics:localRot1 = (1, 0, 0, 0)
+        }
+    }
+}
