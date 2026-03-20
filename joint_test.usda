@@ -54,8 +54,14 @@ def Xform "World"
             }
         }
 
-        def Xform "RightShoulderSupportBody"
+        def Xform "RightShoulderSupportBody" (
+            prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]
+        )
         {
+            float physics:mass = 0.5
+            float3 xformOp:translate = (0, 0, 0)
+            uniform token[] xformOpOrder = ["xformOp:translate"]
+
             def Xform "Visuals"
             {
                 float3 xformOp:rotateXYZ = (180, 0, 0)
@@ -86,6 +92,20 @@ def Xform "World"
                 {
                 }
             }
+
+            def Xform "Colliders"
+            {
+                def Cube "RightShoulderSupport" (
+                    prepend apiSchemas = ["PhysicsCollisionAPI"]
+                )
+                {
+                    token visibility = "invisible"
+                    double size = 0.16
+                    float3 xformOp:scale = (0.7, 0.5, 1.0)
+                    float3 xformOp:translate = (0.055, 0, 0.02)
+                    uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+                }
+            }
         }
 
         def Xform "ShoulderPitchChildBody" (
@@ -93,7 +113,7 @@ def Xform "World"
         )
         {
             float physics:mass = 0.5
-            float3 xformOp:translate = (0.22, 0, 0.24)
+            float3 xformOp:translate = (0, 0, 0)
             uniform token[] xformOpOrder = ["xformOp:translate"]
 
             def Xform "Visuals"
@@ -184,6 +204,16 @@ def Xform "World"
             quatf physics:localRot1 = (1, 0, 0, 0)
         }
 
+        def PhysicsFixedJoint "right_shoulder_support_fixed"
+        {
+            rel physics:body0 = </World/JointTest/ChestBody>
+            rel physics:body1 = </World/JointTest/RightShoulderSupportBody>
+            point3f physics:localPos0 = (0, 0, 0)
+            point3f physics:localPos1 = (0, 0, 0)
+            quatf physics:localRot0 = (1, 0, 0, 0)
+            quatf physics:localRot1 = (1, 0, 0, 0)
+        }
+
         def PhysicsRevoluteJoint "right_shoulder_pitch" (
             prepend apiSchemas = ["PhysicsDriveAPI:angular"]
         )
@@ -194,7 +224,7 @@ def Xform "World"
             float drive:angular:physics:targetPosition = 0
             float physics:lowerLimit = -60
             float physics:upperLimit = 60
-            rel physics:body0 = </World/JointTest/ChestBody>
+            rel physics:body0 = </World/JointTest/RightShoulderSupportBody>
             rel physics:body1 = </World/JointTest/ShoulderPitchChildBody>
             point3f physics:localPos0 = (0.06507, 0.000275, -0.031492)
             point3f physics:localPos1 = (0, 0, 0)
