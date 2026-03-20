@@ -25,6 +25,15 @@ VISUAL_ONLY_PARTS = [
     'shoulder_yaw',
     'humreal_up_fixed',
     'humreal_down',
+    'elbow_servo_sts3215',
+    'upper_elbow_roll_servo_sts3215',
+    'elbow_up',
+    'elbow_down',
+    'lower_elbow_inner',
+    'lower_elbow_outer',
+    'lower_elbow_side_l',
+    'lower_elbow_side_r',
+    'lower_elbow_roll_servo_sts3215',
 ]
 
 
