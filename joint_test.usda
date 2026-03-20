@@ -7,8 +7,8 @@
                 double radius = 5
             }
             dictionary Perspective = {
-                double3 position = (-0.022317360506940036, -0.228835689838174, 0.34777178766207284)
-                double3 target = (-0.05850520215383369, -0.09915861127234074, -0.1619222951798296)
+                double3 position = (0.005740349362720394, -0.402390188187705, -0.2870692090831133)
+                double3 target = (0.06427107441412987, -0.11833986477775288, -0.30497070430642653)
             }
             dictionary Right = {
                 double3 position = (0, -5, 0)
@@ -284,6 +284,12 @@ def Xform "World"
                     )
                     {
                     }
+
+                    def Xform "upper_elbow_roll_servo_sts3215" (
+                        references = @./assets/usd/upper_elbow_roll_servo_sts3215_visual.usd@
+                    )
+                    {
+                    }
                 }
             }
 
@@ -334,31 +340,22 @@ def Xform "World"
                 float3 xformOp:scale = (0.001, 0.001, 0.001)
                 uniform token[] xformOpOrder = ["xformOp:rotateXYZ", "xformOp:scale"]
 
-                def Xform "UpperElbow"
+                def Xform "elbow_servo_sts3215" (
+                    references = @./assets/usd/elbow_servo_sts3215_visual.usd@
+                )
                 {
-                    def Xform "elbow_servo_sts3215" (
-                        references = @./assets/usd/elbow_servo_sts3215_visual.usd@
-                    )
-                    {
-                    }
+                }
 
-                    def Xform "upper_elbow_roll_servo_sts3215" (
-                        references = @./assets/usd/upper_elbow_roll_servo_sts3215_visual.usd@
-                    )
-                    {
-                    }
+                def Xform "elbow_up" (
+                    references = @./assets/usd/elbow_up_visual.usd@
+                )
+                {
+                }
 
-                    def Xform "elbow_up" (
-                        references = @./assets/usd/elbow_up_visual.usd@
-                    )
-                    {
-                    }
-
-                    def Xform "elbow_down" (
-                        references = @./assets/usd/elbow_down_visual.usd@
-                    )
-                    {
-                    }
+                def Xform "elbow_down" (
+                    references = @./assets/usd/elbow_down_visual.usd@
+                )
+                {
                 }
             }
 
@@ -404,7 +401,10 @@ def Xform "World"
             prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI", "PhysicsFilteredPairsAPI"]
         )
         {
-            rel physics:filteredPairs = </World/JointTest/UpperElbowBody>
+            rel physics:filteredPairs = [
+                </World/JointTest/UpperElbowBody>,
+                </World/JointTest/ForearmBody>,
+            ]
             float physics:mass = 0.3
             rel physics:simulationOwner
             float3 xformOp:translate = (0, 0, 0)
@@ -452,16 +452,19 @@ def Xform "World"
 
             def Xform "Colliders"
             {
-                def Cube "LowerElbow" (
+                def Cylinder "LowerElbow" (
                     prepend apiSchemas = ["PhysicsCollisionAPI"]
                 )
                 {
+                    float3[] extent = [(-0.04220515, -0.04220515, -0.0422102), (0.04220515, 0.04220515, 0.0422102)]
+                    double height = 0.0844204
                     rel physics:simulationOwner
-                    double size = 1
+                    double radius = 0.04220515
                     token visibility = "invisible"
-                    float3 xformOp:scale = (0.0844204, 0.0792237, 0.0844103)
+                    quatf xformOp:orient = (0.35985795, 3.5095262e-17, 0.9330071, 3.9197396e-17)
+                    float3 xformOp:scale = (1, 1, 1)
                     float3 xformOp:translate = (0.0676224, -0.1155546, -0.2765985)
-                    uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+                    uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
                 }
             }
 
@@ -475,6 +478,107 @@ def Xform "World"
                     color3f[] primvars:displayColor = [(0.9, 0.7, 0.2)]
                     double radius = 0.008
                 }
+            }
+        }
+
+        def Xform "ForearmBody" (
+            prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI", "PhysicsFilteredPairsAPI"]
+        )
+        {
+            rel physics:filteredPairs = </World/JointTest/LowerElbowBody>
+            float physics:mass = 0.25
+            rel physics:simulationOwner
+            token visibility = "inherited"
+            float3 xformOp:translate = (0, 0, 0)
+            uniform token[] xformOpOrder = ["xformOp:translate"]
+
+            def Xform "Visuals"
+            {
+                float3 xformOp:rotateXYZ = (180, 0, 0)
+                float3 xformOp:scale = (0.001, 0.001, 0.001)
+                uniform token[] xformOpOrder = ["xformOp:rotateXYZ", "xformOp:scale"]
+
+                def Xform "Forearm"
+                {
+                    def Xform "forearm_front" (
+                        references = @./assets/usd/forearm_front_visual.usd@
+                    )
+                    {
+                    }
+
+                    def Xform "forearm_back" (
+                        references = @./assets/usd/forearm_back_visual.usd@
+                    )
+                    {
+                    }
+
+                    def Xform "forearm_to_wrist_servo_sts3215" (
+                        references = @./assets/usd/forearm_to_wrist_servo_sts3215_visual.usd@
+                    )
+                    {
+                    }
+                }
+            }
+
+            def Xform "Colliders"
+            {
+                def Cube "Forearm" (
+                    prepend apiSchemas = ["PhysicsCollisionAPI"]
+                )
+                {
+                    rel physics:simulationOwner
+                    double size = 1
+                    token visibility = "invisible"
+                    float3 xformOp:scale = (0.1063843, 0.0699985, 0.1069423)
+                    float3 xformOp:translate = (0.1109467, -0.1203424, -0.3233147)
+                    uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+                }
+            }
+
+            def Xform "ForearmGuide"
+            {
+                quatf xformOp:orient = (0.80710804, 0, 0.5904038, 0)
+                float3 xformOp:scale = (1, 1, 1)
+                float3 xformOp:translate = (0.08448427, -0.1203424, -0.29318485)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+
+                def Sphere "Pivot"
+                {
+                    color3f[] primvars:displayColor = [(0.95, 0.75, 0.2)]
+                    double radius = 0.02
+                }
+
+                def Cylinder "Axis"
+                {
+                    double height = 0.28
+                    color3f[] primvars:displayColor = [(1, 0.6, 0.2)]
+                    double radius = 0.006
+                    float3 xformOp:rotateXYZ = (90, 0, 0)
+                    uniform token[] xformOpOrder = ["xformOp:rotateXYZ"]
+                }
+            }
+        }
+
+        def Xform "RightForearmGuide"
+        {
+            quatf xformOp:orient = (0.5074513, 0, 0.86168045, 0)
+            float3 xformOp:scale = (1, 1, 1)
+            float3 xformOp:translate = (0.08375621, -0.12088535, -0.2928599)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+
+            def Sphere "Pivot"
+            {
+                color3f[] primvars:displayColor = [(0.2, 0.85, 0.95)]
+                double radius = 0.02
+            }
+
+            def Cylinder "Axis"
+            {
+                double height = 0.28
+                color3f[] primvars:displayColor = [(0.2, 0.8, 1)]
+                double radius = 0.006
+                float3 xformOp:rotateXYZ = (90, 0, 0)
+                uniform token[] xformOpOrder = ["xformOp:rotateXYZ"]
             }
         }
 
@@ -616,8 +720,8 @@ def Xform "World"
             point3f physics:localPos1 = (-0.00007, -0.1201, -0.14893)
             quatf physics:localRot0 = (0.5627204, 0.42650682, 0.5685334, -0.42214617)
             quatf physics:localRot1 = (0.5627204, 0.42650682, 0.5685334, -0.42214617)
-            float physics:lowerLimit = -90
-            float physics:upperLimit = 90
+            float physics:lowerLimit = -60
+            float physics:upperLimit = 60
         }
 
         def PhysicsRevoluteJoint "right_elbow" (
@@ -636,6 +740,24 @@ def Xform "World"
             quatf physics:localRot1 = (0.70710677, 0, 0, 0.70710677)
             float physics:lowerLimit = -120
             float physics:upperLimit = 5
+        }
+
+        def PhysicsRevoluteJoint "right_forearm_twist" (
+            prepend apiSchemas = ["PhysicsDriveAPI:angular"]
+        )
+        {
+            uniform token axis = "Y"
+            float drive:angular:physics:damping = 0
+            float drive:angular:physics:stiffness = 0
+            float drive:angular:physics:targetPosition = 0
+            rel physics:body0 = </World/JointTest/LowerElbowBody>
+            rel physics:body1 = </World/JointTest/ForearmBody>
+            point3f physics:localPos0 = (0.08376, -0.12089, -0.29286)
+            point3f physics:localPos1 = (0.08448, -0.12034, -0.29318)
+            quatf physics:localRot0 = (-0.50745565, -0, -0.8616779, -0)
+            quatf physics:localRot1 = (0.8071098, 0, 0.5904014, 0)
+            float physics:lowerLimit = -90
+            float physics:upperLimit = 90
         }
     }
 }

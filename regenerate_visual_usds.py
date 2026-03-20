@@ -34,6 +34,9 @@ VISUAL_ONLY_PARTS = [
     'lower_elbow_side_l',
     'lower_elbow_side_r',
     'lower_elbow_roll_servo_sts3215',
+    'forearm_front',
+    'forearm_back',
+    'forearm_to_wrist_servo_sts3215',
 ]
 
 
