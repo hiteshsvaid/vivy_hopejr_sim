@@ -17,34 +17,75 @@ def Xform "World"
         prepend apiSchemas = ["PhysicsArticulationRootAPI"]
     )
     {
+        def Xform "Visuals"
+        {
+            def Xform "Chest"
+            {
+                float3 xformOp:rotateXYZ = (180, 0, 0)
+                float3 xformOp:scale = (0.001, 0.001, 0.001)
+                uniform token[] xformOpOrder = ["xformOp:rotateXYZ", "xformOp:scale"]
+
+                def Xform "Mesh" (
+                    references = @./assets/usd/chest.usd@
+                )
+                {
+                }
+            }
+
+            def Xform "RightShoulderSupport"
+            {
+                float3 xformOp:rotateXYZ = (180, 0, 0)
+                float3 xformOp:scale = (0.001, 0.001, 0.001)
+                uniform token[] xformOpOrder = ["xformOp:rotateXYZ", "xformOp:scale"]
+
+                def Xform "shoulder_support_bottom" (
+                    references = @./assets/usd/shoulder_support_bottom.usd@
+                )
+                {
+                }
+
+                def Xform "shoulder_support_top" (
+                    references = @./assets/usd/shoulder_support_top.usd@
+                )
+                {
+                }
+
+                def Xform "pitch_holder" (
+                    references = @./assets/usd/pitch_holder.usd@
+                )
+                {
+                }
+
+                def Xform "shoulder_pitch_servo_s85" (
+                    references = @./assets/usd/shoulder_pitch_servo_s85.usd@
+                )
+                {
+                }
+            }
+        }
+
         def Xform "ChestBody" (
             prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]
         )
         {
             float physics:mass = 1
 
-            def Cube "Collider" (
-                prepend apiSchemas = ["PhysicsCollisionAPI"]
-            )
+            def Xform "Colliders"
             {
-                token visibility = "invisible"
-                double size = 1
-                float3 xformOp:scale = (0.13014, 0.2, 0.14951)
-                float3 xformOp:translate = (0, 0.100275, -0.106247)
-                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+                def Cube "Chest" (
+                    prepend apiSchemas = ["PhysicsCollisionAPI"]
+                )
+                {
+                    token visibility = "invisible"
+                    double size = 1
+                    float3 xformOp:scale = (0.13014, 0.2, 0.14951)
+                    float3 xformOp:translate = (0, 0.100275, -0.106247)
+                    uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+                }
             }
         }
 
-        def Xform "ChestVisual" (
-            references = @./assets/usd/chest.usd@
-        )
-        {
-            float3 xformOp:rotateXYZ = (180, 0, 0)
-            float3 xformOp:scale = (0.001, 0.001, 0.001)
-            uniform token[] xformOpOrder = ["xformOp:rotateXYZ", "xformOp:scale"]
-        }
-
-        def Xform "ShoulderPitchChild" (
+        def Xform "ShoulderPitchChildBody" (
             prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]
         )
         {
@@ -52,24 +93,30 @@ def Xform "World"
             float3 xformOp:translate = (0.22, 0, 0.24)
             uniform token[] xformOpOrder = ["xformOp:translate"]
 
-            def Cube "Visual"
+            def Xform "Visuals"
             {
-                color3f[] primvars:displayColor = [(0.9, 0.55, 0.2)]
-                double size = 0.14
-                float3 xformOp:scale = (0.7, 0.7, 1.8)
-                float3 xformOp:translate = (0.08, 0, 0)
-                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+                def Cube "Placeholder"
+                {
+                    color3f[] primvars:displayColor = [(0.9, 0.55, 0.2)]
+                    double size = 0.14
+                    float3 xformOp:scale = (0.7, 0.7, 1.8)
+                    float3 xformOp:translate = (0.08, 0, 0)
+                    uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+                }
             }
 
-            def Cube "Collider" (
-                prepend apiSchemas = ["PhysicsCollisionAPI"]
-            )
+            def Xform "Colliders"
             {
-                token visibility = "invisible"
-                double size = 0.14
-                float3 xformOp:scale = (0.7, 0.7, 1.8)
-                float3 xformOp:translate = (0.08, 0, 0)
-                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+                def Cube "ShoulderPitchChild" (
+                    prepend apiSchemas = ["PhysicsCollisionAPI"]
+                )
+                {
+                    token visibility = "invisible"
+                    double size = 0.14
+                    float3 xformOp:scale = (0.7, 0.7, 1.8)
+                    float3 xformOp:translate = (0.08, 0, 0)
+                    uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+                }
             }
         }
 
@@ -93,7 +140,7 @@ def Xform "World"
             float physics:lowerLimit = -60
             float physics:upperLimit = 60
             rel physics:body0 = </World/JointTest/ChestBody>
-            rel physics:body1 = </World/JointTest/ShoulderPitchChild>
+            rel physics:body1 = </World/JointTest/ShoulderPitchChildBody>
             point3f physics:localPos0 = (0.06507, 0.000275, -0.031492)
             point3f physics:localPos1 = (0, 0, 0)
             quatf physics:localRot0 = (1, 0, 0, 0)
