@@ -17,58 +17,27 @@ def Xform "World"
         prepend apiSchemas = ["PhysicsArticulationRootAPI"]
     )
     {
-        def Xform "Visuals"
-        {
-            def Xform "Chest"
-            {
-                float3 xformOp:rotateXYZ = (180, 0, 0)
-                float3 xformOp:scale = (0.001, 0.001, 0.001)
-                uniform token[] xformOpOrder = ["xformOp:rotateXYZ", "xformOp:scale"]
-
-                def Xform "Mesh" (
-                    references = @./assets/usd/chest.usd@
-                )
-                {
-                }
-            }
-
-            def Xform "RightShoulderSupport"
-            {
-                float3 xformOp:rotateXYZ = (180, 0, 0)
-                float3 xformOp:scale = (0.001, 0.001, 0.001)
-                uniform token[] xformOpOrder = ["xformOp:rotateXYZ", "xformOp:scale"]
-
-                def Xform "shoulder_support_bottom" (
-                    references = @./assets/usd/shoulder_support_bottom.usd@
-                )
-                {
-                }
-
-                def Xform "shoulder_support_top" (
-                    references = @./assets/usd/shoulder_support_top.usd@
-                )
-                {
-                }
-
-                def Xform "pitch_holder" (
-                    references = @./assets/usd/pitch_holder.usd@
-                )
-                {
-                }
-
-                def Xform "shoulder_pitch_servo_s85" (
-                    references = @./assets/usd/shoulder_pitch_servo_s85.usd@
-                )
-                {
-                }
-            }
-        }
-
         def Xform "ChestBody" (
             prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]
         )
         {
             float physics:mass = 1
+
+            def Xform "Visuals"
+            {
+                float3 xformOp:rotateXYZ = (180, 0, 0)
+                float3 xformOp:scale = (0.001, 0.001, 0.001)
+                uniform token[] xformOpOrder = ["xformOp:rotateXYZ", "xformOp:scale"]
+
+                def Xform "Chest"
+                {
+                    def Xform "Mesh" (
+                        references = @./assets/usd/chest_visual.usd@
+                    )
+                    {
+                    }
+                }
+            }
 
             def Xform "Colliders"
             {
@@ -81,6 +50,40 @@ def Xform "World"
                     float3 xformOp:scale = (0.13014, 0.2, 0.14951)
                     float3 xformOp:translate = (0, 0.100275, -0.106247)
                     uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+                }
+            }
+        }
+
+        def Xform "RightShoulderSupportBody"
+        {
+            def Xform "Visuals"
+            {
+                float3 xformOp:rotateXYZ = (180, 0, 0)
+                float3 xformOp:scale = (0.001, 0.001, 0.001)
+                uniform token[] xformOpOrder = ["xformOp:rotateXYZ", "xformOp:scale"]
+
+                def Xform "shoulder_support_bottom" (
+                    references = @./assets/usd/shoulder_support_bottom_visual.usd@
+                )
+                {
+                }
+
+                def Xform "shoulder_support_top" (
+                    references = @./assets/usd/shoulder_support_top_visual.usd@
+                )
+                {
+                }
+
+                def Xform "pitch_holder" (
+                    references = @./assets/usd/pitch_holder_visual.usd@
+                )
+                {
+                }
+
+                def Xform "shoulder_pitch_servo_s85" (
+                    references = @./assets/usd/shoulder_pitch_servo_s85_visual.usd@
+                )
+                {
                 }
             }
         }

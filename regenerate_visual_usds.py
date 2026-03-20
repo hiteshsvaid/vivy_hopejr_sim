@@ -11,7 +11,12 @@ ASSET_ROOT = Path('/home/viaan/vivy_hopejr_sim/assets')
 SRC_DIR = ASSET_ROOT / 'src'
 USD_DIR = ASSET_ROOT / 'usd'
 
-MOVING_PARTS = [
+VISUAL_ONLY_PARTS = [
+    'chest',
+    'shoulder_support_bottom',
+    'shoulder_support_top',
+    'pitch_holder',
+    'shoulder_pitch_servo_s85',
     'pitch_roller_clip_bottom',
     'pitch_roller_clip_left_side',
     'pitch_roller_clip_right_side',
@@ -24,7 +29,7 @@ MOVING_PARTS = [
 
 
 def main() -> None:
-    for part in MOVING_PARTS:
+    for part in VISUAL_ONLY_PARTS:
         cfg = MeshConverterCfg(
             asset_path=str(SRC_DIR / f'{part}.stl'),
             usd_dir=str(USD_DIR),
