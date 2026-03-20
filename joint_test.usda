@@ -95,13 +95,65 @@ def Xform "World"
 
             def Xform "Visuals"
             {
-                def Cube "Placeholder"
+                float3 xformOp:rotateXYZ = (180, 0, 0)
+                float3 xformOp:scale = (0.001, 0.001, 0.001)
+                uniform token[] xformOpOrder = ["xformOp:rotateXYZ", "xformOp:scale"]
+
+                def Xform "ShoulderPitch"
                 {
-                    color3f[] primvars:displayColor = [(0.9, 0.55, 0.2)]
-                    double size = 0.14
-                    float3 xformOp:scale = (0.7, 0.7, 1.8)
-                    float3 xformOp:translate = (0.08, 0, 0)
-                    uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+                    def Xform "pitch_roller_clip_bottom" (
+                        references = @./assets/usd/pitch_roller_clip_bottom_visual.usd@
+                    )
+                    {
+                    }
+
+                    def Xform "pitch_roller_clip_left_side" (
+                        references = @./assets/usd/pitch_roller_clip_left_side_visual.usd@
+                    )
+                    {
+                    }
+
+                    def Xform "pitch_roller_clip_right_side" (
+                        references = @./assets/usd/pitch_roller_clip_right_side_visual.usd@
+                    )
+                    {
+                    }
+
+                    def Xform "pitch_roller_clip_up" (
+                        references = @./assets/usd/pitch_roller_clip_up_visual.usd@
+                    )
+                    {
+                    }
+                }
+
+                def Xform "ShoulderYaw"
+                {
+                    def Xform "shoulder_yaw_servo_sts3215" (
+                        references = @./assets/usd/shoulder_yaw_servo_sts3215_visual.usd@
+                    )
+                    {
+                    }
+
+                    def Xform "shoulder_yaw" (
+                        references = @./assets/usd/shoulder_yaw_visual.usd@
+                    )
+                    {
+                    }
+                }
+
+                def Xform "UpperArm"
+                {
+                    def Xform "humreal_up_fixed" (
+                        references = @./assets/usd/humreal_up_fixed_visual.usd@
+                    )
+                    {
+                    }
+
+                    def Xform "humreal_down" (
+                        references = @./assets/usd/humreal_down_visual.usd@
+                    )
+                    {
+                    }
                 }
             }
 
