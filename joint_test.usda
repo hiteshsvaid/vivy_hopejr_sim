@@ -7,8 +7,8 @@
                 double radius = 5
             }
             dictionary Perspective = {
-                double3 position = (0.07031364559561623, -0.5297212174133297, 0.009341113834051572)
-                double3 target = (-0.005006659959904958, -0.052888188936978886, -0.15547707486942264)
+                double3 position = (0.48584913789710515, -0.004928954240216158, -0.04761767344886444)
+                double3 target = (-0.021539948637795514, -0.057504496858911604, -0.047398616313948136)
             }
             dictionary Right = {
                 double3 position = (0, -5, 0)
@@ -126,15 +126,17 @@ def Xform "World"
 
             def Xform "Colliders"
             {
-                def Cube "RightShoulderSupport" (
+                def Cone "RightShoulderSupport" (
                     prepend apiSchemas = ["PhysicsCollisionAPI"]
                 )
                 {
-                    double size = 0.16
+                    double height = 0.09135
+                    double radius = 0.07
                     token visibility = "invisible"
-                    float3 xformOp:scale = (0.7, 0.5, 1)
-                    float3 xformOp:translate = (0.055, 0, 0.02)
-                    uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+                    float3 xformOp:rotateXYZ = (90, 0, 0)
+                    float3 xformOp:scale = (1, 1, 1)
+                    float3 xformOp:translate = (0.0000096, -0.0454, -0.049591437)
+                    uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ", "xformOp:scale"]
                 }
             }
         }
@@ -194,21 +196,6 @@ def Xform "World"
                     {
                     }
                 }
-
-                def Xform "UpperArm"
-                {
-                    def Xform "humreal_up_fixed" (
-                        references = @./assets/usd/humreal_up_fixed_visual.usd@
-                    )
-                    {
-                    }
-
-                    def Xform "humreal_down" (
-                        references = @./assets/usd/humreal_down_visual.usd@
-                    )
-                    {
-                    }
-                }
             }
 
             def Xform "Colliders"
@@ -219,8 +206,8 @@ def Xform "World"
                 {
                     double size = 1
                     token visibility = "invisible"
-                    float3 xformOp:scale = (0.0807, 0.0921908, 0.1931322)
-                    float3 xformOp:translate = (-0.0002205, -0.1111454, -0.1053269)
+                    float3 xformOp:scale = (0.0806, 0.0782938, 0.0740039)
+                    float3 xformOp:translate = (-0.0002705, -0.1041969, -0.0457627)
                     uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
                 }
             }
@@ -246,6 +233,75 @@ def Xform "World"
                     float3 xformOp:rotateXYZ = (90, 0, 0)
                     uniform token[] xformOpOrder = ["xformOp:rotateXYZ"]
                 }
+            }
+        }
+
+        def Xform "UpperArmBody" (
+            prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]
+        )
+        {
+            float physics:mass = 0.4
+            float3 xformOp:translate = (0, 0, 0)
+            uniform token[] xformOpOrder = ["xformOp:translate"]
+
+            def Xform "Visuals"
+            {
+                float3 xformOp:rotateXYZ = (180, 0, 0)
+                float3 xformOp:scale = (0.001, 0.001, 0.001)
+                uniform token[] xformOpOrder = ["xformOp:rotateXYZ", "xformOp:scale"]
+
+                def Xform "UpperArm"
+                {
+                    def Xform "humreal_up_fixed" (
+                        references = @./assets/usd/humreal_up_fixed_visual.usd@
+                    )
+                    {
+                    }
+
+                    def Xform "humreal_down" (
+                        references = @./assets/usd/humreal_down_visual.usd@
+                    )
+                    {
+                    }
+                }
+            }
+
+            def Xform "Colliders"
+            {
+                def Cube "UpperArm" (
+                    prepend apiSchemas = ["PhysicsCollisionAPI"]
+                )
+                {
+                    double size = 1
+                    token visibility = "invisible"
+                    float3 xformOp:scale = (0.0807, 0.069998, 0.1679)
+                    float3 xformOp:translate = (-0.0002205, -0.1222418, -0.117943)
+                    uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+                }
+            }
+
+            def Xform "UpperArmGuide"
+            {
+                float3 xformOp:translate = (0, -0.1572408, -0.033993)
+                uniform token[] xformOpOrder = ["xformOp:translate"]
+
+                def Sphere "Pivot"
+                {
+                    color3f[] primvars:displayColor = [(0.9, 0.5, 0.2)]
+                    double radius = 0.008
+                }
+            }
+        }
+
+        def Xform "RightShoulderYawGuide"
+        {
+            float3 xformOp:translate = (0, -0.1572408, -0.033993)
+            uniform token[] xformOpOrder = ["xformOp:translate"]
+
+            def Sphere "Pivot"
+            {
+                color3f[] primvars:displayColor = [(0.2, 0.9, 0.9)]
+                double radius = 0.008
             }
         }
 
@@ -307,6 +363,24 @@ def Xform "World"
             quatf physics:localRot1 = (0.70710677, 0, 0, 0.70710677)
             float physics:lowerLimit = -60
             float physics:upperLimit = 60
+        }
+
+        def PhysicsRevoluteJoint "right_shoulder_yaw" (
+            prepend apiSchemas = ["PhysicsDriveAPI:angular"]
+        )
+        {
+            uniform token axis = "Z"
+            float drive:angular:physics:damping = 0
+            float drive:angular:physics:stiffness = 0
+            float drive:angular:physics:targetPosition = 0
+            rel physics:body0 = </World/JointTest/ShoulderPitchChildBody>
+            rel physics:body1 = </World/JointTest/UpperArmBody>
+            point3f physics:localPos0 = (0, -0.1572408, -0.033993)
+            point3f physics:localPos1 = (0, -0.1572408, -0.033993)
+            quatf physics:localRot0 = (1, 0, 0, 0)
+            quatf physics:localRot1 = (1, 0, 0, 0)
+            float physics:lowerLimit = -90
+            float physics:upperLimit = 90
         }
     }
 }
