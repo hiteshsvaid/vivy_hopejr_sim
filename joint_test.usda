@@ -83,9 +83,10 @@ def Xform "World"
         }
 
         def Xform "RightShoulderSupportBody" (
-            prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]
+            prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI", "PhysicsFilteredPairsAPI"]
         )
         {
+            rel physics:filteredPairs = [</World/JointTest/ShoulderPitchChildBody>, </World/JointTest/UpperArmBody>]
             float physics:mass = 0.5
             float3 xformOp:translate = (0, 0, 0)
             uniform token[] xformOpOrder = ["xformOp:translate"]
@@ -130,6 +131,7 @@ def Xform "World"
                     prepend apiSchemas = ["PhysicsCollisionAPI"]
                 )
                 {
+                    bool physics:collisionEnabled = 0
                     double height = 0.09135
                     double radius = 0.07
                     token visibility = "invisible"
@@ -142,9 +144,10 @@ def Xform "World"
         }
 
         def Xform "ShoulderPitchChildBody" (
-            prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]
+            prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI", "PhysicsFilteredPairsAPI"]
         )
         {
+            rel physics:filteredPairs = [</World/JointTest/RightShoulderSupportBody>, </World/JointTest/UpperArmBody>]
             float physics:mass = 0.5
             float3 xformOp:translate = (0, 0, 0)
             uniform token[] xformOpOrder = ["xformOp:translate"]
@@ -206,8 +209,8 @@ def Xform "World"
                 {
                     double size = 1
                     token visibility = "invisible"
-                    float3 xformOp:scale = (0.0806, 0.0782938, 0.0740039)
-                    float3 xformOp:translate = (-0.0002705, -0.1041969, -0.0457627)
+                    float3 xformOp:scale = (0.042, 0.06, 0.03)
+                    float3 xformOp:translate = (0, -0.0987464, -0.0468760)
                     uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
                 }
             }
@@ -237,9 +240,10 @@ def Xform "World"
         }
 
         def Xform "UpperArmBody" (
-            prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]
+            prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI", "PhysicsFilteredPairsAPI"]
         )
         {
+            rel physics:filteredPairs = [</World/JointTest/ShoulderPitchChildBody>, </World/JointTest/RightShoulderSupportBody>]
             float physics:mass = 0.4
             float3 xformOp:translate = (0, 0, 0)
             uniform token[] xformOpOrder = ["xformOp:translate"]
@@ -282,7 +286,7 @@ def Xform "World"
 
             def Xform "UpperArmGuide"
             {
-                float3 xformOp:translate = (0, -0.1572408, -0.033993)
+                float3 xformOp:translate = (0, -0.12219, -0.0446)
                 uniform token[] xformOpOrder = ["xformOp:translate"]
 
                 def Sphere "Pivot"
@@ -295,7 +299,7 @@ def Xform "World"
 
         def Xform "RightShoulderYawGuide"
         {
-            float3 xformOp:translate = (0, -0.1572408, -0.033993)
+            float3 xformOp:translate = (0, -0.12071, -0.0464)
             uniform token[] xformOpOrder = ["xformOp:translate"]
 
             def Sphere "Pivot"
@@ -369,18 +373,18 @@ def Xform "World"
             prepend apiSchemas = ["PhysicsDriveAPI:angular"]
         )
         {
-            uniform token axis = "Z"
-            float drive:angular:physics:damping = 0
-            float drive:angular:physics:stiffness = 0
+            uniform token axis = "Y"
+            float drive:angular:physics:damping = 2
+            float drive:angular:physics:stiffness = 8
             float drive:angular:physics:targetPosition = 0
             rel physics:body0 = </World/JointTest/ShoulderPitchChildBody>
             rel physics:body1 = </World/JointTest/UpperArmBody>
-            point3f physics:localPos0 = (0, -0.1572408, -0.033993)
-            point3f physics:localPos1 = (0, -0.1572408, -0.033993)
+            point3f physics:localPos0 = (0, -0.12071, -0.0464)
+            point3f physics:localPos1 = (0, -0.12219, -0.0446)
             quatf physics:localRot0 = (1, 0, 0, 0)
             quatf physics:localRot1 = (1, 0, 0, 0)
-            float physics:lowerLimit = -90
-            float physics:upperLimit = 90
+            float physics:lowerLimit = -105
+            float physics:upperLimit = 7
         }
     }
 }
