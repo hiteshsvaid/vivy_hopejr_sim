@@ -7,8 +7,8 @@
                 double radius = 5
             }
             dictionary Perspective = {
-                double3 position = (0.4774793735017971, -0.046494528727014636, -0.41634951687319216)
-                double3 target = (0.17765068242010462, -0.06294725402706516, -0.4478848446310447)
+                double3 position = (0.39071737373094767, 0.024129623863432828, -0.25378848557083306)
+                double3 target = (0.1762879323953291, -0.10215820232273927, -0.4247674688056768)
             }
             dictionary Right = {
                 double3 position = (0, -5, 0)
@@ -676,6 +676,65 @@ def Xform "World"
                     references = @./assets/usd/index_servo_sts3215_visual.usd@
                 )
                 {
+                }
+            }
+
+            def Xform "Colliders"
+            {
+                def Cube "Palm" (
+                    prepend apiSchemas = ["PhysicsCollisionAPI"]
+                )
+                {
+                    float3[] extent = [(-0.5, -0.5, -0.5), (0.5, 0.5, 0.5)]
+                    rel physics:simulationOwner
+                    double size = 1
+                    token visibility = "invisible"
+                    quatf xformOp:orient = (0.81491697, 0.3908839, 0.40514114, -0.13777067)
+                    float3 xformOp:scale = (0.02405179, 0.038801305, 0.09120325)
+                    float3 xformOp:translate = (0.17766373, -0.09644629, -0.4192415)
+                    uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+                }
+
+                def Cube "WristServo" (
+                    prepend apiSchemas = ["PhysicsCollisionAPI"]
+                )
+                {
+                    float3[] extent = [(-0.5, -0.5, -0.5), (0.5, 0.5, 0.5)]
+                    rel physics:simulationOwner
+                    double size = 1
+                    token visibility = "invisible"
+                    quatf xformOp:orient = (0.41784424, -0.14108647, -0.8109464, -0.38453445)
+                    float3 xformOp:scale = (0.044128582, 0.04279055, 0.028039312)
+                    float3 xformOp:translate = (0.17445894, -0.11732295, -0.38868007)
+                    uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+                }
+
+                def Cube "ThumbServo" (
+                    prepend apiSchemas = ["PhysicsCollisionAPI"]
+                )
+                {
+                    float3[] extent = [(-0.5, -0.5, -0.5), (0.5, 0.5, 0.5)]
+                    rel physics:simulationOwner
+                    double size = 1
+                    token visibility = "invisible"
+                    quatf xformOp:orient = (0.41784424, -0.14108647, -0.8109464, -0.38453445)
+                    float3 xformOp:scale = (0.044128582, 0.04279055, 0.028039312)
+                    float3 xformOp:translate = (0.20823628, -0.11805951, -0.42443326)
+                    uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+                }
+
+                def Cube "IndexServo" (
+                    prepend apiSchemas = ["PhysicsCollisionAPI"]
+                )
+                {
+                    float3[] extent = [(-0.5, -0.5, -0.5), (0.5, 0.5, 0.5)]
+                    rel physics:simulationOwner
+                    double size = 1
+                    token visibility = "invisible"
+                    quatf xformOp:orient = (0.41784424, -0.14108647, -0.8109464, -0.38453445)
+                    float3 xformOp:scale = (0.044128582, 0.04279055, 0.028039312)
+                    float3 xformOp:translate = (0.16797751, -0.0717221, -0.4437448)
+                    uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
                 }
             }
         }
