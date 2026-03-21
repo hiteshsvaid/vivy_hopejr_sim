@@ -7,8 +7,8 @@
                 double radius = 5
             }
             dictionary Perspective = {
-                double3 position = (0.005740349362720394, -0.402390188187705, -0.2870692090831133)
-                double3 target = (0.06427107441412987, -0.11833986477775288, -0.30497070430642653)
+                double3 position = (0.20298202844401994, -0.5108026936310934, -0.09817172135113766)
+                double3 target = (0.029588811082619015, -0.16093950672670926, -0.2883165396703352)
             }
             dictionary Right = {
                 double3 position = (0, -5, 0)
@@ -49,8 +49,14 @@ def Xform "World"
             prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]
         )
         {
+            vector3f physics:angularVelocity = (0, 0, 0)
             float physics:mass = 1
             rel physics:simulationOwner
+            vector3f physics:velocity = (0, 0, 0)
+            quatf xformOp:orient = (1, 0, 0, 0)
+            float3 xformOp:scale = (1, 1, 1)
+            float3 xformOp:translate = (0, 0, 0)
+            token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
 
             def Xform "Visuals"
             {
@@ -88,14 +94,18 @@ def Xform "World"
             prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI", "PhysicsFilteredPairsAPI"]
         )
         {
+            vector3f physics:angularVelocity = (0, 0, 0)
             rel physics:filteredPairs = [
                 </World/JointTest/ShoulderPitchChildBody>,
                 </World/JointTest/UpperArmBody>,
             ]
             float physics:mass = 0.5
             rel physics:simulationOwner
-            float3 xformOp:translate = (0, 0, 0)
-            uniform token[] xformOpOrder = ["xformOp:translate"]
+            vector3f physics:velocity = (0, 0, 0)
+            quatf xformOp:orient = (1, 0, 0, 0)
+            float3 xformOp:scale = (1, 1, 1)
+            float3 xformOp:translate = (0, -3.7252903e-9, 0)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
 
             def Xform "Visuals"
             {
@@ -154,14 +164,18 @@ def Xform "World"
             prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI", "PhysicsFilteredPairsAPI"]
         )
         {
+            vector3f physics:angularVelocity = (-1.1750657e-10, -0.00078595313, 2.3182874e-18)
             rel physics:filteredPairs = [
                 </World/JointTest/RightShoulderSupportBody>,
                 </World/JointTest/UpperArmBody>,
             ]
             float physics:mass = 0.5
             rel physics:simulationOwner
-            float3 xformOp:translate = (0, 0, 0)
-            uniform token[] xformOpOrder = ["xformOp:translate"]
+            vector3f physics:velocity = (-5.399021e-11, 8.0719915e-18, -9.859522e-12)
+            quatf xformOp:orient = (0.9958846, -1.2863534e-8, -0.090630636, -7.543608e-9)
+            float3 xformOp:scale = (1, 1, 1)
+            float3 xformOp:translate = (-0.008925049, 0.000004902482, -0.0009304173)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
 
             def Xform "Visuals"
             {
@@ -229,6 +243,7 @@ def Xform "World"
 
             def Xform "ShoulderPitchGuide"
             {
+                token visibility = "invisible"
                 quatf xformOp:orient = (1, 0, 0, 0)
                 float3 xformOp:scale = (1, 1, 1)
                 float3 xformOp:translate = (0, -0.0724167, -0.046877097)
@@ -255,6 +270,7 @@ def Xform "World"
             prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI", "PhysicsFilteredPairsAPI"]
         )
         {
+            vector3f physics:angularVelocity = (-0.0030719026, -0.00078595313, -0.00056378805)
             rel physics:filteredPairs = [
                 </World/JointTest/ShoulderPitchChildBody>,
                 </World/JointTest/RightShoulderSupportBody>,
@@ -262,8 +278,11 @@ def Xform "World"
             ]
             float physics:mass = 0.4
             rel physics:simulationOwner
-            float3 xformOp:translate = (0, 0, 0)
-            uniform token[] xformOpOrder = ["xformOp:translate"]
+            vector3f physics:velocity = (3.9193748e-7, -0.0000032773396, 0.0000023967816)
+            quatf xformOp:orient = (0.9500551, -0.29863238, -0.08645991, -0.027177097)
+            float3 xformOp:scale = (1, 1, 1)
+            float3 xformOp:translate = (0.0054674195, 0.005027443, -0.079350516)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
 
             def Xform "Visuals"
             {
@@ -310,6 +329,7 @@ def Xform "World"
 
             def Xform "UpperArmGuide"
             {
+                token visibility = "invisible"
                 float3 xformOp:translate = (0, -0.12219, -0.0446)
                 uniform token[] xformOpOrder = ["xformOp:translate"]
 
@@ -325,14 +345,18 @@ def Xform "World"
             prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI", "PhysicsFilteredPairsAPI"]
         )
         {
+            vector3f physics:angularVelocity = (-0.0030993465, -0.00068010134, -0.0004112609)
             rel physics:filteredPairs = [
                 </World/JointTest/UpperArmBody>,
                 </World/JointTest/LowerElbowBody>,
             ]
             float physics:mass = 0.3
             rel physics:simulationOwner
-            float3 xformOp:translate = (0, 0, 0)
-            uniform token[] xformOpOrder = ["xformOp:translate"]
+            vector3f physics:velocity = (7.2041166e-7, -0.0000066704893, 0.000005582125)
+            quatf xformOp:orient = (0.89515656, -0.2580613, -0.17158526, -0.32040223)
+            float3 xformOp:scale = (1, 1, 1)
+            float3 xformOp:translate = (0.073553644, -0.013995647, -0.05407252)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
 
             def Xform "Visuals"
             {
@@ -376,6 +400,7 @@ def Xform "World"
 
             def Xform "UpperElbowGuide"
             {
+                token visibility = "invisible"
                 float3 xformOp:rotateXYZ = (0, 0, 0)
                 float3 xformOp:translate = (-0.00007, -0.1201, -0.14893)
                 uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ"]
@@ -401,14 +426,18 @@ def Xform "World"
             prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI", "PhysicsFilteredPairsAPI"]
         )
         {
+            vector3f physics:angularVelocity = (-0.0030381894, -0.0006190075, -0.00044377623)
             rel physics:filteredPairs = [
                 </World/JointTest/UpperElbowBody>,
                 </World/JointTest/ForearmBody>,
             ]
             float physics:mass = 0.3
             rel physics:simulationOwner
-            float3 xformOp:translate = (0, 0, 0)
-            uniform token[] xformOpOrder = ["xformOp:translate"]
+            vector3f physics:velocity = (7.5139405e-7, -0.000009019926, 0.000009044197)
+            quatf xformOp:orient = (0.89760345, -0.25327992, -0.15828729, -0.32419515)
+            float3 xformOp:scale = (1, 1, 1)
+            float3 xformOp:translate = (0.07900589, -0.016887337, -0.049818873)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
 
             def Xform "Visuals"
             {
@@ -456,20 +485,21 @@ def Xform "World"
                     prepend apiSchemas = ["PhysicsCollisionAPI"]
                 )
                 {
-                    float3[] extent = [(-0.04220515, -0.04220515, -0.0422102), (0.04220515, 0.04220515, 0.0422102)]
-                    double height = 0.0844204
+                    float3[] extent = [(-0.03798464, -0.03798464, -0.03207975), (0.03798464, 0.03798464, 0.03207975)]
+                    double height = 0.0641595
                     rel physics:simulationOwner
-                    double radius = 0.04220515
+                    double radius = 0.03798464
                     token visibility = "invisible"
-                    quatf xformOp:orient = (0.35985795, 3.5095262e-17, 0.9330071, 3.9197396e-17)
+                    quatf xformOp:orient = (0.35985795, 3.5095265e-17, 0.9330071, 3.9197396e-17)
                     float3 xformOp:scale = (1, 1, 1)
-                    float3 xformOp:translate = (0.0676224, -0.1155546, -0.2765985)
+                    float3 xformOp:translate = (0.0579987, -0.1155546, -0.26751032)
                     uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
                 }
             }
 
             def Xform "LowerElbowGuide"
             {
+                token visibility = "invisible"
                 float3 xformOp:translate = (0.03838, -0.12084, -0.24802)
                 uniform token[] xformOpOrder = ["xformOp:translate"]
 
@@ -485,74 +515,80 @@ def Xform "World"
             prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI", "PhysicsFilteredPairsAPI"]
         )
         {
+            vector3f physics:angularVelocity = (-2.2253249, 2.6204028, 0.883731)
             rel physics:filteredPairs = </World/JointTest/LowerElbowBody>
             float physics:mass = 0.25
             rel physics:simulationOwner
+            vector3f physics:velocity = (-0.000015461626, -0.000047584235, 0.00008302375)
             token visibility = "inherited"
-            float3 xformOp:translate = (0, 0, 0)
-            uniform token[] xformOpOrder = ["xformOp:translate"]
+            quatf xformOp:orient = (-0.67550075, 0.70998484, -0.16005406, -0.11833425)
+            float3 xformOp:scale = (1, 1, 1)
+            float3 xformOp:translate = (-0.014169626, -0.008302331, -0.30947602)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
 
             def Xform "Visuals"
             {
+                token visibility = "inherited"
                 float3 xformOp:rotateXYZ = (180, 0, 0)
                 float3 xformOp:scale = (0.001, 0.001, 0.001)
                 uniform token[] xformOpOrder = ["xformOp:rotateXYZ", "xformOp:scale"]
 
-                def Xform "Forearm"
+                def Xform "forearm_front" (
+                    references = @./assets/usd/forearm_front_visual.usd@
+                )
                 {
-                    def Xform "forearm_front" (
-                        references = @./assets/usd/forearm_front_visual.usd@
-                    )
-                    {
-                    }
+                }
 
-                    def Xform "forearm_back" (
-                        references = @./assets/usd/forearm_back_visual.usd@
-                    )
-                    {
-                    }
+                def Xform "forearm_back" (
+                    references = @./assets/usd/forearm_back_visual.usd@
+                )
+                {
+                }
 
-                    def Xform "forearm_to_wrist_servo_sts3215" (
-                        references = @./assets/usd/forearm_to_wrist_servo_sts3215_visual.usd@
-                    )
-                    {
-                    }
+                def Xform "forearm_to_wrist_servo_sts3215" (
+                    references = @./assets/usd/forearm_to_wrist_servo_sts3215_visual.usd@
+                )
+                {
                 }
             }
 
             def Xform "Colliders"
             {
-                def Cube "Forearm" (
+                def Cylinder "Forearm" (
                     prepend apiSchemas = ["PhysicsCollisionAPI"]
                 )
                 {
+                    float3[] extent = [(-0.03499925, -0.03499925, -0.04277692), (0.03499925, 0.03499925, 0.04277692)]
+                    double height = 0.08555384
                     rel physics:simulationOwner
-                    double size = 1
+                    double radius = 0.03499925
                     token visibility = "invisible"
-                    float3 xformOp:scale = (0.1063843, 0.0699985, 0.1069423)
-                    float3 xformOp:translate = (0.1109467, -0.1203424, -0.3233147)
-                    uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+                    quatf xformOp:orient = (0.38984022, 3.2516963e-17, 0.9208825, 3.736151e-17)
+                    float3 xformOp:scale = (1, 1, 1)
+                    float3 xformOp:translate = (0.11363872, -0.1203424, -0.3248983)
+                    uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
                 }
             }
 
             def Xform "ForearmGuide"
             {
-                quatf xformOp:orient = (0.80710804, 0, 0.5904038, 0)
+                token visibility = "invisible"
+                quatf xformOp:orient = (0.46582362, 0.06583313, 0.53844184, -0.69911)
                 float3 xformOp:scale = (1, 1, 1)
-                float3 xformOp:translate = (0.08448427, -0.1203424, -0.29318485)
+                float3 xformOp:translate = (0.08548, -0.12182321, -0.29666)
                 uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
 
                 def Sphere "Pivot"
                 {
                     color3f[] primvars:displayColor = [(0.95, 0.75, 0.2)]
-                    double radius = 0.02
+                    double radius = 0.035
                 }
 
                 def Cylinder "Axis"
                 {
-                    double height = 0.28
+                    double height = 0.42
                     color3f[] primvars:displayColor = [(1, 0.6, 0.2)]
-                    double radius = 0.006
+                    double radius = 0.01
                     float3 xformOp:rotateXYZ = (90, 0, 0)
                     uniform token[] xformOpOrder = ["xformOp:rotateXYZ"]
                 }
@@ -561,22 +597,23 @@ def Xform "World"
 
         def Xform "RightForearmGuide"
         {
-            quatf xformOp:orient = (0.5074513, 0, 0.86168045, 0)
+            token visibility = "invisible"
+            quatf xformOp:orient = (0.46582362, 0.06583313, 0.53844184, -0.6991099)
             float3 xformOp:scale = (1, 1, 1)
-            float3 xformOp:translate = (0.08375621, -0.12088535, -0.2928599)
+            float3 xformOp:translate = (0.08548, -0.12144, -0.29666)
             uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
 
             def Sphere "Pivot"
             {
                 color3f[] primvars:displayColor = [(0.2, 0.85, 0.95)]
-                double radius = 0.02
+                double radius = 0.035
             }
 
             def Cylinder "Axis"
             {
-                double height = 0.28
+                double height = 0.42
                 color3f[] primvars:displayColor = [(0.2, 0.8, 1)]
-                double radius = 0.006
+                double radius = 0.01
                 float3 xformOp:rotateXYZ = (90, 0, 0)
                 uniform token[] xformOpOrder = ["xformOp:rotateXYZ"]
             }
@@ -584,6 +621,7 @@ def Xform "World"
 
         def Xform "RightUpperElbowGuide"
         {
+            token visibility = "invisible"
             float3 xformOp:rotateXYZ = (0, 0, 0)
             float3 xformOp:translate = (-0.00006, -0.11989, -0.14907)
             uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ"]
@@ -606,6 +644,7 @@ def Xform "World"
 
         def Xform "UpperToLowerElbowGuide"
         {
+            token visibility = "invisible"
             float3 xformOp:translate = (0.03843, -0.12064, -0.24804)
             uniform token[] xformOpOrder = ["xformOp:translate"]
 
@@ -618,6 +657,7 @@ def Xform "World"
 
         def Xform "RightShoulderYawGuide"
         {
+            token visibility = "invisible"
             float3 xformOp:translate = (0, -0.12071, -0.0464)
             uniform token[] xformOpOrder = ["xformOp:translate"]
 
@@ -649,6 +689,7 @@ def Xform "World"
 
         def Xform "RightShoulderPitchGuide"
         {
+            token visibility = "invisible"
             quatf xformOp:orient = (1, 0, 0, 0)
             float3 xformOp:scale = (1, 1, 1)
             float3 xformOp:translate = (-0.00046249336, -0.07241509, -0.04704027)
@@ -677,7 +718,7 @@ def Xform "World"
             uniform token axis = "Y"
             float drive:angular:physics:damping = 5
             float drive:angular:physics:stiffness = 20
-            float drive:angular:physics:targetPosition = 0
+            float drive:angular:physics:targetPosition = -10.400001
             rel physics:body0 = </World/JointTest/RightShoulderSupportBody>
             rel physics:body1 = </World/JointTest/ShoulderPitchChildBody>
             point3f physics:localPos0 = (-0.00046249336, -0.07241509, -0.04704027)
@@ -695,7 +736,7 @@ def Xform "World"
             uniform token axis = "Y"
             float drive:angular:physics:damping = 2
             float drive:angular:physics:stiffness = 8
-            float drive:angular:physics:targetPosition = 0
+            float drive:angular:physics:targetPosition = -34.9
             rel physics:body0 = </World/JointTest/ShoulderPitchChildBody>
             rel physics:body1 = </World/JointTest/UpperArmBody>
             point3f physics:localPos0 = (0, -0.12071, -0.0464)
@@ -713,7 +754,7 @@ def Xform "World"
             uniform token axis = "Y"
             float drive:angular:physics:damping = 2
             float drive:angular:physics:stiffness = 6
-            float drive:angular:physics:targetPosition = 5.8
+            float drive:angular:physics:targetPosition = 36
             rel physics:body0 = </World/JointTest/UpperArmBody>
             rel physics:body1 = </World/JointTest/UpperElbowBody>
             point3f physics:localPos0 = (-0.00006, -0.11989, -0.14907)
@@ -731,7 +772,7 @@ def Xform "World"
             uniform token axis = "Y"
             float drive:angular:physics:damping = 3
             float drive:angular:physics:stiffness = 10
-            float drive:angular:physics:targetPosition = 0
+            float drive:angular:physics:targetPosition = 1.7
             rel physics:body0 = </World/JointTest/UpperElbowBody>
             rel physics:body1 = </World/JointTest/LowerElbowBody>
             point3f physics:localPos0 = (0.03843, -0.12064, -0.24804)
@@ -747,17 +788,18 @@ def Xform "World"
         )
         {
             uniform token axis = "Y"
-            float drive:angular:physics:damping = 0
-            float drive:angular:physics:stiffness = 0
+            float drive:angular:physics:damping = 2
+            float drive:angular:physics:stiffness = 6
             float drive:angular:physics:targetPosition = 0
+            uniform token physics:axis = "Y"
             rel physics:body0 = </World/JointTest/LowerElbowBody>
             rel physics:body1 = </World/JointTest/ForearmBody>
-            point3f physics:localPos0 = (0.08376, -0.12089, -0.29286)
-            point3f physics:localPos1 = (0.08448, -0.12034, -0.29318)
-            quatf physics:localRot0 = (-0.50745565, -0, -0.8616779, -0)
-            quatf physics:localRot1 = (0.8071098, 0, 0.5904014, 0)
-            float physics:lowerLimit = -90
-            float physics:upperLimit = 90
+            point3f physics:localPos0 = (0.08548, -0.12144, -0.29666)
+            point3f physics:localPos1 = (0.08548, -0.12182, -0.29666)
+            quatf physics:localRot0 = (0.46582362, 0.06583313, 0.53844184, -0.6991099)
+            quatf physics:localRot1 = (0.46582362, 0.06583313, 0.53844184, -0.6991099)
+            float physics:lowerLimit = -180
+            float physics:upperLimit = 180
         }
     }
 }
