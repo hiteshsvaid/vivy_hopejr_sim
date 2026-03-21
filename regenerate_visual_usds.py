@@ -37,6 +37,8 @@ VISUAL_ONLY_PARTS = [
     'forearm_front',
     'forearm_back',
     'forearm_to_wrist_servo_sts3215',
+    'wrist_servo_sts3215',
+    'wrist_yaw_pitch',
 ]
 
 
