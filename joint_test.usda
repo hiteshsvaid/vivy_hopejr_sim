@@ -7,8 +7,8 @@
                 double radius = 5
             }
             dictionary Perspective = {
-                double3 position = (0.5829861944214688, -0.11019845918503796, -0.07583822442699144)
-                double3 target = (0.23897998283861455, -0.08218062048115005, -0.32530622017880145)
+                double3 position = (0.33281395845523765, -0.011229783279411864, -0.5134384803972023)
+                double3 target = (0.17228187906322737, -0.08822149195843394, -0.4438058624553515)
             }
             dictionary Right = {
                 double3 position = (0, -5, 0)
@@ -580,6 +580,14 @@ def Xform "World"
                 )
                 {
                 }
+            }
+
+            def Xform "EndEffector"
+            {
+                float3 xformOp:rotateXYZ = (0.98844874, 141.89586, 15.00731)
+                float3 xformOp:scale = (1, 1, 1)
+                float3 xformOp:translate = (0.18586423, -0.09546602, -0.42922118)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ", "xformOp:scale"]
             }
 
             def Xform "Colliders"
