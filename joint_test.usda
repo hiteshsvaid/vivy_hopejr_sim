@@ -7,8 +7,8 @@
                 double radius = 5
             }
             dictionary Perspective = {
-                double3 position = (0.3202795781213339, -0.0519252205408762, -0.714369860480183)
-                double3 target = (0.21968985352475923, -0.1208727727292828, -0.4381627725639467)
+                double3 position = (0.5829861944214688, -0.11019845918503796, -0.07583822442699144)
+                double3 target = (0.23897998283861455, -0.08218062048115005, -0.32530622017880145)
             }
             dictionary Right = {
                 double3 position = (0, -5, 0)
@@ -238,30 +238,6 @@ def Xform "World"
                     uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
                 }
             }
-
-            def Xform "ShoulderPitchGuide"
-            {
-                token visibility = "invisible"
-                quatf xformOp:orient = (1, 0, 0, 0)
-                float3 xformOp:scale = (1, 1, 1)
-                float3 xformOp:translate = (0, -0.0724167, -0.046877097)
-                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
-
-                def Sphere "Pivot"
-                {
-                    color3f[] primvars:displayColor = [(1, 0.8, 0.2)]
-                    double radius = 0.008
-                }
-
-                def Cylinder "Axis"
-                {
-                    double height = 0.08
-                    color3f[] primvars:displayColor = [(0.2, 1, 0.4)]
-                    double radius = 0.003
-                    float3 xformOp:rotateXYZ = (90, 0, 0)
-                    uniform token[] xformOpOrder = ["xformOp:rotateXYZ"]
-                }
-            }
         }
 
         def Xform "UpperArmBody" (
@@ -322,19 +298,6 @@ def Xform "World"
                     uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
                 }
             }
-
-            def Xform "UpperArmGuide"
-            {
-                token visibility = "invisible"
-                float3 xformOp:translate = (0, -0.12219, -0.0446)
-                uniform token[] xformOpOrder = ["xformOp:translate"]
-
-                def Sphere "Pivot"
-                {
-                    color3f[] primvars:displayColor = [(0.9, 0.5, 0.2)]
-                    double radius = 0.008
-                }
-            }
         }
 
         def Xform "UpperElbowBody" (
@@ -389,29 +352,6 @@ def Xform "World"
                     float3 xformOp:scale = (0.086109, 0.0458899, 0.1322292)
                     float3 xformOp:translate = (0.015375, -0.1220877, -0.2001075)
                     uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
-                }
-            }
-
-            def Xform "UpperElbowGuide"
-            {
-                token visibility = "invisible"
-                float3 xformOp:rotateXYZ = (0, 0, 0)
-                float3 xformOp:translate = (-0.00007, -0.1201, -0.14893)
-                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ"]
-
-                def Sphere "Pivot"
-                {
-                    color3f[] primvars:displayColor = [(0.9, 0.7, 0.4)]
-                    double radius = 0.008
-                }
-
-                def Cylinder "Axis"
-                {
-                    double height = 0.14
-                    color3f[] primvars:displayColor = [(1, 0.6, 0.2)]
-                    double radius = 0.003
-                    float3 xformOp:rotateXYZ = (90, 0, 0)
-                    uniform token[] xformOpOrder = ["xformOp:rotateXYZ"]
                 }
             }
         }
@@ -483,22 +423,9 @@ def Xform "World"
                     double radius = 0.03798464
                     token visibility = "invisible"
                     quatf xformOp:orient = (0.35985795, 3.5095265e-17, 0.9330071, 3.9197396e-17)
-                    float3 xformOp:scale = (1, 1, 1)
-                    float3 xformOp:translate = (0.0579987, -0.1155546, -0.26751032)
+                    float3 xformOp:scale = (1, 1, 0.8733559)
+                    float3 xformOp:translate = (0.06185394, -0.1155546, -0.2731077)
                     uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
-                }
-            }
-
-            def Xform "LowerElbowGuide"
-            {
-                token visibility = "invisible"
-                float3 xformOp:translate = (0.03838, -0.12084, -0.24802)
-                uniform token[] xformOpOrder = ["xformOp:translate"]
-
-                def Sphere "Pivot"
-                {
-                    color3f[] primvars:displayColor = [(0.9, 0.7, 0.2)]
-                    double radius = 0.008
                 }
             }
         }
@@ -560,30 +487,6 @@ def Xform "World"
                     float3 xformOp:scale = (1, 1, 1)
                     float3 xformOp:translate = (0.10862216, -0.1203424, -0.31940338)
                     uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
-                }
-            }
-
-            def Xform "ForearmGuide"
-            {
-                token visibility = "invisible"
-                quatf xformOp:orient = (0.46582362, 0.06583313, 0.53844184, -0.69911)
-                float3 xformOp:scale = (1, 1, 1)
-                float3 xformOp:translate = (0.08548, -0.12182321, -0.29666)
-                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
-
-                def Sphere "Pivot"
-                {
-                    color3f[] primvars:displayColor = [(0.95, 0.75, 0.2)]
-                    double radius = 0.035
-                }
-
-                def Cylinder "Axis"
-                {
-                    double height = 0.42
-                    color3f[] primvars:displayColor = [(1, 0.6, 0.2)]
-                    double radius = 0.01
-                    float3 xformOp:rotateXYZ = (90, 0, 0)
-                    uniform token[] xformOpOrder = ["xformOp:rotateXYZ"]
                 }
             }
         }
@@ -829,285 +732,191 @@ def Xform "World"
             }
         }
 
-        def Xform "RightForearmGuide"
+        def Scope "Joints"
         {
-            token visibility = "invisible"
-            quatf xformOp:orient = (0.46582362, 0.06583313, 0.53844184, -0.6991099)
-            float3 xformOp:scale = (1, 1, 1)
-            float3 xformOp:translate = (0.08548, -0.12144, -0.29666)
-            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
-
-            def Sphere "Pivot"
+            def PhysicsFixedJoint "world_to_chest"
             {
-                color3f[] primvars:displayColor = [(0.2, 0.85, 0.95)]
-                double radius = 0.035
+                rel physics:body1 = </World/JointTest/ChestBody>
+                point3f physics:localPos0 = (0, 0.100275, -0.106247)
+                point3f physics:localPos1 = (0, 0.100275, -0.106247)
+                quatf physics:localRot0 = (1, 0, 0, 0)
+                quatf physics:localRot1 = (1, 0, 0, 0)
             }
 
-            def Cylinder "Axis"
+            def PhysicsFixedJoint "right_shoulder_support_fixed"
             {
-                double height = 0.42
-                color3f[] primvars:displayColor = [(0.2, 0.8, 1)]
-                double radius = 0.01
-                float3 xformOp:rotateXYZ = (90, 0, 0)
-                uniform token[] xformOpOrder = ["xformOp:rotateXYZ"]
-            }
-        }
-
-        def Xform "RightUpperElbowGuide"
-        {
-            token visibility = "invisible"
-            float3 xformOp:rotateXYZ = (0, 0, 0)
-            float3 xformOp:translate = (-0.00006, -0.11989, -0.14907)
-            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ"]
-
-            def Sphere "Pivot"
-            {
-                color3f[] primvars:displayColor = [(0.2, 0.9, 0.6)]
-                double radius = 0.008
+                rel physics:body0 = </World/JointTest/ChestBody>
+                rel physics:body1 = </World/JointTest/RightShoulderSupportBody>
+                point3f physics:localPos0 = (0, 0, 0)
+                point3f physics:localPos1 = (0, 0, 0)
+                quatf physics:localRot0 = (1, 0, 0, 0)
+                quatf physics:localRot1 = (1, 0, 0, 0)
             }
 
-            def Cylinder "Axis"
+            def PhysicsRevoluteJoint "right_shoulder_pitch" (
+                prepend apiSchemas = ["PhysicsDriveAPI:angular"]
+            )
             {
-                double height = 0.14
-                color3f[] primvars:displayColor = [(0.2, 0.8, 1)]
-                double radius = 0.003
-                float3 xformOp:rotateXYZ = (90, 0, 0)
-                uniform token[] xformOpOrder = ["xformOp:rotateXYZ"]
-            }
-        }
-
-        def Xform "UpperToLowerElbowGuide"
-        {
-            token visibility = "invisible"
-            float3 xformOp:translate = (0.03843, -0.12064, -0.24804)
-            uniform token[] xformOpOrder = ["xformOp:translate"]
-
-            def Sphere "Pivot"
-            {
-                color3f[] primvars:displayColor = [(0.2, 0.7, 0.95)]
-                double radius = 0.008
-            }
-        }
-
-        def Xform "RightShoulderYawGuide"
-        {
-            token visibility = "invisible"
-            float3 xformOp:translate = (0, -0.12071, -0.0464)
-            uniform token[] xformOpOrder = ["xformOp:translate"]
-
-            def Sphere "Pivot"
-            {
-                color3f[] primvars:displayColor = [(0.2, 0.9, 0.9)]
-                double radius = 0.008
-            }
-        }
-
-        def PhysicsFixedJoint "world_to_chest"
-        {
-            rel physics:body1 = </World/JointTest/ChestBody>
-            point3f physics:localPos0 = (0, 0.100275, -0.106247)
-            point3f physics:localPos1 = (0, 0.100275, -0.106247)
-            quatf physics:localRot0 = (1, 0, 0, 0)
-            quatf physics:localRot1 = (1, 0, 0, 0)
-        }
-
-        def PhysicsFixedJoint "right_shoulder_support_fixed"
-        {
-            rel physics:body0 = </World/JointTest/ChestBody>
-            rel physics:body1 = </World/JointTest/RightShoulderSupportBody>
-            point3f physics:localPos0 = (0, 0, 0)
-            point3f physics:localPos1 = (0, 0, 0)
-            quatf physics:localRot0 = (1, 0, 0, 0)
-            quatf physics:localRot1 = (1, 0, 0, 0)
-        }
-
-        def Xform "RightShoulderPitchGuide"
-        {
-            token visibility = "invisible"
-            quatf xformOp:orient = (1, 0, 0, 0)
-            float3 xformOp:scale = (1, 1, 1)
-            float3 xformOp:translate = (-0.00046249336, -0.07241509, -0.04704027)
-            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
-
-            def Sphere "Pivot"
-            {
-                color3f[] primvars:displayColor = [(1, 0.2, 0.2)]
-                double radius = 0.008
+                uniform token axis = "Y"
+                float drive:angular:physics:damping = 5
+                float drive:angular:physics:stiffness = 20
+                float drive:angular:physics:targetPosition = -3.2
+                rel physics:body0 = </World/JointTest/RightShoulderSupportBody>
+                rel physics:body1 = </World/JointTest/ShoulderPitchChildBody>
+                point3f physics:localPos0 = (-0.00046249336, -0.07241509, -0.04704027)
+                point3f physics:localPos1 = (0, -0.07242, -0.04688)
+                quatf physics:localRot0 = (0.70710677, 0, 0, 0.70710677)
+                quatf physics:localRot1 = (0.70710677, 0, 0, 0.70710677)
+                float physics:lowerLimit = -60
+                float physics:upperLimit = 60
             }
 
-            def Cylinder "Axis"
+            def PhysicsRevoluteJoint "right_shoulder_yaw" (
+                prepend apiSchemas = ["PhysicsDriveAPI:angular"]
+            )
             {
-                double height = 0.08
-                color3f[] primvars:displayColor = [(0.2, 0.8, 1)]
-                double radius = 0.003
-                float3 xformOp:rotateXYZ = (90, 0, 0)
-                uniform token[] xformOpOrder = ["xformOp:rotateXYZ"]
+                uniform token axis = "Y"
+                float drive:angular:physics:damping = 2
+                float drive:angular:physics:stiffness = 8
+                float drive:angular:physics:targetPosition = 4.3
+                rel physics:body0 = </World/JointTest/ShoulderPitchChildBody>
+                rel physics:body1 = </World/JointTest/UpperArmBody>
+                point3f physics:localPos0 = (0, -0.12071, -0.0464)
+                point3f physics:localPos1 = (0, -0.12219, -0.0446)
+                quatf physics:localRot0 = (1, 0, 0, 0)
+                quatf physics:localRot1 = (1, 0, 0, 0)
+                float physics:lowerLimit = -105
+                float physics:upperLimit = 7
             }
-        }
 
-        def PhysicsRevoluteJoint "right_shoulder_pitch" (
-            prepend apiSchemas = ["PhysicsDriveAPI:angular"]
-        )
-        {
-            uniform token axis = "Y"
-            float drive:angular:physics:damping = 5
-            float drive:angular:physics:stiffness = 20
-            float drive:angular:physics:targetPosition = -20.6
-            rel physics:body0 = </World/JointTest/RightShoulderSupportBody>
-            rel physics:body1 = </World/JointTest/ShoulderPitchChildBody>
-            point3f physics:localPos0 = (-0.00046249336, -0.07241509, -0.04704027)
-            point3f physics:localPos1 = (0, -0.07242, -0.04688)
-            quatf physics:localRot0 = (0.70710677, 0, 0, 0.70710677)
-            quatf physics:localRot1 = (0.70710677, 0, 0, 0.70710677)
-            float physics:lowerLimit = -60
-            float physics:upperLimit = 60
-        }
+            def PhysicsRevoluteJoint "right_upper_elbow" (
+                prepend apiSchemas = ["PhysicsDriveAPI:angular"]
+            )
+            {
+                uniform token axis = "Y"
+                float drive:angular:physics:damping = 2
+                float drive:angular:physics:stiffness = 6
+                float drive:angular:physics:targetPosition = -2.6000001
+                rel physics:body0 = </World/JointTest/UpperArmBody>
+                rel physics:body1 = </World/JointTest/UpperElbowBody>
+                point3f physics:localPos0 = (-0.00006, -0.11989, -0.14907)
+                point3f physics:localPos1 = (-0.00007, -0.1201, -0.14893)
+                quatf physics:localRot0 = (0.5627204, 0.42650682, 0.5685334, -0.42214617)
+                quatf physics:localRot1 = (0.5627204, 0.42650682, 0.5685334, -0.42214617)
+                float physics:lowerLimit = -60
+                float physics:upperLimit = 60
+            }
 
-        def PhysicsRevoluteJoint "right_shoulder_yaw" (
-            prepend apiSchemas = ["PhysicsDriveAPI:angular"]
-        )
-        {
-            uniform token axis = "Y"
-            float drive:angular:physics:damping = 2
-            float drive:angular:physics:stiffness = 8
-            float drive:angular:physics:targetPosition = 7
-            rel physics:body0 = </World/JointTest/ShoulderPitchChildBody>
-            rel physics:body1 = </World/JointTest/UpperArmBody>
-            point3f physics:localPos0 = (0, -0.12071, -0.0464)
-            point3f physics:localPos1 = (0, -0.12219, -0.0446)
-            quatf physics:localRot0 = (1, 0, 0, 0)
-            quatf physics:localRot1 = (1, 0, 0, 0)
-            float physics:lowerLimit = -105
-            float physics:upperLimit = 7
-        }
+            def PhysicsRevoluteJoint "right_elbow" (
+                prepend apiSchemas = ["PhysicsDriveAPI:angular"]
+            )
+            {
+                uniform token axis = "Y"
+                float drive:angular:physics:damping = 3
+                float drive:angular:physics:stiffness = 10
+                float drive:angular:physics:targetPosition = -8.900001
+                rel physics:body0 = </World/JointTest/UpperElbowBody>
+                rel physics:body1 = </World/JointTest/LowerElbowBody>
+                point3f physics:localPos0 = (0.03843, -0.12064, -0.24804)
+                point3f physics:localPos1 = (0.03838, -0.12084, -0.24802)
+                quatf physics:localRot0 = (0.70710677, 0, 0, 0.70710677)
+                quatf physics:localRot1 = (0.70710677, 0, 0, 0.70710677)
+                float physics:lowerLimit = -120
+                float physics:upperLimit = 5
+            }
 
-        def PhysicsRevoluteJoint "right_upper_elbow" (
-            prepend apiSchemas = ["PhysicsDriveAPI:angular"]
-        )
-        {
-            uniform token axis = "Y"
-            float drive:angular:physics:damping = 2
-            float drive:angular:physics:stiffness = 6
-            float drive:angular:physics:targetPosition = -6.7000003
-            rel physics:body0 = </World/JointTest/UpperArmBody>
-            rel physics:body1 = </World/JointTest/UpperElbowBody>
-            point3f physics:localPos0 = (-0.00006, -0.11989, -0.14907)
-            point3f physics:localPos1 = (-0.00007, -0.1201, -0.14893)
-            quatf physics:localRot0 = (0.5627204, 0.42650682, 0.5685334, -0.42214617)
-            quatf physics:localRot1 = (0.5627204, 0.42650682, 0.5685334, -0.42214617)
-            float physics:lowerLimit = -60
-            float physics:upperLimit = 60
-        }
+            def PhysicsRevoluteJoint "right_forearm_twist" (
+                prepend apiSchemas = ["PhysicsDriveAPI:angular"]
+            )
+            {
+                uniform token axis = "Y"
+                float drive:angular:physics:damping = 2
+                float drive:angular:physics:stiffness = 6
+                float drive:angular:physics:targetPosition = -97
+                uniform token physics:axis = "Y"
+                rel physics:body0 = </World/JointTest/LowerElbowBody>
+                rel physics:body1 = </World/JointTest/ForearmBody>
+                point3f physics:localPos0 = (0.08548, -0.12144, -0.29666)
+                point3f physics:localPos1 = (0.08548, -0.12182, -0.29666)
+                quatf physics:localRot0 = (0.46582362, 0.06583313, 0.53844184, -0.6991099)
+                quatf physics:localRot1 = (0.46582362, 0.06583313, 0.53844184, -0.6991099)
+                float physics:lowerLimit = -124.68563
+                float physics:upperLimit = 124.809845
+            }
 
-        def PhysicsRevoluteJoint "right_elbow" (
-            prepend apiSchemas = ["PhysicsDriveAPI:angular"]
-        )
-        {
-            uniform token axis = "Y"
-            float drive:angular:physics:damping = 3
-            float drive:angular:physics:stiffness = 10
-            float drive:angular:physics:targetPosition = -22.5
-            rel physics:body0 = </World/JointTest/UpperElbowBody>
-            rel physics:body1 = </World/JointTest/LowerElbowBody>
-            point3f physics:localPos0 = (0.03843, -0.12064, -0.24804)
-            point3f physics:localPos1 = (0.03838, -0.12084, -0.24802)
-            quatf physics:localRot0 = (0.70710677, 0, 0, 0.70710677)
-            quatf physics:localRot1 = (0.70710677, 0, 0, 0.70710677)
-            float physics:lowerLimit = -120
-            float physics:upperLimit = 5
-        }
+            def PhysicsRevoluteJoint "right_wrist" (
+                prepend apiSchemas = ["PhysicsDriveAPI:angular"]
+            )
+            {
+                float drive:angular:physics:damping = 5
+                float drive:angular:physics:stiffness = 8
+                float drive:angular:physics:targetPosition = -8.400001
+                uniform token physics:axis = "Y"
+                rel physics:body0 = </World/JointTest/ForearmBody>
+                rel physics:body1 = </World/JointTest/WristBody>
+                float physics:breakForce = 3.4028235e38
+                float physics:breakTorque = 3.4028235e38
+                point3f physics:localPos0 = (0.1579265, -0.14307544, -0.34384504)
+                point3f physics:localPos1 = (0.1579265, -0.14307544, -0.34384504)
+                quatf physics:localRot0 = (0.9551123, -0.21374306, 0.027581567, 0.20325764)
+                quatf physics:localRot1 = (0.9551123, -0.21374306, 0.027581567, 0.20325764)
+                float physics:lowerLimit = -108.96908
+                float physics:upperLimit = 31.785845
+            }
 
-        def PhysicsRevoluteJoint "right_forearm_twist" (
-            prepend apiSchemas = ["PhysicsDriveAPI:angular"]
-        )
-        {
-            uniform token axis = "Y"
-            float drive:angular:physics:damping = 2
-            float drive:angular:physics:stiffness = 6
-            float drive:angular:physics:targetPosition = -62.600002
-            uniform token physics:axis = "Y"
-            rel physics:body0 = </World/JointTest/LowerElbowBody>
-            rel physics:body1 = </World/JointTest/ForearmBody>
-            point3f physics:localPos0 = (0.08548, -0.12144, -0.29666)
-            point3f physics:localPos1 = (0.08548, -0.12182, -0.29666)
-            quatf physics:localRot0 = (0.46582362, 0.06583313, 0.53844184, -0.6991099)
-            quatf physics:localRot1 = (0.46582362, 0.06583313, 0.53844184, -0.6991099)
-            float physics:lowerLimit = -180
-            float physics:upperLimit = 180
-        }
+            def PhysicsRevoluteJoint "right_palm" (
+                prepend apiSchemas = ["PhysicsDriveAPI:angular"]
+            )
+            {
+                float drive:angular:physics:damping = 2
+                float drive:angular:physics:stiffness = 6
+                float drive:angular:physics:targetPosition = -38.9
+                uniform token physics:axis = "Y"
+                rel physics:body0 = </World/JointTest/WristBody>
+                rel physics:body1 = </World/JointTest/PalmBody>
+                point3f physics:localPos0 = (0.17846663, -0.10427633, -0.36706167)
+                point3f physics:localPos1 = (0.17846663, -0.10427633, -0.36706167)
+                quatf physics:localRot0 = (0.9156082, 0.31194434, 0.064322874, -0.24538718)
+                quatf physics:localRot1 = (0.9156082, 0.31194434, 0.064322874, -0.24538718)
+                float physics:lowerLimit = -106.98095
+                float physics:upperLimit = 55.070885
+            }
 
-        def PhysicsRevoluteJoint "right_wrist" (
-            prepend apiSchemas = ["PhysicsDriveAPI:angular"]
-        )
-        {
-            float drive:angular:physics:damping = 5
-            float drive:angular:physics:stiffness = 8
-            float drive:angular:physics:targetPosition = -26.7
-            uniform token physics:axis = "Y"
-            rel physics:body0 = </World/JointTest/ForearmBody>
-            rel physics:body1 = </World/JointTest/WristBody>
-            float physics:breakForce = 3.4028235e38
-            float physics:breakTorque = 3.4028235e38
-            point3f physics:localPos0 = (0.1579265, -0.14307544, -0.34384504)
-            point3f physics:localPos1 = (0.1579265, -0.14307544, -0.34384504)
-            quatf physics:localRot0 = (0.9551123, -0.21374306, 0.027581567, 0.20325764)
-            quatf physics:localRot1 = (0.9551123, -0.21374306, 0.027581567, 0.20325764)
-            float physics:lowerLimit = -108.96908
-            float physics:upperLimit = 31.785845
-        }
+            def PhysicsRevoluteJoint "right_thumb" (
+                prepend apiSchemas = ["PhysicsDriveAPI:angular"]
+            )
+            {
+                float drive:angular:physics:damping = 2
+                float drive:angular:physics:stiffness = 6
+                float drive:angular:physics:targetPosition = 47.5
+                uniform token physics:axis = "Y"
+                rel physics:body0 = </World/JointTest/PalmBody>
+                rel physics:body1 = </World/JointTest/ThumbBody>
+                point3f physics:localPos0 = (0.22607772, -0.10128983, -0.42174152)
+                point3f physics:localPos1 = (0.22607772, -0.10128983, -0.42174152)
+                quatf physics:localRot0 = (0.90150213, 0.3445212, 0.102842994, -0.24087827)
+                quatf physics:localRot1 = (0.90150213, 0.3445212, 0.102842994, -0.24087827)
+                float physics:lowerLimit = -59.856945
+                float physics:upperLimit = 125.49909
+            }
 
-        def PhysicsRevoluteJoint "right_palm" (
-            prepend apiSchemas = ["PhysicsDriveAPI:angular"]
-        )
-        {
-            float drive:angular:physics:damping = 2
-            float drive:angular:physics:stiffness = 6
-            float drive:angular:physics:targetPosition = -70.6
-            uniform token physics:axis = "Y"
-            rel physics:body0 = </World/JointTest/WristBody>
-            rel physics:body1 = </World/JointTest/PalmBody>
-            point3f physics:localPos0 = (0.17846663, -0.10427633, -0.36706167)
-            point3f physics:localPos1 = (0.17846663, -0.10427633, -0.36706167)
-            quatf physics:localRot0 = (0.9156082, 0.31194434, 0.064322874, -0.24538718)
-            quatf physics:localRot1 = (0.9156082, 0.31194434, 0.064322874, -0.24538718)
-            float physics:lowerLimit = -106.98095
-            float physics:upperLimit = 55.070885
-        }
-
-        def PhysicsRevoluteJoint "right_thumb" (
-            prepend apiSchemas = ["PhysicsDriveAPI:angular"]
-        )
-        {
-            float drive:angular:physics:damping = 2
-            float drive:angular:physics:stiffness = 6
-            float drive:angular:physics:targetPosition = 0
-            uniform token physics:axis = "Y"
-            rel physics:body0 = </World/JointTest/PalmBody>
-            rel physics:body1 = </World/JointTest/ThumbBody>
-            point3f physics:localPos0 = (0.22607772, -0.10128983, -0.42174152)
-            point3f physics:localPos1 = (0.22607772, -0.10128983, -0.42174152)
-            quatf physics:localRot0 = (0.90150213, 0.3445212, 0.102842994, -0.24087827)
-            quatf physics:localRot1 = (0.90150213, 0.3445212, 0.102842994, -0.24087827)
-            float physics:lowerLimit = -59.856945
-            float physics:upperLimit = 125.49909
-        }
-
-        def PhysicsRevoluteJoint "right_index" (
-            prepend apiSchemas = ["PhysicsDriveAPI:angular"]
-        )
-        {
-            float drive:angular:physics:damping = 2
-            float drive:angular:physics:stiffness = 6
-            float drive:angular:physics:targetPosition = 0
-            uniform token physics:axis = "Y"
-            rel physics:body0 = </World/JointTest/PalmBody>
-            rel physics:body1 = </World/JointTest/IndexBody>
-            point3f physics:localPos0 = (0.18798552, -0.056437373, -0.44248012)
-            point3f physics:localPos1 = (0.18798552, -0.056437373, -0.44248012)
-            quatf physics:localRot0 = (0.9088809, 0.31569228, 0.075378895, -0.26190057)
-            quatf physics:localRot1 = (0.9088809, 0.31569228, 0.075378895, -0.26190057)
-            float physics:lowerLimit = -27.539473
-            float physics:upperLimit = 147.26332
+            def PhysicsRevoluteJoint "right_index" (
+                prepend apiSchemas = ["PhysicsDriveAPI:angular"]
+            )
+            {
+                float drive:angular:physics:damping = 2
+                float drive:angular:physics:stiffness = 6
+                float drive:angular:physics:targetPosition = 18
+                uniform token physics:axis = "Y"
+                rel physics:body0 = </World/JointTest/PalmBody>
+                rel physics:body1 = </World/JointTest/IndexBody>
+                point3f physics:localPos0 = (0.18798552, -0.056437373, -0.44248012)
+                point3f physics:localPos1 = (0.18798552, -0.056437373, -0.44248012)
+                quatf physics:localRot0 = (0.9088809, 0.31569228, 0.075378895, -0.26190057)
+                quatf physics:localRot1 = (0.9088809, 0.31569228, 0.075378895, -0.26190057)
+                float physics:lowerLimit = -27.539473
+                float physics:upperLimit = 147.26332
+            }
         }
     }
 }
