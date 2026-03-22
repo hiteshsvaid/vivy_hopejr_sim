@@ -7,8 +7,8 @@
                 double radius = 5
             }
             dictionary Perspective = {
-                double3 position = (0.39071737373094767, 0.024129623863432828, -0.25378848557083306)
-                double3 target = (0.1762879323953291, -0.10215820232273927, -0.4247674688056768)
+                double3 position = (0.3202795781213339, -0.0519252205408762, -0.714369860480183)
+                double3 target = (0.21968985352475923, -0.1208727727292828, -0.4381627725639467)
             }
             dictionary Right = {
                 double3 position = (0, -5, 0)
@@ -765,6 +765,23 @@ def Xform "World"
                 {
                 }
             }
+
+            def Xform "Colliders"
+            {
+                def Cube "Thumb" (
+                    prepend apiSchemas = ["PhysicsCollisionAPI"]
+                )
+                {
+                    float3[] extent = [(-0.5, -0.5, -0.5), (0.5, 0.5, 0.5)]
+                    rel physics:simulationOwner
+                    double size = 1
+                    token visibility = "invisible"
+                    quatf xformOp:orient = (0.64069605, 0.0014212644, -0.6505231, -0.40783113)
+                    float3 xformOp:scale = (0.02122515, 0.04314559, 0.06779554)
+                    float3 xformOp:translate = (0.24048151, -0.1326019, -0.43924123)
+                    uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+                }
+            }
         }
 
         def Xform "IndexBody" (
@@ -791,6 +808,23 @@ def Xform "World"
                     references = @./assets/usd/index_visual.usd@
                 )
                 {
+                }
+            }
+
+            def Xform "Colliders"
+            {
+                def Cube "Index" (
+                    prepend apiSchemas = ["PhysicsCollisionAPI"]
+                )
+                {
+                    float3[] extent = [(-0.5, -0.5, -0.5), (0.5, 0.5, 0.5)]
+                    rel physics:simulationOwner
+                    double size = 1
+                    token visibility = "invisible"
+                    quatf xformOp:orient = (0.64069605, 0.0014212644, -0.6505231, -0.40783113)
+                    float3 xformOp:scale = (0.02122515, 0.04314559, 0.08303055)
+                    float3 xformOp:translate = (0.21151423, -0.096551366, -0.46263072)
+                    uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
                 }
             }
         }
