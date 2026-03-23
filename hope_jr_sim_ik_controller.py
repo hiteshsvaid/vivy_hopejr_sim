@@ -17,6 +17,9 @@ DEFAULT_PACKET_PATH = Path("/tmp/hope_jr_quest_latest.json")
 DEFAULT_IK_SPEC_PATH = DEFAULT_LEROBOT_REPO / "src/lerobot/robots/hope_jr/hope_jr_arm_ik_spec.json"
 DEFAULT_KINEMATICS_MODULE_PATH = DEFAULT_LEROBOT_REPO / "src/lerobot/robots/hope_jr/hope_jr_arm_kinematics.py"
 DEFAULT_JOINT_ROOT_PATH = "/World/JointTest/Joints"
+DEFAULT_STOP_TARGETS_DEG = {
+    "right_elbow": 40.5,
+}
 
 _ACTIVE_LOOP = None
 
@@ -113,6 +116,32 @@ class HopeJrSimIkController:
                 )
             attr.Set(float(target_deg))
 
+
+    def _write_joint_state_deg(self, stage, joint_positions_deg: np.ndarray) -> None:
+        for joint_name, position_deg in zip(self.model.joint_names, joint_positions_deg, strict=True):
+            prim = stage.GetPrimAtPath(f"{self.joint_root_path}/{joint_name}")
+            if not prim.IsValid():
+                continue
+            pos_attr = prim.GetAttribute("state:angular:physics:position")
+            vel_attr = prim.GetAttribute("state:angular:physics:velocity")
+            if pos_attr.IsValid():
+                pos_attr.Set(float(position_deg))
+            if vel_attr.IsValid():
+                vel_attr.Set(0.0)
+
+    def reset_target_positions(self, target_value_deg: float = 0.0, reset_joint_state: bool = True) -> None:
+        stage = self._get_stage()
+        if stage is None:
+            return
+        target_values = np.array(
+            [DEFAULT_STOP_TARGETS_DEG.get(joint_name, float(target_value_deg)) for joint_name in self.model.joint_names],
+            dtype=float,
+        )
+        self._write_joint_targets_deg(stage, target_values)
+        if reset_joint_state:
+            self._write_joint_state_deg(stage, target_values)
+        self.last_joint_targets_deg = target_values
+
     def solve_once(self, *, apply_to_stage: bool) -> dict[str, Any] | None:
         packet = self._load_latest_packet()
         if packet is None:
@@ -155,10 +184,20 @@ class HopeJrSimIkController:
 
 
 class HopeJrIsaacUpdateLoop:
-    def __init__(self, controller: HopeJrSimIkController, *, apply_to_stage: bool, interval_s: float):
+    def __init__(
+        self,
+        controller: HopeJrSimIkController,
+        *,
+        apply_to_stage: bool,
+        interval_s: float,
+        reset_targets_on_stop: bool = True,
+        reset_target_value_deg: float = 0.0,
+    ):
         self.controller = controller
         self.apply_to_stage = apply_to_stage
         self.interval_s = interval_s
+        self.reset_targets_on_stop = reset_targets_on_stop
+        self.reset_target_value_deg = reset_target_value_deg
         self._subscription = None
         self._last_tick_time = 0.0
 
@@ -187,6 +226,11 @@ class HopeJrIsaacUpdateLoop:
 
     def stop(self) -> None:
         self._subscription = None
+        if self.reset_targets_on_stop:
+            try:
+                self.controller.reset_target_positions(self.reset_target_value_deg, reset_joint_state=True)
+            except Exception as exc:
+                print(f"Hope Jr IK controller target reset error: {exc}")
         print("Hope Jr IK controller unsubscribed from Isaac update stream")
 
 
@@ -212,6 +256,8 @@ def start_script_editor_loop(
     interval_s: float = 0.05,
     dry_run: bool = False,
     consume_only_new: bool = True,
+    reset_targets_on_stop: bool = True,
+    reset_target_value_deg: float = 0.0,
 ) -> HopeJrIsaacUpdateLoop:
     global _ACTIVE_LOOP
     stop_script_editor_loop()
@@ -225,7 +271,13 @@ def start_script_editor_loop(
     )
     if consume_only_new:
         controller.minimum_packet_timestamp = time.time()
-    _ACTIVE_LOOP = HopeJrIsaacUpdateLoop(controller, apply_to_stage=not dry_run, interval_s=interval_s).start()
+    _ACTIVE_LOOP = HopeJrIsaacUpdateLoop(
+        controller,
+        apply_to_stage=not dry_run,
+        interval_s=interval_s,
+        reset_targets_on_stop=reset_targets_on_stop,
+        reset_target_value_deg=reset_target_value_deg,
+    ).start()
     return _ACTIVE_LOOP
 
 
