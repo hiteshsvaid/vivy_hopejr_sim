@@ -50,6 +50,7 @@ class HopeJrSimIkController:
         )
         self.last_joint_targets_deg = np.zeros(len(self.model.joint_names), dtype=float)
         self.last_packet_timestamp = None
+        self.minimum_packet_timestamp = None
 
     def _load_kinematics_module(self, module_path: Path):
         spec = importlib.util.spec_from_file_location("hope_jr_arm_kinematics", module_path)
@@ -118,6 +119,10 @@ class HopeJrSimIkController:
             return None
 
         packet_timestamp = packet.get("timestamp")
+        if packet_timestamp is None:
+            return None
+        if self.minimum_packet_timestamp is not None and packet_timestamp <= self.minimum_packet_timestamp:
+            return None
         if packet_timestamp == self.last_packet_timestamp:
             return None
         self.last_packet_timestamp = packet_timestamp
@@ -206,6 +211,7 @@ def start_script_editor_loop(
     world_rotate_xyz: list[float] | tuple[float, float, float] = (0.0, 0.0, 0.0),
     interval_s: float = 0.05,
     dry_run: bool = False,
+    consume_only_new: bool = True,
 ) -> HopeJrIsaacUpdateLoop:
     global _ACTIVE_LOOP
     stop_script_editor_loop()
@@ -217,6 +223,8 @@ def start_script_editor_loop(
         world_offset=np.asarray(world_offset, dtype=float),
         world_rotate_xyz_deg=np.asarray(world_rotate_xyz, dtype=float),
     )
+    if consume_only_new:
+        controller.minimum_packet_timestamp = time.time()
     _ACTIVE_LOOP = HopeJrIsaacUpdateLoop(controller, apply_to_stage=not dry_run, interval_s=interval_s).start()
     return _ACTIVE_LOOP
 
