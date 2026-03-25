@@ -69,6 +69,7 @@ class HopeJrSimIkController:
         end_effector_path: str,
         write_joint_state_directly: bool,
         active_joint_names: tuple[str, ...] | None = None,
+        inactive_joint_behavior: str = "neutral",
     ):
         self.lerobot_repo = lerobot_repo
         self.packet_path = packet_path
@@ -98,6 +99,9 @@ class HopeJrSimIkController:
             self.active_joint_names = tuple()
         else:
             self.active_joint_names = tuple(active_joint_names)
+        if inactive_joint_behavior not in {"neutral", "hold"}:
+            raise ValueError(f"Unsupported inactive_joint_behavior: {inactive_joint_behavior}")
+        self.inactive_joint_behavior = inactive_joint_behavior
         self._udp_socket = None
         if self.use_udp:
             self._udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -119,6 +123,7 @@ class HopeJrSimIkController:
         )
         self.last_joint_targets_deg = np.zeros(len(self.model.joint_names), dtype=float)
         self.neutral_model_joint_targets_deg = np.array([DEFAULT_STOP_TARGETS_DEG.get(name, 0.0) for name in self.model.joint_names], dtype=float)
+        self.inactive_joint_hold_targets_deg = self.neutral_model_joint_targets_deg.copy()
         if self.active_joint_names:
             active_set = set(self.active_joint_names)
             self.active_joint_mask = np.array([1.0 if name in active_set else 0.0 for name in self.model.joint_names], dtype=float)
@@ -139,6 +144,11 @@ class HopeJrSimIkController:
         self.last_packet_received_at = None
         self._articulation = None
         self._articulation_joint_indices = None
+
+    def _inactive_joint_reference_targets_deg(self) -> np.ndarray:
+        if self.inactive_joint_behavior == "hold":
+            return self.inactive_joint_hold_targets_deg
+        return self.neutral_model_joint_targets_deg
 
     def _load_kinematics_module(self, module_path: Path):
         spec = importlib.util.spec_from_file_location("hope_jr_arm_kinematics", module_path)
@@ -183,7 +193,14 @@ class HopeJrSimIkController:
 
         quest_position = np.asarray(hand["position"], dtype=float)
         quest_rotation = Rotation.from_quat(np.asarray(hand["orientation_xyzw"], dtype=float)).as_matrix()
-        current_sim_pose = self.model.forward_kinematics(current_joint_targets_deg)
+        anchor_joint_targets_deg = current_joint_targets_deg.copy()
+        if self.active_joint_names:
+            inactive = self.active_joint_mask < 0.5
+            if self.inactive_joint_behavior == "hold":
+                self.inactive_joint_hold_targets_deg = current_joint_targets_deg.copy()
+            inactive_reference_targets_deg = self._inactive_joint_reference_targets_deg()
+            anchor_joint_targets_deg[inactive] = inactive_reference_targets_deg[inactive]
+        current_sim_pose = self.model.forward_kinematics(anchor_joint_targets_deg)
         stage = self._get_stage()
         current_stage_pose = self._read_stage_end_effector_pose(stage)
 
@@ -216,6 +233,9 @@ class HopeJrSimIkController:
                     "quest_anchor_position": self.quest_anchor_position.tolist(),
                     "sim_anchor_position": self.sim_anchor_pose[:3, 3].tolist(),
                     "stage_anchor_position": self.stage_anchor_pose[:3, 3].tolist(),
+                    "anchor_joint_targets_deg": anchor_joint_targets_deg.tolist(),
+                    "active_joint_names": list(self.active_joint_names),
+                    "inactive_joint_behavior": self.inactive_joint_behavior,
                 },
                 dedupe_key=("anchor_captured", tuple(np.round(self.quest_anchor_position, 6))),
             )
@@ -626,7 +646,8 @@ class HopeJrSimIkController:
         ik_seed_deg = current_joint_targets_deg.copy()
         if self.active_joint_names:
             inactive = self.active_joint_mask < 0.5
-            ik_seed_deg[inactive] = self.neutral_model_joint_targets_deg[inactive]
+            inactive_reference_targets_deg = self._inactive_joint_reference_targets_deg()
+            ik_seed_deg[inactive] = inactive_reference_targets_deg[inactive]
         solved_model_joint_targets_deg = self.model.inverse_kinematics(
             ik_seed_deg,
             target_pose,
@@ -635,7 +656,8 @@ class HopeJrSimIkController:
         )
         if self.active_joint_names:
             inactive = self.active_joint_mask < 0.5
-            solved_model_joint_targets_deg[inactive] = self.neutral_model_joint_targets_deg[inactive]
+            inactive_reference_targets_deg = self._inactive_joint_reference_targets_deg()
+            solved_model_joint_targets_deg[inactive] = inactive_reference_targets_deg[inactive]
         self.last_joint_targets_deg = solved_model_joint_targets_deg
         solved_joint_targets_deg = self._model_to_stage_joint_positions_deg(solved_model_joint_targets_deg)
 
@@ -684,6 +706,7 @@ class HopeJrSimIkController:
             "grip": float(hand_state.get("grip", 0.0)),
             "trigger": float(hand_state.get("trigger", 0.0)),
             "active_joint_names": list(self.active_joint_names),
+            "inactive_joint_behavior": self.inactive_joint_behavior,
         }
         hand_position = np.asarray(hand_state.get("position", [0.0, 0.0, 0.0]), dtype=float)
         event_payload = {
@@ -699,6 +722,7 @@ class HopeJrSimIkController:
                 "quest_delta": None if self.quest_anchor_position is None else (hand_position - self.quest_anchor_position).tolist(),
                 "mapped_delta": None if self.sim_anchor_pose is None else (target_position - self.sim_anchor_pose[:3, 3]).tolist(),
                 "current_joint_targets_deg": current_joint_targets_deg.tolist(),
+                "inactive_joint_behavior": self.inactive_joint_behavior,
                 "result": result,
             }
         self._append_event(event_payload, dedupe_key=(event_payload["status"], packet_timestamp))
@@ -735,7 +759,7 @@ class HopeJrIsaacUpdateLoop:
             import omni.ui as ui
         except ImportError:
             return
-        self._status_window = ui.Window("Hope Jr Teleop", width=420, height=240)
+        self._status_window = ui.Window("Hope Jr Teleop", width=480, height=280)
         with self._status_window.frame:
             with ui.VStack(spacing=4):
                 with ui.VGrid(column_count=4, row_height=20, column_widths=[90, 0, 90, 0], spacing=6):
@@ -751,11 +775,13 @@ class HopeJrIsaacUpdateLoop:
 
                     ui.Label("trigger")
                     self._status_labels["trigger"] = ui.Label("-", word_wrap=True)
+                    ui.Label("buttons")
+                    self._status_labels["buttons"] = ui.Label("-", word_wrap=True)
+
+                with ui.VGrid(column_count=2, row_height=20, column_widths=[90, 0], spacing=6):
                     ui.Label("packet")
                     self._status_labels["packet"] = ui.Label("-", word_wrap=True)
 
-                    ui.Label("buttons")
-                    self._status_labels["buttons"] = ui.Label("-", word_wrap=True)
                     ui.Label("mapped delta")
                     self._status_labels["mapped_delta"] = ui.Label("-", word_wrap=True)
 
@@ -930,6 +956,7 @@ def build_controller_from_args(args: argparse.Namespace) -> HopeJrSimIkControlle
         end_effector_path=args.end_effector_path,
         write_joint_state_directly=args.write_joint_state_directly,
         active_joint_names=tuple(args.active_joint_names) if getattr(args, 'active_joint_names', None) else None,
+        inactive_joint_behavior=args.inactive_joint_behavior,
     )
 
 
@@ -958,6 +985,7 @@ def start_script_editor_loop(
     end_effector_path: str = DEFAULT_END_EFFECTOR_PATH,
     write_joint_state_directly: bool = False,
     active_joint_names: tuple[str, ...] | list[str] | None = None,
+    inactive_joint_behavior: str = "neutral",
     interval_s: float = 0.05,
     dry_run: bool = False,
     consume_only_new: bool = True,
@@ -990,6 +1018,7 @@ def start_script_editor_loop(
         end_effector_path=end_effector_path,
         write_joint_state_directly=write_joint_state_directly,
         active_joint_names=tuple(active_joint_names) if active_joint_names else None,
+        inactive_joint_behavior=inactive_joint_behavior,
     )
     try:
         controller.event_log_path.unlink(missing_ok=True)
@@ -1038,6 +1067,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--packet-stale-timeout-s", type=float, default=DEFAULT_PACKET_STALE_TIMEOUT_S)
     parser.add_argument("--end-effector-path", default=DEFAULT_END_EFFECTOR_PATH)
     parser.add_argument("--write-joint-state-directly", action="store_true")
+    parser.add_argument("--active-joint-names", nargs="*", default=None)
+    parser.add_argument("--inactive-joint-behavior", choices=("neutral", "hold"), default="neutral")
     parser.add_argument("--watch", action="store_true")
     parser.add_argument("--isaac-update-loop", action="store_true")
     parser.add_argument("--interval", type=float, default=0.05)
