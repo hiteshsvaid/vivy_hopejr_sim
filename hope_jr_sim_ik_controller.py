@@ -32,10 +32,10 @@ DEFAULT_STOP_TARGETS_DEG = {
 DEFAULT_MODEL_JOINT_SIGNS = {
     "right_shoulder_pitch": -1.0,
     "right_shoulder_yaw": -1.0,
-    "right_upper_elbow": 1.0,
+    "right_upper_elbow": -1.0,
     "right_elbow": -1.0,
-    "right_forearm_twist": -1.0,
-    "right_wrist": -1.0,
+    "right_forearm_twist": 1.0,
+    "right_wrist": 1.0,
     "right_palm": 1.0,
 }
 
@@ -68,6 +68,7 @@ class HopeJrSimIkController:
         packet_stale_timeout_s: float,
         end_effector_path: str,
         write_joint_state_directly: bool,
+        active_joint_names: tuple[str, ...] | None = None,
     ):
         self.lerobot_repo = lerobot_repo
         self.packet_path = packet_path
@@ -93,6 +94,10 @@ class HopeJrSimIkController:
         self.packet_stale_timeout_s = float(packet_stale_timeout_s)
         self.end_effector_path = end_effector_path
         self.write_joint_state_directly = bool(write_joint_state_directly)
+        if active_joint_names is None:
+            self.active_joint_names = tuple()
+        else:
+            self.active_joint_names = tuple(active_joint_names)
         self._udp_socket = None
         if self.use_udp:
             self._udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -113,6 +118,12 @@ class HopeJrSimIkController:
             dtype=float,
         )
         self.last_joint_targets_deg = np.zeros(len(self.model.joint_names), dtype=float)
+        self.neutral_model_joint_targets_deg = np.array([DEFAULT_STOP_TARGETS_DEG.get(name, 0.0) for name in self.model.joint_names], dtype=float)
+        if self.active_joint_names:
+            active_set = set(self.active_joint_names)
+            self.active_joint_mask = np.array([1.0 if name in active_set else 0.0 for name in self.model.joint_names], dtype=float)
+        else:
+            self.active_joint_mask = np.ones(len(self.model.joint_names), dtype=float)
         self.last_packet_timestamp = None
         self.minimum_packet_timestamp = None
         self.last_debug_payload = None
@@ -185,6 +196,7 @@ class HopeJrSimIkController:
                     quest_mapped_position=waiting_pose[:3, 3],
                     sim_target_position=waiting_pose[:3, 3],
                     actual_end_effector_position=self._read_stage_end_effector_position(stage),
+                    actual_end_effector_pose=self._read_stage_end_effector_pose(stage),
                     waiting_for_anchor=True,
                 )
                 return None
@@ -230,6 +242,7 @@ class HopeJrSimIkController:
             quest_mapped_position=quest_mapped_position_stage,
             sim_target_position=desired_target_position_stage,
             actual_end_effector_position=self._read_stage_end_effector_position(stage),
+            actual_end_effector_pose=self._read_stage_end_effector_pose(stage),
         )
         return target_pose, hand
 
@@ -256,6 +269,7 @@ class HopeJrSimIkController:
         quest_mapped_position: np.ndarray,
         sim_target_position: np.ndarray,
         actual_end_effector_position: np.ndarray | None = None,
+        actual_end_effector_pose: np.ndarray | None = None,
         waiting_for_anchor: bool = False,
     ) -> None:
         if not self.show_teleop_debug:
@@ -274,8 +288,6 @@ class HopeJrSimIkController:
             ("QuestMapped", quest_mapped_position, (1.0, 0.5, 0.0), 0.004),
             ("SimTarget", sim_target_position, sim_target_color, 0.005),
         ]
-        if actual_end_effector_position is not None:
-            visuals.append(("ActualEndEffector", actual_end_effector_position, (0.1, 0.5, 1.0), 0.0045))
         for name, position, color, radius in visuals:
             sphere_path = f"{self.teleop_debug_root}/{name}"
             sphere = UsdGeom.Sphere.Define(stage, sphere_path)
@@ -293,6 +305,53 @@ class HopeJrSimIkController:
             order_attr = prim.GetAttribute("xformOpOrder")
             if not order_attr.IsValid() or not order_attr.Get():
                 order_attr.Set(["xformOp:translate"])
+
+        if actual_end_effector_pose is not None:
+            arrow_root_path = f"{self.teleop_debug_root}/ActualEndEffectorArrow"
+            arrow_root = stage.DefinePrim(arrow_root_path, "Xform")
+            arrow_rotation = actual_end_effector_pose[:3, :3]
+            quat_xyzw = Rotation.from_matrix(arrow_rotation).as_quat()
+            quat_wxyz = [float(quat_xyzw[3]), float(quat_xyzw[0]), float(quat_xyzw[1]), float(quat_xyzw[2])]
+            translate_attr = arrow_root.GetAttribute("xformOp:translate")
+            if not translate_attr.IsValid():
+                translate_attr = arrow_root.CreateAttribute("xformOp:translate", Sdf.ValueTypeNames.Double3)
+            translate_attr.Set(Gf.Vec3d(*[float(v) for v in actual_end_effector_pose[:3, 3]]))
+            orient_attr = arrow_root.GetAttribute("xformOp:orient")
+            if not orient_attr.IsValid():
+                orient_attr = arrow_root.CreateAttribute("xformOp:orient", Sdf.ValueTypeNames.Quatf)
+            orient_attr.Set(Gf.Quatf(quat_wxyz[0], quat_wxyz[1], quat_wxyz[2], quat_wxyz[3]))
+            order_attr = arrow_root.GetAttribute("xformOpOrder")
+            order_attr.Set(["xformOp:translate", "xformOp:orient"])
+
+            shaft = UsdGeom.Cylinder.Define(stage, f"{arrow_root_path}/Shaft")
+            shaft_prim = shaft.GetPrim()
+            shaft.GetRadiusAttr().Set(0.0028)
+            shaft.GetHeightAttr().Set(0.03)
+            shaft_display = shaft_prim.GetAttribute("primvars:displayColor")
+            if not shaft_display.IsValid():
+                shaft_display = shaft_prim.CreateAttribute("primvars:displayColor", Sdf.ValueTypeNames.Color3fArray)
+            shaft_display.Set([Gf.Vec3f(0.1, 0.5, 1.0)])
+            shaft_translate = shaft_prim.GetAttribute("xformOp:translate")
+            if not shaft_translate.IsValid():
+                shaft_translate = shaft_prim.CreateAttribute("xformOp:translate", Sdf.ValueTypeNames.Double3)
+            shaft_translate.Set(Gf.Vec3d(0.0, 0.0, 0.015))
+            shaft_order = shaft_prim.GetAttribute("xformOpOrder")
+            shaft_order.Set(["xformOp:translate"])
+
+            tip = UsdGeom.Cone.Define(stage, f"{arrow_root_path}/Tip")
+            tip_prim = tip.GetPrim()
+            tip.GetRadiusAttr().Set(0.005)
+            tip.GetHeightAttr().Set(0.014)
+            tip_display = tip_prim.GetAttribute("primvars:displayColor")
+            if not tip_display.IsValid():
+                tip_display = tip_prim.CreateAttribute("primvars:displayColor", Sdf.ValueTypeNames.Color3fArray)
+            tip_display.Set([Gf.Vec3f(0.1, 0.5, 1.0)])
+            tip_translate = tip_prim.GetAttribute("xformOp:translate")
+            if not tip_translate.IsValid():
+                tip_translate = tip_prim.CreateAttribute("xformOp:translate", Sdf.ValueTypeNames.Double3)
+            tip_translate.Set(Gf.Vec3d(0.0, 0.0, 0.032))
+            tip_order = tip_prim.GetAttribute("xformOpOrder")
+            tip_order.Set(["xformOp:translate"])
 
     def _read_stage_end_effector_pose(self, stage) -> np.ndarray | None:
         if stage is None:
@@ -564,11 +623,19 @@ class HopeJrSimIkController:
             return None
         target_pose, hand_state = target
 
+        ik_seed_deg = current_joint_targets_deg.copy()
+        if self.active_joint_names:
+            inactive = self.active_joint_mask < 0.5
+            ik_seed_deg[inactive] = self.neutral_model_joint_targets_deg[inactive]
         solved_model_joint_targets_deg = self.model.inverse_kinematics(
-            current_joint_targets_deg,
+            ik_seed_deg,
             target_pose,
             orientation_weight=0.0 if self.position_only else 1.0,
+            active_joint_mask=self.active_joint_mask,
         )
+        if self.active_joint_names:
+            inactive = self.active_joint_mask < 0.5
+            solved_model_joint_targets_deg[inactive] = self.neutral_model_joint_targets_deg[inactive]
         self.last_joint_targets_deg = solved_model_joint_targets_deg
         solved_joint_targets_deg = self._model_to_stage_joint_positions_deg(solved_model_joint_targets_deg)
 
@@ -616,6 +683,7 @@ class HopeJrSimIkController:
             "quest_position_signs": self.quest_position_signs.tolist(),
             "grip": float(hand_state.get("grip", 0.0)),
             "trigger": float(hand_state.get("trigger", 0.0)),
+            "active_joint_names": list(self.active_joint_names),
         }
         hand_position = np.asarray(hand_state.get("position", [0.0, 0.0, 0.0]), dtype=float)
         event_payload = {
@@ -667,20 +735,46 @@ class HopeJrIsaacUpdateLoop:
             import omni.ui as ui
         except ImportError:
             return
-        self._status_window = ui.Window("Hope Jr Teleop", width=320, height=230)
+        self._status_window = ui.Window("Hope Jr Teleop", width=420, height=240)
         with self._status_window.frame:
             with ui.VStack(spacing=4):
-                for key in [
-                    "status",
-                    "messages",
-                    "anchor",
-                    "grip",
-                    "trigger",
-                    "buttons",
-                    "packet",
-                    "mapped_delta",
-                ]:
-                    self._status_labels[key] = ui.Label(f"{key}: -", word_wrap=True)
+                with ui.VGrid(column_count=4, row_height=20, column_widths=[90, 0, 90, 0], spacing=6):
+                    ui.Label("status")
+                    self._status_labels["status"] = ui.Label("-", word_wrap=True)
+                    ui.Label("messages")
+                    self._status_labels["messages"] = ui.Label("-", word_wrap=True)
+
+                    ui.Label("anchor")
+                    self._status_labels["anchor"] = ui.Label("-", word_wrap=True)
+                    ui.Label("grip")
+                    self._status_labels["grip"] = ui.Label("-", word_wrap=True)
+
+                    ui.Label("trigger")
+                    self._status_labels["trigger"] = ui.Label("-", word_wrap=True)
+                    ui.Label("packet")
+                    self._status_labels["packet"] = ui.Label("-", word_wrap=True)
+
+                    ui.Label("buttons")
+                    self._status_labels["buttons"] = ui.Label("-", word_wrap=True)
+                    ui.Label("mapped delta")
+                    self._status_labels["mapped_delta"] = ui.Label("-", word_wrap=True)
+
+                with ui.VStack(spacing=2):
+                    ui.Label("markers")
+                    with ui.VGrid(column_count=4, row_height=18, column_widths=[18, 0, 18, 0], spacing=6):
+                        with ui.ZStack(width=12, height=12):
+                            ui.Rectangle(style={"background_color": 0xFFFF8000})
+                        ui.Label("QuestMapped", word_wrap=True)
+                        with ui.ZStack(width=12, height=12):
+                            ui.Rectangle(style={"background_color": 0xFFFF0000})
+                        ui.Label("SimTarget live", word_wrap=True)
+
+                        with ui.ZStack(width=12, height=12):
+                            ui.Rectangle(style={"background_color": 0xFF00FF00})
+                        ui.Label("SimTarget waiting", word_wrap=True)
+                        with ui.ZStack(width=12, height=12):
+                            ui.Rectangle(style={"background_color": 0xFF1A80FF})
+                        ui.Label("ActualEndEffector", word_wrap=True)
 
     def _refresh_status_window(self) -> None:
         self._ensure_status_window()
@@ -717,19 +811,19 @@ class HopeJrIsaacUpdateLoop:
         packet = self.controller.last_packet_timestamp
         mapped_delta = debug.get("mapped_delta")
         mapped_text = "-" if mapped_delta is None else ", ".join(f"{float(v):+.3f}" for v in mapped_delta)
-        self._status_labels["status"].text = f"status: {status_line}"
+        self._status_labels["status"].text = f"{status_line}"
         if packet_age is None:
             packet_text = "-"
         else:
             packet_label = packet if packet is not None else "-"
             packet_text = f"{packet_label} ({packet_age:.2f}s ago)"
-        self._status_labels["messages"].text = f"messages: {messages}"
-        self._status_labels["anchor"].text = f"anchor: {anchor}"
-        self._status_labels["grip"].text = f"grip: {grip:.2f}"
-        self._status_labels["trigger"].text = f"trigger: {trigger:.2f}"
-        self._status_labels["buttons"].text = f"buttons: {buttons}"
-        self._status_labels["packet"].text = f"packet: {packet_text}"
-        self._status_labels["mapped_delta"].text = f"mapped delta: {mapped_text}"
+        self._status_labels["messages"].text = f"{messages}"
+        self._status_labels["anchor"].text = f"{anchor}"
+        self._status_labels["grip"].text = f"{grip:.2f}"
+        self._status_labels["trigger"].text = f"{trigger:.2f}"
+        self._status_labels["buttons"].text = f"{buttons}"
+        self._status_labels["packet"].text = f"{packet_text}"
+        self._status_labels["mapped_delta"].text = f"{mapped_text}"
 
     def _on_update(self, _event: object) -> None:
         now = time.monotonic()
@@ -835,6 +929,7 @@ def build_controller_from_args(args: argparse.Namespace) -> HopeJrSimIkControlle
         packet_stale_timeout_s=args.packet_stale_timeout_s,
         end_effector_path=args.end_effector_path,
         write_joint_state_directly=args.write_joint_state_directly,
+        active_joint_names=tuple(args.active_joint_names) if getattr(args, 'active_joint_names', None) else None,
     )
 
 
@@ -862,6 +957,7 @@ def start_script_editor_loop(
     packet_stale_timeout_s: float = DEFAULT_PACKET_STALE_TIMEOUT_S,
     end_effector_path: str = DEFAULT_END_EFFECTOR_PATH,
     write_joint_state_directly: bool = False,
+    active_joint_names: tuple[str, ...] | list[str] | None = None,
     interval_s: float = 0.05,
     dry_run: bool = False,
     consume_only_new: bool = True,
@@ -893,6 +989,7 @@ def start_script_editor_loop(
         packet_stale_timeout_s=packet_stale_timeout_s,
         end_effector_path=end_effector_path,
         write_joint_state_directly=write_joint_state_directly,
+        active_joint_names=tuple(active_joint_names) if active_joint_names else None,
     )
     try:
         controller.event_log_path.unlink(missing_ok=True)
