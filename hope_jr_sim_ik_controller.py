@@ -17,14 +17,26 @@ DEFAULT_LEROBOT_REPO = Path("/home/viaan/huggingface/lerobot")
 DEFAULT_PACKET_PATH = Path("/tmp/hope_jr_quest_latest.json")
 DEFAULT_IK_SPEC_PATH = DEFAULT_LEROBOT_REPO / "src/lerobot/robots/hope_jr/hope_jr_arm_ik_spec.json"
 DEFAULT_KINEMATICS_MODULE_PATH = DEFAULT_LEROBOT_REPO / "src/lerobot/robots/hope_jr/hope_jr_arm_kinematics.py"
+DEFAULT_ARTICULATION_ROOT_PATH = "/World/JointTest"
 DEFAULT_JOINT_ROOT_PATH = "/World/JointTest/Joints"
 DEFAULT_UDP_LISTEN_HOST = "127.0.0.1"
 DEFAULT_UDP_LISTEN_PORT = 8766
 DEFAULT_DEBUG_PATH = Path("/tmp/hope_jr_sim_ik_debug.json")
 DEFAULT_TELEOP_DEBUG_ROOT = "/World/JointTest/TeleopDebug"
+DEFAULT_END_EFFECTOR_PATH = "/World/JointTest/PalmBody/EndEffector"
 DEFAULT_EVENT_LOG_PATH = Path("/tmp/hope_jr_sim_ik_events.ndjson")
+DEFAULT_PACKET_STALE_TIMEOUT_S = 0.75
 DEFAULT_STOP_TARGETS_DEG = {
     "right_elbow": 40.5,
+}
+DEFAULT_MODEL_JOINT_SIGNS = {
+    "right_shoulder_pitch": -1.0,
+    "right_shoulder_yaw": -1.0,
+    "right_upper_elbow": 1.0,
+    "right_elbow": -1.0,
+    "right_forearm_twist": -1.0,
+    "right_wrist": -1.0,
+    "right_palm": 1.0,
 }
 
 _ACTIVE_LOOP = None
@@ -52,10 +64,15 @@ class HopeJrSimIkController:
         anchor_delay_s: float,
         grip_threshold: float,
         event_log_path: Path,
+        quest_deadband_m: float,
+        packet_stale_timeout_s: float,
+        end_effector_path: str,
+        write_joint_state_directly: bool,
     ):
         self.lerobot_repo = lerobot_repo
         self.packet_path = packet_path
         self.joint_root_path = joint_root_path.rstrip("/")
+        self.articulation_root_path = self.joint_root_path.rsplit("/", 1)[0]
         self.position_scale = position_scale
         self.world_offset = world_offset
         self.world_rotation = Rotation.from_euler("XYZ", world_rotate_xyz_deg, degrees=True).as_matrix()
@@ -72,6 +89,10 @@ class HopeJrSimIkController:
         self.anchor_ready_time = time.time() + anchor_delay_s
         self.grip_threshold = grip_threshold
         self.event_log_path = event_log_path
+        self.quest_deadband_m = float(quest_deadband_m)
+        self.packet_stale_timeout_s = float(packet_stale_timeout_s)
+        self.end_effector_path = end_effector_path
+        self.write_joint_state_directly = bool(write_joint_state_directly)
         self._udp_socket = None
         if self.use_udp:
             self._udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -87,6 +108,10 @@ class HopeJrSimIkController:
             if lerobot_repo == DEFAULT_LEROBOT_REPO
             else lerobot_repo / "src/lerobot/robots/hope_jr/hope_jr_arm_ik_spec.json"
         )
+        self.model_joint_signs = np.asarray(
+            [DEFAULT_MODEL_JOINT_SIGNS.get(name, 1.0) for name in self.model.joint_names],
+            dtype=float,
+        )
         self.last_joint_targets_deg = np.zeros(len(self.model.joint_names), dtype=float)
         self.last_packet_timestamp = None
         self.minimum_packet_timestamp = None
@@ -95,7 +120,14 @@ class HopeJrSimIkController:
         self.quest_anchor_position = None
         self.quest_anchor_rotation = None
         self.sim_anchor_pose = None
+        self.stage_anchor_pose = None
+        self.model_to_stage_transform = np.eye(4)
+        self.stage_to_model_transform = np.eye(4)
         self._a_pressed_last = False
+        self.last_hand_state = {}
+        self.last_packet_received_at = None
+        self._articulation = None
+        self._articulation_joint_indices = None
 
     def _load_kinematics_module(self, module_path: Path):
         spec = importlib.util.spec_from_file_location("hope_jr_arm_kinematics", module_path)
@@ -141,39 +173,64 @@ class HopeJrSimIkController:
         quest_position = np.asarray(hand["position"], dtype=float)
         quest_rotation = Rotation.from_quat(np.asarray(hand["orientation_xyzw"], dtype=float)).as_matrix()
         current_sim_pose = self.model.forward_kinematics(current_joint_targets_deg)
+        stage = self._get_stage()
+        current_stage_pose = self._read_stage_end_effector_pose(stage)
 
-        if self.quest_anchor_position is None or self.sim_anchor_pose is None:
+        if self.quest_anchor_position is None or self.sim_anchor_pose is None or self.stage_anchor_pose is None:
+            waiting_pose = current_stage_pose if current_stage_pose is not None else current_sim_pose
             if time.time() < self.anchor_ready_time:
+                self._update_teleop_debug_visuals(
+                    quest_anchor_position=quest_position,
+                    quest_current_position=quest_position,
+                    quest_mapped_position=waiting_pose[:3, 3],
+                    sim_target_position=waiting_pose[:3, 3],
+                    actual_end_effector_position=self._read_stage_end_effector_position(stage),
+                    waiting_for_anchor=True,
+                )
                 return None
             self.quest_anchor_position = quest_position.copy()
             self.quest_anchor_rotation = quest_rotation.copy()
             self.sim_anchor_pose = current_sim_pose.copy()
+            self.stage_anchor_pose = current_stage_pose.copy() if current_stage_pose is not None else current_sim_pose.copy()
+            try:
+                self.model_to_stage_transform = self.stage_anchor_pose @ np.linalg.inv(self.sim_anchor_pose)
+                self.stage_to_model_transform = np.linalg.inv(self.model_to_stage_transform)
+            except np.linalg.LinAlgError:
+                self.model_to_stage_transform = np.eye(4)
+                self.stage_to_model_transform = np.eye(4)
             self._append_event(
                 {
                     "status": "anchor_captured",
                     "quest_anchor_position": self.quest_anchor_position.tolist(),
                     "sim_anchor_position": self.sim_anchor_pose[:3, 3].tolist(),
+                    "stage_anchor_position": self.stage_anchor_pose[:3, 3].tolist(),
                 },
                 dedupe_key=("anchor_captured", tuple(np.round(self.quest_anchor_position, 6))),
             )
 
         quest_delta = quest_position - self.quest_anchor_position
+        if self.quest_deadband_m > 0.0:
+            small = np.abs(quest_delta) < self.quest_deadband_m
+            quest_delta = np.where(small, 0.0, quest_delta)
         remapped_delta = quest_delta[list(self.quest_position_axes)] * self.quest_position_signs
-        position_delta = self.world_rotation @ (remapped_delta * self.position_scale)
-        quest_mapped_position = self.sim_anchor_pose[:3, 3] + position_delta
-        target_position = quest_mapped_position + self.world_offset
+        position_delta_stage = self.world_rotation @ (remapped_delta * self.position_scale)
+        quest_mapped_position_stage = self.stage_anchor_pose[:3, 3] + position_delta_stage
+        desired_target_position_stage = quest_mapped_position_stage + self.world_offset
+        solve_target_position_stage = desired_target_position_stage
         if self.position_only:
-            target_rotation = self.sim_anchor_pose[:3, :3]
+            target_rotation_stage = self.stage_anchor_pose[:3, :3]
         else:
             relative_rotation = quest_rotation @ self.quest_anchor_rotation.T
-            target_rotation = self.world_rotation @ relative_rotation @ self.sim_anchor_pose[:3, :3]
+            target_rotation_stage = self.world_rotation @ relative_rotation @ self.stage_anchor_pose[:3, :3]
+        target_pose_stage = self.kinematics_module.make_pose(position=solve_target_position_stage, rotation_matrix=target_rotation_stage)
+        target_pose = self.stage_to_model_transform @ target_pose_stage
         self._update_teleop_debug_visuals(
             quest_anchor_position=self.quest_anchor_position,
             quest_current_position=quest_position,
-            quest_mapped_position=quest_mapped_position,
-            sim_target_position=target_position,
+            quest_mapped_position=quest_mapped_position_stage,
+            sim_target_position=desired_target_position_stage,
+            actual_end_effector_position=self._read_stage_end_effector_position(stage),
         )
-        target_pose = self.kinematics_module.make_pose(position=target_position, rotation_matrix=target_rotation)
         return target_pose, hand
 
 
@@ -198,6 +255,8 @@ class HopeJrSimIkController:
         quest_current_position: np.ndarray,
         quest_mapped_position: np.ndarray,
         sim_target_position: np.ndarray,
+        actual_end_effector_position: np.ndarray | None = None,
+        waiting_for_anchor: bool = False,
     ) -> None:
         if not self.show_teleop_debug:
             return
@@ -210,10 +269,13 @@ class HopeJrSimIkController:
             return
 
         root = stage.DefinePrim(self.teleop_debug_root, "Xform")
+        sim_target_color = (0.0, 1.0, 0.0) if waiting_for_anchor else (1.0, 0.0, 0.0)
         visuals = [
             ("QuestMapped", quest_mapped_position, (1.0, 0.5, 0.0), 0.004),
-            ("SimTarget", sim_target_position, (1.0, 0.0, 0.0), 0.005),
+            ("SimTarget", sim_target_position, sim_target_color, 0.005),
         ]
+        if actual_end_effector_position is not None:
+            visuals.append(("ActualEndEffector", actual_end_effector_position, (0.1, 0.5, 1.0), 0.0045))
         for name, position, color, radius in visuals:
             sphere_path = f"{self.teleop_debug_root}/{name}"
             sphere = UsdGeom.Sphere.Define(stage, sphere_path)
@@ -232,6 +294,30 @@ class HopeJrSimIkController:
             if not order_attr.IsValid() or not order_attr.Get():
                 order_attr.Set(["xformOp:translate"])
 
+    def _read_stage_end_effector_pose(self, stage) -> np.ndarray | None:
+        if stage is None:
+            return None
+        try:
+            from pxr import UsdGeom
+        except ImportError:
+            return None
+        prim = stage.GetPrimAtPath(self.end_effector_path)
+        if not prim.IsValid():
+            return None
+        try:
+            xform_cache = UsdGeom.XformCache()
+            world_transform = xform_cache.GetLocalToWorldTransform(prim)
+            matrix = np.array(world_transform, dtype=float).T
+            return matrix
+        except Exception:
+            return None
+
+    def _read_stage_end_effector_position(self, stage) -> np.ndarray | None:
+        pose = self._read_stage_end_effector_pose(stage)
+        if pose is None:
+            return None
+        return pose[:3, 3].copy()
+
     def _get_stage(self):
         try:
             import omni.usd
@@ -239,18 +325,106 @@ class HopeJrSimIkController:
             return None
         return omni.usd.get_context().get_stage()
 
+    def _get_articulation(self):
+        try:
+            from isaacsim.core.prims import SingleArticulation
+            from isaacsim.core.utils.types import ArticulationAction
+        except ImportError:
+            return None
+        if self._articulation is None:
+            self._articulation = SingleArticulation(self.articulation_root_path, reset_xform_properties=False)
+            self._articulation_joint_indices = None
+        try:
+            if not self._articulation.handles_initialized:
+                self._articulation.initialize()
+        except Exception:
+            return None
+        if self._articulation_joint_indices is None:
+            try:
+                self._articulation_joint_indices = np.array(
+                    [self._articulation.get_dof_index(name) for name in self.model.joint_names],
+                    dtype=np.int64,
+                )
+            except Exception:
+                return None
+        return self._articulation
+
+    def _get_articulation_joint_indices(self) -> np.ndarray | None:
+        articulation = self._get_articulation()
+        if articulation is None:
+            return None
+        return self._articulation_joint_indices
+
+    def _stage_to_model_joint_positions_deg(self, joint_positions_deg: np.ndarray) -> np.ndarray:
+        return np.asarray(joint_positions_deg, dtype=float) * self.model_joint_signs
+
+    def _model_to_stage_joint_positions_deg(self, joint_positions_deg: np.ndarray) -> np.ndarray:
+        return np.asarray(joint_positions_deg, dtype=float) * self.model_joint_signs
+
     def _read_current_joint_targets_deg(self, stage) -> np.ndarray:
+        articulation = self._get_articulation()
+        joint_indices = self._get_articulation_joint_indices()
+        if articulation is not None and joint_indices is not None:
+            try:
+                joint_positions_rad = articulation.get_joint_positions(joint_indices=joint_indices)
+                if joint_positions_rad is not None:
+                    return np.rad2deg(np.asarray(joint_positions_rad, dtype=float))
+            except Exception:
+                pass
         joint_targets = []
         for joint_name in self.model.joint_names:
             prim = stage.GetPrimAtPath(f"{self.joint_root_path}/{joint_name}")
             if not prim.IsValid():
                 raise RuntimeError(f"Joint prim not found: {self.joint_root_path}/{joint_name}")
+            state_attr = prim.GetAttribute("state:angular:physics:position")
+            state_value = state_attr.Get() if state_attr.IsValid() else None
+            if state_value is not None:
+                joint_targets.append(float(state_value))
+                continue
             attr = prim.GetAttribute("drive:angular:physics:targetPosition")
             value = attr.Get() if attr.IsValid() else None
             joint_targets.append(float(value) if value is not None else 0.0)
         return np.asarray(joint_targets, dtype=float)
 
+    def _read_stage_joint_positions_deg(self, stage) -> np.ndarray | None:
+        articulation = self._get_articulation()
+        joint_indices = self._get_articulation_joint_indices()
+        if articulation is not None and joint_indices is not None:
+            try:
+                joint_positions_rad = articulation.get_joint_positions(joint_indices=joint_indices)
+                if joint_positions_rad is not None:
+                    return np.rad2deg(np.asarray(joint_positions_rad, dtype=float))
+            except Exception:
+                pass
+        if stage is None:
+            return None
+        joint_positions = []
+        for joint_name in self.model.joint_names:
+            prim = stage.GetPrimAtPath(f"{self.joint_root_path}/{joint_name}")
+            if not prim.IsValid():
+                return None
+            state_attr = prim.GetAttribute("state:angular:physics:position")
+            state_value = state_attr.Get() if state_attr.IsValid() else None
+            if state_value is None:
+                return None
+            joint_positions.append(float(state_value))
+        return np.asarray(joint_positions, dtype=float)
+
     def _write_joint_targets_deg(self, stage, joint_targets_deg: np.ndarray) -> None:
+        articulation = self._get_articulation()
+        joint_indices = self._get_articulation_joint_indices()
+        if articulation is not None and joint_indices is not None:
+            try:
+                from isaacsim.core.utils.types import ArticulationAction
+                articulation.apply_action(
+                    ArticulationAction(
+                        joint_positions=np.deg2rad(np.asarray(joint_targets_deg, dtype=float)),
+                        joint_indices=joint_indices,
+                    )
+                )
+                return
+            except Exception:
+                pass
         for joint_name, target_deg in zip(self.model.joint_names, joint_targets_deg, strict=True):
             prim = stage.GetPrimAtPath(f"{self.joint_root_path}/{joint_name}")
             if not prim.IsValid():
@@ -264,6 +438,14 @@ class HopeJrSimIkController:
 
 
     def _write_joint_state_deg(self, stage, joint_positions_deg: np.ndarray) -> None:
+        articulation = self._get_articulation()
+        joint_indices = self._get_articulation_joint_indices()
+        if articulation is not None and joint_indices is not None:
+            try:
+                articulation.set_joint_positions(np.deg2rad(np.asarray(joint_positions_deg, dtype=float)), joint_indices=joint_indices)
+                return
+            except Exception:
+                pass
         for joint_name, position_deg in zip(self.model.joint_names, joint_positions_deg, strict=True):
             prim = stage.GetPrimAtPath(f"{self.joint_root_path}/{joint_name}")
             if not prim.IsValid():
@@ -279,6 +461,9 @@ class HopeJrSimIkController:
         self.quest_anchor_position = None
         self.quest_anchor_rotation = None
         self.sim_anchor_pose = None
+        self.stage_anchor_pose = None
+        self.model_to_stage_transform = np.eye(4)
+        self.stage_to_model_transform = np.eye(4)
         self.anchor_ready_time = time.time() + self.anchor_delay_s
         stage = self._get_stage()
         if stage is None:
@@ -290,7 +475,7 @@ class HopeJrSimIkController:
         self._write_joint_targets_deg(stage, target_values)
         if reset_joint_state:
             self._write_joint_state_deg(stage, target_values)
-        self.last_joint_targets_deg = target_values
+        self.last_joint_targets_deg = self._stage_to_model_joint_positions_deg(target_values)
 
     def solve_once(self, *, apply_to_stage: bool) -> dict[str, Any] | None:
         packet = self._load_latest_packet()
@@ -300,6 +485,8 @@ class HopeJrSimIkController:
         packet_timestamp = packet.get("timestamp")
         normalized = packet.get("normalized") if isinstance(packet, dict) else None
         hand = normalized.get("right_hand") if isinstance(normalized, dict) else None
+        if isinstance(hand, dict):
+            self.last_hand_state = dict(hand)
         a_pressed = bool(hand.get("a_pressed", False)) if isinstance(hand, dict) else False
         if a_pressed and not self._a_pressed_last:
             if apply_to_stage:
@@ -317,6 +504,8 @@ class HopeJrSimIkController:
                 "status": "reset_to_neutral",
             }
         self._a_pressed_last = a_pressed
+        self.last_packet_received_at = time.time()
+
         if packet_timestamp is None:
             if self.last_debug_payload is None:
                 self._write_debug({"status": "ignored", "reason": "missing_timestamp", "packet": packet})
@@ -339,8 +528,10 @@ class HopeJrSimIkController:
 
         stage = self._get_stage() if apply_to_stage else None
         if stage is not None:
-            current_joint_targets_deg = self._read_current_joint_targets_deg(stage)
+            current_stage_joint_targets_deg = self._read_current_joint_targets_deg(stage)
+            current_joint_targets_deg = self._stage_to_model_joint_positions_deg(current_stage_joint_targets_deg)
         else:
+            current_stage_joint_targets_deg = None
             current_joint_targets_deg = self.last_joint_targets_deg
 
         target = self._packet_to_target_pose(packet, current_joint_targets_deg)
@@ -373,17 +564,53 @@ class HopeJrSimIkController:
             return None
         target_pose, hand_state = target
 
-        solved_joint_targets_deg = self.model.inverse_kinematics(current_joint_targets_deg, target_pose)
-        self.last_joint_targets_deg = solved_joint_targets_deg
+        solved_model_joint_targets_deg = self.model.inverse_kinematics(
+            current_joint_targets_deg,
+            target_pose,
+            orientation_weight=0.0 if self.position_only else 1.0,
+        )
+        self.last_joint_targets_deg = solved_model_joint_targets_deg
+        solved_joint_targets_deg = self._model_to_stage_joint_positions_deg(solved_model_joint_targets_deg)
 
+        stage_end_effector_position = self._read_stage_end_effector_position(stage) if stage is not None else None
+        stage_joint_positions_deg = None
+        stage_model_joint_positions_deg = None
         if stage is not None:
             self._write_joint_targets_deg(stage, solved_joint_targets_deg)
+            if self.write_joint_state_directly:
+                self._write_joint_state_deg(stage, solved_joint_targets_deg)
+            stage_joint_positions_deg = self._read_stage_joint_positions_deg(stage)
+            if stage_joint_positions_deg is not None:
+                stage_model_joint_positions_deg = self._stage_to_model_joint_positions_deg(stage_joint_positions_deg)
+            stage_end_effector_position = self._read_stage_end_effector_position(stage)
 
+        achieved_pose = self.model.forward_kinematics(solved_model_joint_targets_deg)
+        achieved_position = achieved_pose[:3, 3]
+        target_position = target_pose[:3, 3]
+        position_error = target_position - achieved_position
+        target_stage_position = (self.model_to_stage_transform @ target_pose)[:3, 3]
+        achieved_stage_position = (self.model_to_stage_transform @ achieved_pose)[:3, 3]
+        stage_end_effector_error = None
+        if stage_end_effector_position is not None:
+            stage_end_effector_error = (target_stage_position - stage_end_effector_position).tolist()
+        stage_vs_model_joint_delta = None
+        if stage_model_joint_positions_deg is not None:
+            stage_vs_model_joint_delta = (stage_model_joint_positions_deg - solved_model_joint_targets_deg).tolist()
         result = {
             "timestamp": packet_timestamp,
             "joint_names": self.model.joint_names,
             "joint_targets_deg": solved_joint_targets_deg.tolist(),
-            "target_position": target_pose[:3, 3].tolist(),
+            "model_joint_targets_deg": solved_model_joint_targets_deg.tolist(),
+            "stage_joint_positions_deg": None if stage_joint_positions_deg is None else stage_joint_positions_deg.tolist(),
+            "stage_model_joint_positions_deg": None if stage_model_joint_positions_deg is None else stage_model_joint_positions_deg.tolist(),
+            "stage_vs_model_joint_delta": stage_vs_model_joint_delta,
+            "target_position": target_position.tolist(),
+            "target_stage_position": target_stage_position.tolist(),
+            "achieved_position": achieved_position.tolist(),
+            "achieved_stage_position": achieved_stage_position.tolist(),
+            "stage_end_effector_position": None if stage_end_effector_position is None else stage_end_effector_position.tolist(),
+            "stage_end_effector_error": stage_end_effector_error,
+            "position_error": position_error.tolist(),
             "position_only": self.position_only,
             "quest_position_axes": list(self.quest_position_axes),
             "quest_position_signs": self.quest_position_signs.tolist(),
@@ -391,7 +618,6 @@ class HopeJrSimIkController:
             "trigger": float(hand_state.get("trigger", 0.0)),
         }
         hand_position = np.asarray(hand_state.get("position", [0.0, 0.0, 0.0]), dtype=float)
-        target_position = target_pose[:3, 3]
         event_payload = {
             "status": "applied" if stage is not None else "solved",
                 "packet_timestamp": packet_timestamp,
@@ -431,6 +657,79 @@ class HopeJrIsaacUpdateLoop:
         self._last_tick_time = 0.0
         self._last_status = None
         self._last_wait_seconds = None
+        self._status_window = None
+        self._status_labels = {}
+
+    def _ensure_status_window(self) -> None:
+        if self._status_window is not None:
+            return
+        try:
+            import omni.ui as ui
+        except ImportError:
+            return
+        self._status_window = ui.Window("Hope Jr Teleop", width=320, height=230)
+        with self._status_window.frame:
+            with ui.VStack(spacing=4):
+                for key in [
+                    "status",
+                    "messages",
+                    "anchor",
+                    "grip",
+                    "trigger",
+                    "buttons",
+                    "packet",
+                    "mapped_delta",
+                ]:
+                    self._status_labels[key] = ui.Label(f"{key}: -", word_wrap=True)
+
+    def _refresh_status_window(self) -> None:
+        self._ensure_status_window()
+        if not self._status_labels:
+            return
+        debug = self.controller.last_debug_payload or {}
+        hand = self.controller.last_hand_state or {}
+        status = debug.get("status", "idle")
+        grip = float(hand.get("grip", 0.0)) if hand else 0.0
+        trigger = float(hand.get("trigger", 0.0)) if hand else 0.0
+        if status == "waiting_for_anchor":
+            now = float(debug.get("now", time.time()))
+            ready = float(debug.get("anchor_ready_time", now))
+            status_line = f"waiting ({max(0.0, ready - now):.1f}s)"
+        elif self.controller.last_packet_timestamp is not None and grip < float(self.controller.grip_threshold):
+            status_line = "ignored"
+        else:
+            status_line = str(status)
+        packet_age = None if self.controller.last_packet_received_at is None else max(0.0, time.time() - self.controller.last_packet_received_at)
+        messages = (
+            "receiving"
+            if packet_age is not None and packet_age <= float(self.controller.packet_stale_timeout_s)
+            else "disconnected"
+        )
+        anchor = "captured" if self.controller.quest_anchor_position is not None else "not captured"
+        buttons = (
+            f"A={int(bool(hand.get('a_pressed', False)))} "
+            f"B={int(bool(hand.get('b_pressed', False)))} "
+            f"X={int(bool(hand.get('x_pressed', False)))} "
+            f"Y={int(bool(hand.get('y_pressed', False)))} "
+            f"P={int(bool(hand.get('primary_button', False)))} "
+            f"S={int(bool(hand.get('secondary_button', False)))}"
+        )
+        packet = self.controller.last_packet_timestamp
+        mapped_delta = debug.get("mapped_delta")
+        mapped_text = "-" if mapped_delta is None else ", ".join(f"{float(v):+.3f}" for v in mapped_delta)
+        self._status_labels["status"].text = f"status: {status_line}"
+        if packet_age is None:
+            packet_text = "-"
+        else:
+            packet_label = packet if packet is not None else "-"
+            packet_text = f"{packet_label} ({packet_age:.2f}s ago)"
+        self._status_labels["messages"].text = f"messages: {messages}"
+        self._status_labels["anchor"].text = f"anchor: {anchor}"
+        self._status_labels["grip"].text = f"grip: {grip:.2f}"
+        self._status_labels["trigger"].text = f"trigger: {trigger:.2f}"
+        self._status_labels["buttons"].text = f"buttons: {buttons}"
+        self._status_labels["packet"].text = f"packet: {packet_text}"
+        self._status_labels["mapped_delta"].text = f"mapped delta: {mapped_text}"
 
     def _on_update(self, _event: object) -> None:
         now = time.monotonic()
@@ -441,6 +740,7 @@ class HopeJrIsaacUpdateLoop:
             result = self.controller.solve_once(apply_to_stage=self.apply_to_stage)
             debug_payload = self.controller.last_debug_payload or {}
             status = debug_payload.get("status")
+            self._refresh_status_window()
 
             if status == "waiting_for_anchor":
                 remaining = max(0.0, float(debug_payload.get("anchor_ready_time", 0.0)) - float(debug_payload.get("now", 0.0)))
@@ -531,6 +831,10 @@ def build_controller_from_args(args: argparse.Namespace) -> HopeJrSimIkControlle
         anchor_delay_s=args.anchor_delay_s,
         grip_threshold=args.grip_threshold,
         event_log_path=args.event_log_path,
+        quest_deadband_m=args.quest_deadband_m,
+        packet_stale_timeout_s=args.packet_stale_timeout_s,
+        end_effector_path=args.end_effector_path,
+        write_joint_state_directly=args.write_joint_state_directly,
     )
 
 
@@ -554,6 +858,10 @@ def start_script_editor_loop(
     anchor_delay_s: float = 3.0,
     grip_threshold: float = 0.25,
     event_log_path: str | Path = DEFAULT_EVENT_LOG_PATH,
+    quest_deadband_m: float = 0.01,
+    packet_stale_timeout_s: float = DEFAULT_PACKET_STALE_TIMEOUT_S,
+    end_effector_path: str = DEFAULT_END_EFFECTOR_PATH,
+    write_joint_state_directly: bool = False,
     interval_s: float = 0.05,
     dry_run: bool = False,
     consume_only_new: bool = True,
@@ -581,6 +889,10 @@ def start_script_editor_loop(
         anchor_delay_s=anchor_delay_s,
         grip_threshold=grip_threshold,
         event_log_path=Path(event_log_path),
+        quest_deadband_m=quest_deadband_m,
+        packet_stale_timeout_s=packet_stale_timeout_s,
+        end_effector_path=end_effector_path,
+        write_joint_state_directly=write_joint_state_directly,
     )
     try:
         controller.event_log_path.unlink(missing_ok=True)
@@ -625,6 +937,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--anchor-delay-s", type=float, default=3.0)
     parser.add_argument("--grip-threshold", type=float, default=0.25)
     parser.add_argument("--event-log-path", type=Path, default=DEFAULT_EVENT_LOG_PATH)
+    parser.add_argument("--quest-deadband-m", type=float, default=0.01)
+    parser.add_argument("--packet-stale-timeout-s", type=float, default=DEFAULT_PACKET_STALE_TIMEOUT_S)
+    parser.add_argument("--end-effector-path", default=DEFAULT_END_EFFECTOR_PATH)
+    parser.add_argument("--write-joint-state-directly", action="store_true")
     parser.add_argument("--watch", action="store_true")
     parser.add_argument("--isaac-update-loop", action="store_true")
     parser.add_argument("--interval", type=float, default=0.05)
