@@ -9,6 +9,13 @@ import time
 from pathlib import Path
 from typing import Any
 
+SCRIPT_DIR = Path(__file__).resolve().parent
+REPO_ROOT = SCRIPT_DIR.parent
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from ui.hope_jr_teleop_status_ui import HopeJrTeleopStatusUi
+
 import numpy as np
 from scipy.spatial.transform import Rotation
 
@@ -749,107 +756,10 @@ class HopeJrIsaacUpdateLoop:
         self._last_tick_time = 0.0
         self._last_status = None
         self._last_wait_seconds = None
-        self._status_window = None
-        self._status_labels = {}
-
-    def _ensure_status_window(self) -> None:
-        if self._status_window is not None:
-            return
-        try:
-            import omni.ui as ui
-        except ImportError:
-            return
-        self._status_window = ui.Window("Hope Jr Teleop", width=480, height=280)
-        with self._status_window.frame:
-            with ui.VStack(spacing=4):
-                with ui.VGrid(column_count=4, row_height=20, column_widths=[90, 0, 90, 0], spacing=6):
-                    ui.Label("status")
-                    self._status_labels["status"] = ui.Label("-", word_wrap=True)
-                    ui.Label("messages")
-                    self._status_labels["messages"] = ui.Label("-", word_wrap=True)
-
-                    ui.Label("anchor")
-                    self._status_labels["anchor"] = ui.Label("-", word_wrap=True)
-                    ui.Label("grip")
-                    self._status_labels["grip"] = ui.Label("-", word_wrap=True)
-
-                    ui.Label("trigger")
-                    self._status_labels["trigger"] = ui.Label("-", word_wrap=True)
-                    ui.Label("buttons")
-                    self._status_labels["buttons"] = ui.Label("-", word_wrap=True)
-
-                with ui.VGrid(column_count=2, row_height=20, column_widths=[90, 0], spacing=6):
-                    ui.Label("packet")
-                    self._status_labels["packet"] = ui.Label("-", word_wrap=True)
-
-                    ui.Label("mapped delta")
-                    self._status_labels["mapped_delta"] = ui.Label("-", word_wrap=True)
-
-                with ui.VStack(spacing=2):
-                    ui.Label("markers")
-                    with ui.VGrid(column_count=4, row_height=18, column_widths=[18, 0, 18, 0], spacing=6):
-                        with ui.ZStack(width=12, height=12):
-                            ui.Rectangle(style={"background_color": 0xFFFF8000})
-                        ui.Label("QuestMapped", word_wrap=True)
-                        with ui.ZStack(width=12, height=12):
-                            ui.Rectangle(style={"background_color": 0xFFFF0000})
-                        ui.Label("SimTarget live", word_wrap=True)
-
-                        with ui.ZStack(width=12, height=12):
-                            ui.Rectangle(style={"background_color": 0xFF00FF00})
-                        ui.Label("SimTarget waiting", word_wrap=True)
-                        with ui.ZStack(width=12, height=12):
-                            ui.Rectangle(style={"background_color": 0xFF1A80FF})
-                        ui.Label("ActualEndEffector", word_wrap=True)
+        self._status_ui = HopeJrTeleopStatusUi()
 
     def _refresh_status_window(self) -> None:
-        self._ensure_status_window()
-        if not self._status_labels:
-            return
-        debug = self.controller.last_debug_payload or {}
-        hand = self.controller.last_hand_state or {}
-        status = debug.get("status", "idle")
-        grip = float(hand.get("grip", 0.0)) if hand else 0.0
-        trigger = float(hand.get("trigger", 0.0)) if hand else 0.0
-        if status == "waiting_for_anchor":
-            now = float(debug.get("now", time.time()))
-            ready = float(debug.get("anchor_ready_time", now))
-            status_line = f"waiting ({max(0.0, ready - now):.1f}s)"
-        elif self.controller.last_packet_timestamp is not None and grip < float(self.controller.grip_threshold):
-            status_line = "ignored"
-        else:
-            status_line = str(status)
-        packet_age = None if self.controller.last_packet_received_at is None else max(0.0, time.time() - self.controller.last_packet_received_at)
-        messages = (
-            "receiving"
-            if packet_age is not None and packet_age <= float(self.controller.packet_stale_timeout_s)
-            else "disconnected"
-        )
-        anchor = "captured" if self.controller.quest_anchor_position is not None else "not captured"
-        buttons = (
-            f"A={int(bool(hand.get('a_pressed', False)))} "
-            f"B={int(bool(hand.get('b_pressed', False)))} "
-            f"X={int(bool(hand.get('x_pressed', False)))} "
-            f"Y={int(bool(hand.get('y_pressed', False)))} "
-            f"P={int(bool(hand.get('primary_button', False)))} "
-            f"S={int(bool(hand.get('secondary_button', False)))}"
-        )
-        packet = self.controller.last_packet_timestamp
-        mapped_delta = debug.get("mapped_delta")
-        mapped_text = "-" if mapped_delta is None else ", ".join(f"{float(v):+.3f}" for v in mapped_delta)
-        self._status_labels["status"].text = f"{status_line}"
-        if packet_age is None:
-            packet_text = "-"
-        else:
-            packet_label = packet if packet is not None else "-"
-            packet_text = f"{packet_label} ({packet_age:.2f}s ago)"
-        self._status_labels["messages"].text = f"{messages}"
-        self._status_labels["anchor"].text = f"{anchor}"
-        self._status_labels["grip"].text = f"{grip:.2f}"
-        self._status_labels["trigger"].text = f"{trigger:.2f}"
-        self._status_labels["buttons"].text = f"{buttons}"
-        self._status_labels["packet"].text = f"{packet_text}"
-        self._status_labels["mapped_delta"].text = f"{mapped_text}"
+        self._status_ui.update(self.controller, self.controller.last_debug_payload)
 
     def _on_update(self, _event: object) -> None:
         now = time.monotonic()
