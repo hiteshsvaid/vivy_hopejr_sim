@@ -83,7 +83,7 @@ class TeleopDebugVisuals:
         wall_translate = wall_prim.GetAttribute("xformOp:translate")
         if not wall_translate.IsValid():
             wall_translate = wall_prim.CreateAttribute("xformOp:translate", sdf.ValueTypeNames.Double3)
-        wall_translate.Set(gf.Vec3d(0.0, 0.0, 0.12))
+        wall_translate.Set(gf.Vec3d(0.06, 0.0, 0.12))
         wall_scale = wall_prim.GetAttribute("xformOp:scale")
         if not wall_scale.IsValid():
             wall_scale = wall_prim.CreateAttribute("xformOp:scale", sdf.ValueTypeNames.Double3)
@@ -94,8 +94,8 @@ class TeleopDebugVisuals:
         wall_grid_root = stage.DefinePrim(wall_grid_root_path, "Xform")
         self._set_order(wall_grid_root, [])
 
-        wall_y_positions = (-0.16, -0.08, 0.0, 0.08, 0.16)
-        wall_z_positions = (0.02, 0.10, 0.18, 0.26)
+        wall_y_positions = (-0.20, -0.10, 0.0, 0.10, 0.20)
+        wall_z_positions = (-0.12, -0.04, 0.04, 0.12)
 
         for idx, y in enumerate(wall_y_positions):
             line = usd_geom.Cube.Define(stage, f"{wall_grid_root_path}/Vertical{idx}")
@@ -105,7 +105,7 @@ class TeleopDebugVisuals:
             translate = prim.GetAttribute("xformOp:translate")
             if not translate.IsValid():
                 translate = prim.CreateAttribute("xformOp:translate", sdf.ValueTypeNames.Double3)
-            translate.Set(gf.Vec3d(-0.0025, float(y), 0.12))
+            translate.Set(gf.Vec3d(0.058, float(y), 0.12))
             scale = prim.GetAttribute("xformOp:scale")
             if not scale.IsValid():
                 scale = prim.CreateAttribute("xformOp:scale", sdf.ValueTypeNames.Double3)
@@ -116,11 +116,11 @@ class TeleopDebugVisuals:
             line = usd_geom.Cube.Define(stage, f"{wall_grid_root_path}/Horizontal{idx}")
             prim = line.GetPrim()
             line.GetSizeAttr().Set(1.0)
-            self._set_display_color(prim, sdf, gf, (0.92, 0.92, 0.92) if abs(z - 0.18) < 1e-9 else (0.80, 0.80, 0.80))
+            self._set_display_color(prim, sdf, gf, (0.92, 0.92, 0.92) if abs(z - 0.04) < 1e-9 else (0.80, 0.80, 0.80))
             translate = prim.GetAttribute("xformOp:translate")
             if not translate.IsValid():
                 translate = prim.CreateAttribute("xformOp:translate", sdf.ValueTypeNames.Double3)
-            translate.Set(gf.Vec3d(-0.002, 0.0, float(z)))
+            translate.Set(gf.Vec3d(0.058, 0.0, float(z) + 0.12))
             scale = prim.GetAttribute("xformOp:scale")
             if not scale.IsValid():
                 scale = prim.CreateAttribute("xformOp:scale", sdf.ValueTypeNames.Double3)
@@ -134,25 +134,25 @@ class TeleopDebugVisuals:
         floor_translate = floor_prim.GetAttribute("xformOp:translate")
         if not floor_translate.IsValid():
             floor_translate = floor_prim.CreateAttribute("xformOp:translate", sdf.ValueTypeNames.Double3)
-        floor_translate.Set(gf.Vec3d(-0.12, 0.0, -0.04))
+        floor_translate.Set(gf.Vec3d(-0.10, 0.0, -0.04))
         floor_scale = floor_prim.GetAttribute("xformOp:scale")
         if not floor_scale.IsValid():
             floor_scale = floor_prim.CreateAttribute("xformOp:scale", sdf.ValueTypeNames.Double3)
-        floor_scale.Set(gf.Vec3d(0.40, 0.34, 0.004))
+        floor_scale.Set(gf.Vec3d(0.56, 0.44, 0.004))
         self._set_order(floor_prim, ["xformOp:translate", "xformOp:scale"])
 
         grid_root_path = f"{root_path}/FloorGrid"
         grid_root = stage.DefinePrim(grid_root_path, "Xform")
         self._set_order(grid_root, [])
 
-        x_positions = (-0.28, -0.20, -0.12, -0.04, 0.04)
-        y_positions = (-0.16, -0.08, 0.0, 0.08, 0.16)
+        x_positions = (-0.38, -0.24, -0.10, 0.04, 0.18)
+        y_positions = (-0.20, -0.10, 0.0, 0.10, 0.20)
 
         for idx, x in enumerate(x_positions):
             line = usd_geom.Cube.Define(stage, f"{grid_root_path}/XLine{idx}")
             prim = line.GetPrim()
             line.GetSizeAttr().Set(1.0)
-            self._set_display_color(prim, sdf, gf, (0.90, 0.90, 0.90) if x == -0.12 else (0.78, 0.78, 0.78))
+            self._set_display_color(prim, sdf, gf, (0.90, 0.90, 0.90) if x == -0.10 else (0.78, 0.78, 0.78))
             translate = prim.GetAttribute("xformOp:translate")
             if not translate.IsValid():
                 translate = prim.CreateAttribute("xformOp:translate", sdf.ValueTypeNames.Double3)
@@ -160,7 +160,7 @@ class TeleopDebugVisuals:
             scale = prim.GetAttribute("xformOp:scale")
             if not scale.IsValid():
                 scale = prim.CreateAttribute("xformOp:scale", sdf.ValueTypeNames.Double3)
-            scale.Set(gf.Vec3d(0.0015, 0.34, 0.0015))
+            scale.Set(gf.Vec3d(0.0015, 0.44, 0.0015))
             self._set_order(prim, ["xformOp:translate", "xformOp:scale"])
 
         for idx, y in enumerate(y_positions):
@@ -171,11 +171,11 @@ class TeleopDebugVisuals:
             translate = prim.GetAttribute("xformOp:translate")
             if not translate.IsValid():
                 translate = prim.CreateAttribute("xformOp:translate", sdf.ValueTypeNames.Double3)
-            translate.Set(gf.Vec3d(-0.12, float(y), -0.0355))
+            translate.Set(gf.Vec3d(-0.10, float(y), -0.0355))
             scale = prim.GetAttribute("xformOp:scale")
             if not scale.IsValid():
                 scale = prim.CreateAttribute("xformOp:scale", sdf.ValueTypeNames.Double3)
-            scale.Set(gf.Vec3d(0.32, 0.0015, 0.0015))
+            scale.Set(gf.Vec3d(0.28, 0.0015, 0.0015))
             self._set_order(prim, ["xformOp:translate", "xformOp:scale"])
 
     def update(
