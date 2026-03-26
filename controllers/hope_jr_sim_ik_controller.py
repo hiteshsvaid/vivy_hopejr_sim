@@ -2,8 +2,6 @@
 
 import argparse
 import importlib.util
-import json
-import socket
 import sys
 import time
 from pathlib import Path
@@ -15,7 +13,10 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from ui.hope_jr_teleop_status_ui import HopeJrTeleopStatusUi
+from ui.teleop_debug_visuals import TeleopDebugVisuals
 from controllers.quest_teleop_mapper import QuestTeleopMapper
+from controllers.teleop_packet_source import TeleopPacketSource
+from controllers.stage_io import HopeJrStageIo
 
 import numpy as np
 from scipy.spatial.transform import Rotation
@@ -85,9 +86,7 @@ class HopeJrSimIkController:
         self.articulation_root_path = self.joint_root_path.rsplit("/", 1)[0]
         self.position_only = position_only
         self.debug_path = debug_path
-        self.use_udp = use_udp
-        self.udp_listen_host = udp_listen_host
-        self.udp_listen_port = udp_listen_port
+
         self.teleop_debug_root = teleop_debug_root.rstrip("/")
         self.show_teleop_debug = show_teleop_debug
         self.anchor_delay_s = anchor_delay_s
@@ -102,11 +101,12 @@ class HopeJrSimIkController:
         if inactive_joint_behavior not in {"neutral", "hold"}:
             raise ValueError(f"Unsupported inactive_joint_behavior: {inactive_joint_behavior}")
         self.inactive_joint_behavior = inactive_joint_behavior
-        self._udp_socket = None
-        if self.use_udp:
-            self._udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            self._udp_socket.bind((self.udp_listen_host, self.udp_listen_port))
-            self._udp_socket.setblocking(False)
+        self.packet_source = TeleopPacketSource(
+            packet_path=packet_path,
+            use_udp=use_udp,
+            udp_listen_host=udp_listen_host,
+            udp_listen_port=udp_listen_port,
+        )
         self.kinematics_module = self._load_kinematics_module(
             DEFAULT_KINEMATICS_MODULE_PATH
             if lerobot_repo == DEFAULT_LEROBOT_REPO
@@ -145,11 +145,17 @@ class HopeJrSimIkController:
             quest_deadband_m=quest_deadband_m,
             make_pose=self.kinematics_module.make_pose,
         )
+        self.teleop_debug_visuals = TeleopDebugVisuals(teleop_debug_root=self.teleop_debug_root, enabled=self.show_teleop_debug)
         self._a_pressed_last = False
         self.last_hand_state = {}
         self.last_packet_received_at = None
-        self._articulation = None
-        self._articulation_joint_indices = None
+        self.stage_io = HopeJrStageIo(
+            articulation_root_path=self.articulation_root_path,
+            joint_root_path=self.joint_root_path,
+            end_effector_path=self.end_effector_path,
+            joint_names=self.model.joint_names,
+            model_joint_signs=self.model_joint_signs,
+        )
 
     def _inactive_joint_reference_targets_deg(self) -> np.ndarray:
         if self.inactive_joint_behavior == "hold":
@@ -166,20 +172,8 @@ class HopeJrSimIkController:
         return module
 
     def _load_latest_packet(self) -> dict[str, Any] | None:
-        if self._udp_socket is not None:
-            latest_payload = None
-            while True:
-                try:
-                    payload, _addr = self._udp_socket.recvfrom(1024 * 1024)
-                except BlockingIOError:
-                    break
-                latest_payload = payload
-            if latest_payload is None:
-                return None
-            return json.loads(latest_payload.decode("utf-8"))
-        if not self.packet_path.is_file():
-            return None
-        return json.loads(self.packet_path.read_text())
+        return self.packet_source.read_latest_packet()
+
 
     def _packet_to_target_pose(
         self,
@@ -194,8 +188,8 @@ class HopeJrSimIkController:
             inactive_reference_targets_deg = self._inactive_joint_reference_targets_deg()
             anchor_joint_targets_deg[inactive] = inactive_reference_targets_deg[inactive]
         current_sim_pose = self.model.forward_kinematics(anchor_joint_targets_deg)
-        stage = self._get_stage()
-        current_stage_pose = self._read_stage_end_effector_pose(stage)
+        stage = self.stage_io.get_stage()
+        current_stage_pose = self.stage_io.read_stage_end_effector_pose(stage)
         map_result = self.teleop_mapper.map_packet(
             packet,
             current_sim_pose=current_sim_pose,
@@ -212,8 +206,8 @@ class HopeJrSimIkController:
                 quest_current_position=map_result.quest_current_position,
                 quest_mapped_position=map_result.quest_mapped_position_stage,
                 sim_target_position=map_result.sim_target_position_stage,
-                actual_end_effector_position=self._read_stage_end_effector_position(stage),
-                actual_end_effector_pose=self._read_stage_end_effector_pose(stage),
+                actual_end_effector_position=self.stage_io.read_stage_end_effector_position(stage),
+                actual_end_effector_pose=self.stage_io.read_stage_end_effector_pose(stage),
                 waiting_for_anchor=True,
             )
             return map_result
@@ -227,8 +221,8 @@ class HopeJrSimIkController:
             quest_current_position=map_result.quest_current_position,
             quest_mapped_position=map_result.quest_mapped_position_stage,
             sim_target_position=map_result.sim_target_position_stage,
-            actual_end_effector_position=self._read_stage_end_effector_position(stage),
-            actual_end_effector_pose=self._read_stage_end_effector_pose(stage),
+            actual_end_effector_position=self.stage_io.read_stage_end_effector_position(stage),
+            actual_end_effector_pose=self.stage_io.read_stage_end_effector_pose(stage),
         )
         return map_result
 
@@ -258,263 +252,32 @@ class HopeJrSimIkController:
         actual_end_effector_pose: np.ndarray | None = None,
         waiting_for_anchor: bool = False,
     ) -> None:
-        if not self.show_teleop_debug:
-            return
-        stage = self._get_stage()
-        if stage is None:
-            return
-        try:
-            from pxr import Gf, Sdf, UsdGeom
-        except ImportError:
-            return
+        stage = self.stage_io.get_stage()
+        self.teleop_debug_visuals.update(
+            stage,
+            quest_anchor_position=quest_anchor_position,
+            quest_current_position=quest_current_position,
+            quest_mapped_position=quest_mapped_position,
+            sim_target_position=sim_target_position,
+            actual_end_effector_position=actual_end_effector_position,
+            actual_end_effector_pose=actual_end_effector_pose,
+            waiting_for_anchor=waiting_for_anchor,
+        )
 
-        root = stage.DefinePrim(self.teleop_debug_root, "Xform")
-        sim_target_color = (0.0, 1.0, 0.0) if waiting_for_anchor else (1.0, 0.0, 0.0)
-        visuals = [
-            ("QuestMapped", quest_mapped_position, (1.0, 0.5, 0.0), 0.004),
-            ("SimTarget", sim_target_position, sim_target_color, 0.005),
-        ]
-        for name, position, color, radius in visuals:
-            sphere_path = f"{self.teleop_debug_root}/{name}"
-            sphere = UsdGeom.Sphere.Define(stage, sphere_path)
-            prim = sphere.GetPrim()
-            display_attr = prim.GetAttribute("primvars:displayColor")
-            if not display_attr.IsValid():
-                display_attr = prim.CreateAttribute("primvars:displayColor", Sdf.ValueTypeNames.Color3fArray)
-            display_attr.Set([Gf.Vec3f(*color)])
-            radius_attr = sphere.GetRadiusAttr()
-            radius_attr.Set(radius)
-            translate_attr = prim.GetAttribute("xformOp:translate")
-            if not translate_attr.IsValid():
-                translate_attr = prim.CreateAttribute("xformOp:translate", Sdf.ValueTypeNames.Double3)
-            translate_attr.Set(Gf.Vec3d(*[float(v) for v in position]))
-            order_attr = prim.GetAttribute("xformOpOrder")
-            if not order_attr.IsValid() or not order_attr.Get():
-                order_attr.Set(["xformOp:translate"])
-
-        if actual_end_effector_pose is not None:
-            arrow_root_path = f"{self.teleop_debug_root}/ActualEndEffectorArrow"
-            arrow_root = stage.DefinePrim(arrow_root_path, "Xform")
-            arrow_rotation = actual_end_effector_pose[:3, :3]
-            quat_xyzw = Rotation.from_matrix(arrow_rotation).as_quat()
-            quat_wxyz = [float(quat_xyzw[3]), float(quat_xyzw[0]), float(quat_xyzw[1]), float(quat_xyzw[2])]
-            translate_attr = arrow_root.GetAttribute("xformOp:translate")
-            if not translate_attr.IsValid():
-                translate_attr = arrow_root.CreateAttribute("xformOp:translate", Sdf.ValueTypeNames.Double3)
-            translate_attr.Set(Gf.Vec3d(*[float(v) for v in actual_end_effector_pose[:3, 3]]))
-            orient_attr = arrow_root.GetAttribute("xformOp:orient")
-            if not orient_attr.IsValid():
-                orient_attr = arrow_root.CreateAttribute("xformOp:orient", Sdf.ValueTypeNames.Quatf)
-            orient_attr.Set(Gf.Quatf(quat_wxyz[0], quat_wxyz[1], quat_wxyz[2], quat_wxyz[3]))
-            order_attr = arrow_root.GetAttribute("xformOpOrder")
-            order_attr.Set(["xformOp:translate", "xformOp:orient"])
-
-            shaft = UsdGeom.Cylinder.Define(stage, f"{arrow_root_path}/Shaft")
-            shaft_prim = shaft.GetPrim()
-            shaft.GetRadiusAttr().Set(0.0028)
-            shaft.GetHeightAttr().Set(0.03)
-            shaft_display = shaft_prim.GetAttribute("primvars:displayColor")
-            if not shaft_display.IsValid():
-                shaft_display = shaft_prim.CreateAttribute("primvars:displayColor", Sdf.ValueTypeNames.Color3fArray)
-            shaft_display.Set([Gf.Vec3f(0.1, 0.5, 1.0)])
-            shaft_translate = shaft_prim.GetAttribute("xformOp:translate")
-            if not shaft_translate.IsValid():
-                shaft_translate = shaft_prim.CreateAttribute("xformOp:translate", Sdf.ValueTypeNames.Double3)
-            shaft_translate.Set(Gf.Vec3d(0.0, 0.0, 0.015))
-            shaft_order = shaft_prim.GetAttribute("xformOpOrder")
-            shaft_order.Set(["xformOp:translate"])
-
-            tip = UsdGeom.Cone.Define(stage, f"{arrow_root_path}/Tip")
-            tip_prim = tip.GetPrim()
-            tip.GetRadiusAttr().Set(0.005)
-            tip.GetHeightAttr().Set(0.014)
-            tip_display = tip_prim.GetAttribute("primvars:displayColor")
-            if not tip_display.IsValid():
-                tip_display = tip_prim.CreateAttribute("primvars:displayColor", Sdf.ValueTypeNames.Color3fArray)
-            tip_display.Set([Gf.Vec3f(0.1, 0.5, 1.0)])
-            tip_translate = tip_prim.GetAttribute("xformOp:translate")
-            if not tip_translate.IsValid():
-                tip_translate = tip_prim.CreateAttribute("xformOp:translate", Sdf.ValueTypeNames.Double3)
-            tip_translate.Set(Gf.Vec3d(0.0, 0.0, 0.032))
-            tip_order = tip_prim.GetAttribute("xformOpOrder")
-            tip_order.Set(["xformOp:translate"])
-
-    def _read_stage_end_effector_pose(self, stage) -> np.ndarray | None:
-        if stage is None:
-            return None
-        try:
-            from pxr import UsdGeom
-        except ImportError:
-            return None
-        prim = stage.GetPrimAtPath(self.end_effector_path)
-        if not prim.IsValid():
-            return None
-        try:
-            xform_cache = UsdGeom.XformCache()
-            world_transform = xform_cache.GetLocalToWorldTransform(prim)
-            matrix = np.array(world_transform, dtype=float).T
-            return matrix
-        except Exception:
-            return None
-
-    def _read_stage_end_effector_position(self, stage) -> np.ndarray | None:
-        pose = self._read_stage_end_effector_pose(stage)
-        if pose is None:
-            return None
-        return pose[:3, 3].copy()
-
-    def _get_stage(self):
-        try:
-            import omni.usd
-        except ImportError:
-            return None
-        return omni.usd.get_context().get_stage()
-
-    def _get_articulation(self):
-        try:
-            from isaacsim.core.prims import SingleArticulation
-            from isaacsim.core.utils.types import ArticulationAction
-        except ImportError:
-            return None
-        if self._articulation is None:
-            self._articulation = SingleArticulation(self.articulation_root_path, reset_xform_properties=False)
-            self._articulation_joint_indices = None
-        try:
-            if not self._articulation.handles_initialized:
-                self._articulation.initialize()
-        except Exception:
-            return None
-        if self._articulation_joint_indices is None:
-            try:
-                self._articulation_joint_indices = np.array(
-                    [self._articulation.get_dof_index(name) for name in self.model.joint_names],
-                    dtype=np.int64,
-                )
-            except Exception:
-                return None
-        return self._articulation
-
-    def _get_articulation_joint_indices(self) -> np.ndarray | None:
-        articulation = self._get_articulation()
-        if articulation is None:
-            return None
-        return self._articulation_joint_indices
-
-    def _stage_to_model_joint_positions_deg(self, joint_positions_deg: np.ndarray) -> np.ndarray:
-        return np.asarray(joint_positions_deg, dtype=float) * self.model_joint_signs
-
-    def _model_to_stage_joint_positions_deg(self, joint_positions_deg: np.ndarray) -> np.ndarray:
-        return np.asarray(joint_positions_deg, dtype=float) * self.model_joint_signs
-
-    def _read_current_joint_targets_deg(self, stage) -> np.ndarray:
-        articulation = self._get_articulation()
-        joint_indices = self._get_articulation_joint_indices()
-        if articulation is not None and joint_indices is not None:
-            try:
-                joint_positions_rad = articulation.get_joint_positions(joint_indices=joint_indices)
-                if joint_positions_rad is not None:
-                    return np.rad2deg(np.asarray(joint_positions_rad, dtype=float))
-            except Exception:
-                pass
-        joint_targets = []
-        for joint_name in self.model.joint_names:
-            prim = stage.GetPrimAtPath(f"{self.joint_root_path}/{joint_name}")
-            if not prim.IsValid():
-                raise RuntimeError(f"Joint prim not found: {self.joint_root_path}/{joint_name}")
-            state_attr = prim.GetAttribute("state:angular:physics:position")
-            state_value = state_attr.Get() if state_attr.IsValid() else None
-            if state_value is not None:
-                joint_targets.append(float(state_value))
-                continue
-            attr = prim.GetAttribute("drive:angular:physics:targetPosition")
-            value = attr.Get() if attr.IsValid() else None
-            joint_targets.append(float(value) if value is not None else 0.0)
-        return np.asarray(joint_targets, dtype=float)
-
-    def _read_stage_joint_positions_deg(self, stage) -> np.ndarray | None:
-        articulation = self._get_articulation()
-        joint_indices = self._get_articulation_joint_indices()
-        if articulation is not None and joint_indices is not None:
-            try:
-                joint_positions_rad = articulation.get_joint_positions(joint_indices=joint_indices)
-                if joint_positions_rad is not None:
-                    return np.rad2deg(np.asarray(joint_positions_rad, dtype=float))
-            except Exception:
-                pass
-        if stage is None:
-            return None
-        joint_positions = []
-        for joint_name in self.model.joint_names:
-            prim = stage.GetPrimAtPath(f"{self.joint_root_path}/{joint_name}")
-            if not prim.IsValid():
-                return None
-            state_attr = prim.GetAttribute("state:angular:physics:position")
-            state_value = state_attr.Get() if state_attr.IsValid() else None
-            if state_value is None:
-                return None
-            joint_positions.append(float(state_value))
-        return np.asarray(joint_positions, dtype=float)
-
-    def _write_joint_targets_deg(self, stage, joint_targets_deg: np.ndarray) -> None:
-        articulation = self._get_articulation()
-        joint_indices = self._get_articulation_joint_indices()
-        if articulation is not None and joint_indices is not None:
-            try:
-                from isaacsim.core.utils.types import ArticulationAction
-                articulation.apply_action(
-                    ArticulationAction(
-                        joint_positions=np.deg2rad(np.asarray(joint_targets_deg, dtype=float)),
-                        joint_indices=joint_indices,
-                    )
-                )
-                return
-            except Exception:
-                pass
-        for joint_name, target_deg in zip(self.model.joint_names, joint_targets_deg, strict=True):
-            prim = stage.GetPrimAtPath(f"{self.joint_root_path}/{joint_name}")
-            if not prim.IsValid():
-                raise RuntimeError(f"Joint prim not found: {self.joint_root_path}/{joint_name}")
-            attr = prim.GetAttribute("drive:angular:physics:targetPosition")
-            if not attr.IsValid():
-                raise RuntimeError(
-                    f"Joint drive target attribute missing on {self.joint_root_path}/{joint_name}"
-                )
-            attr.Set(float(target_deg))
-
-
-    def _write_joint_state_deg(self, stage, joint_positions_deg: np.ndarray) -> None:
-        articulation = self._get_articulation()
-        joint_indices = self._get_articulation_joint_indices()
-        if articulation is not None and joint_indices is not None:
-            try:
-                articulation.set_joint_positions(np.deg2rad(np.asarray(joint_positions_deg, dtype=float)), joint_indices=joint_indices)
-                return
-            except Exception:
-                pass
-        for joint_name, position_deg in zip(self.model.joint_names, joint_positions_deg, strict=True):
-            prim = stage.GetPrimAtPath(f"{self.joint_root_path}/{joint_name}")
-            if not prim.IsValid():
-                continue
-            pos_attr = prim.GetAttribute("state:angular:physics:position")
-            vel_attr = prim.GetAttribute("state:angular:physics:velocity")
-            if pos_attr.IsValid():
-                pos_attr.Set(float(position_deg))
-            if vel_attr.IsValid():
-                vel_attr.Set(0.0)
 
     def reset_target_positions(self, target_value_deg: float = 0.0, reset_joint_state: bool = True) -> None:
         self.teleop_mapper.reset()
-        stage = self._get_stage()
+        stage = self.stage_io.get_stage()
         if stage is None:
             return
         target_values = np.array(
             [DEFAULT_STOP_TARGETS_DEG.get(joint_name, float(target_value_deg)) for joint_name in self.model.joint_names],
             dtype=float,
         )
-        self._write_joint_targets_deg(stage, target_values)
+        self.stage_io.write_joint_targets_deg(stage, target_values)
         if reset_joint_state:
-            self._write_joint_state_deg(stage, target_values)
-        self.last_joint_targets_deg = self._stage_to_model_joint_positions_deg(target_values)
+            self.stage_io.write_joint_state_deg(stage, target_values)
+        self.last_joint_targets_deg = self.stage_io.stage_to_model_joint_positions_deg(target_values)
 
     def solve_once(self, *, apply_to_stage: bool) -> dict[str, Any] | None:
         packet = self._load_latest_packet()
@@ -565,10 +328,10 @@ class HopeJrSimIkController:
             return None
         self.last_packet_timestamp = packet_timestamp
 
-        stage = self._get_stage() if apply_to_stage else None
+        stage = self.stage_io.get_stage() if apply_to_stage else None
         if stage is not None:
-            current_stage_joint_targets_deg = self._read_current_joint_targets_deg(stage)
-            current_joint_targets_deg = self._stage_to_model_joint_positions_deg(current_stage_joint_targets_deg)
+            current_stage_joint_targets_deg = self.stage_io.read_current_joint_targets_deg(stage)
+            current_joint_targets_deg = self.stage_io.stage_to_model_joint_positions_deg(current_stage_joint_targets_deg)
         else:
             current_stage_joint_targets_deg = None
             current_joint_targets_deg = self.last_joint_targets_deg
@@ -630,19 +393,19 @@ class HopeJrSimIkController:
             inactive_reference_targets_deg = self._inactive_joint_reference_targets_deg()
             solved_model_joint_targets_deg[inactive] = inactive_reference_targets_deg[inactive]
         self.last_joint_targets_deg = solved_model_joint_targets_deg
-        solved_joint_targets_deg = self._model_to_stage_joint_positions_deg(solved_model_joint_targets_deg)
+        solved_joint_targets_deg = self.stage_io.model_to_stage_joint_positions_deg(solved_model_joint_targets_deg)
 
-        stage_end_effector_position = self._read_stage_end_effector_position(stage) if stage is not None else None
+        stage_end_effector_position = self.stage_io.read_stage_end_effector_position(stage) if stage is not None else None
         stage_joint_positions_deg = None
         stage_model_joint_positions_deg = None
         if stage is not None:
-            self._write_joint_targets_deg(stage, solved_joint_targets_deg)
+            self.stage_io.write_joint_targets_deg(stage, solved_joint_targets_deg)
             if self.write_joint_state_directly:
-                self._write_joint_state_deg(stage, solved_joint_targets_deg)
-            stage_joint_positions_deg = self._read_stage_joint_positions_deg(stage)
+                self.stage_io.write_joint_state_deg(stage, solved_joint_targets_deg)
+            stage_joint_positions_deg = self.stage_io.read_stage_joint_positions_deg(stage)
             if stage_joint_positions_deg is not None:
-                stage_model_joint_positions_deg = self._stage_to_model_joint_positions_deg(stage_joint_positions_deg)
-            stage_end_effector_position = self._read_stage_end_effector_position(stage)
+                stage_model_joint_positions_deg = self.stage_io.stage_to_model_joint_positions_deg(stage_joint_positions_deg)
+            stage_end_effector_position = self.stage_io.read_stage_end_effector_position(stage)
 
         achieved_pose = self.model.forward_kinematics(solved_model_joint_targets_deg)
         achieved_position = achieved_pose[:3, 3]
