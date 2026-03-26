@@ -2,6 +2,7 @@
 
 import argparse
 import importlib.util
+import json
 import sys
 import time
 from pathlib import Path
@@ -259,6 +260,7 @@ class HopeJrSimIkController:
             quest_current_position=quest_current_position,
             quest_mapped_position=quest_mapped_position,
             sim_target_position=sim_target_position,
+            reference_position=None if self.teleop_mapper.stage_anchor_pose is None else self.teleop_mapper.stage_anchor_pose[:3, 3],
             actual_end_effector_position=actual_end_effector_position,
             actual_end_effector_pose=actual_end_effector_pose,
             waiting_for_anchor=waiting_for_anchor,
