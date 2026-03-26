@@ -15,6 +15,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from ui.hope_jr_teleop_status_ui import HopeJrTeleopStatusUi
+from controllers.quest_teleop_mapper import QuestTeleopMapper
 
 import numpy as np
 from scipy.spatial.transform import Rotation
@@ -82,11 +83,6 @@ class HopeJrSimIkController:
         self.packet_path = packet_path
         self.joint_root_path = joint_root_path.rstrip("/")
         self.articulation_root_path = self.joint_root_path.rsplit("/", 1)[0]
-        self.position_scale = position_scale
-        self.world_offset = world_offset
-        self.world_rotation = Rotation.from_euler("XYZ", world_rotate_xyz_deg, degrees=True).as_matrix()
-        self.quest_position_axes = quest_position_axes
-        self.quest_position_signs = quest_position_signs
         self.position_only = position_only
         self.debug_path = debug_path
         self.use_udp = use_udp
@@ -95,10 +91,7 @@ class HopeJrSimIkController:
         self.teleop_debug_root = teleop_debug_root.rstrip("/")
         self.show_teleop_debug = show_teleop_debug
         self.anchor_delay_s = anchor_delay_s
-        self.anchor_ready_time = time.time() + anchor_delay_s
-        self.grip_threshold = grip_threshold
         self.event_log_path = event_log_path
-        self.quest_deadband_m = float(quest_deadband_m)
         self.packet_stale_timeout_s = float(packet_stale_timeout_s)
         self.end_effector_path = end_effector_path
         self.write_joint_state_directly = bool(write_joint_state_directly)
@@ -140,12 +133,18 @@ class HopeJrSimIkController:
         self.minimum_packet_timestamp = None
         self.last_debug_payload = None
         self._last_event_key = None
-        self.quest_anchor_position = None
-        self.quest_anchor_rotation = None
-        self.sim_anchor_pose = None
-        self.stage_anchor_pose = None
-        self.model_to_stage_transform = np.eye(4)
-        self.stage_to_model_transform = np.eye(4)
+        self.teleop_mapper = QuestTeleopMapper(
+            position_scale=position_scale,
+            world_offset=world_offset,
+            world_rotate_xyz_deg=world_rotate_xyz_deg,
+            quest_position_axes=quest_position_axes,
+            quest_position_signs=quest_position_signs,
+            position_only=position_only,
+            anchor_delay_s=anchor_delay_s,
+            grip_threshold=grip_threshold,
+            quest_deadband_m=quest_deadband_m,
+            make_pose=self.kinematics_module.make_pose,
+        )
         self._a_pressed_last = False
         self.last_hand_state = {}
         self.last_packet_received_at = None
@@ -186,20 +185,7 @@ class HopeJrSimIkController:
         self,
         packet: dict[str, Any],
         current_joint_targets_deg: np.ndarray,
-    ) -> tuple[np.ndarray, dict[str, Any]] | None:
-        normalized = packet.get("normalized")
-        if not isinstance(normalized, dict):
-            return None
-        hand = normalized.get("right_hand")
-        if not isinstance(hand, dict):
-            return None
-        if not hand.get("enabled", True) or hand.get("clutch", False):
-            return None
-        if float(hand.get("grip", 0.0)) < self.grip_threshold:
-            return None
-
-        quest_position = np.asarray(hand["position"], dtype=float)
-        quest_rotation = Rotation.from_quat(np.asarray(hand["orientation_xyzw"], dtype=float)).as_matrix()
+    ) -> Any | None:
         anchor_joint_targets_deg = current_joint_targets_deg.copy()
         if self.active_joint_names:
             inactive = self.active_joint_mask < 0.5
@@ -210,68 +196,41 @@ class HopeJrSimIkController:
         current_sim_pose = self.model.forward_kinematics(anchor_joint_targets_deg)
         stage = self._get_stage()
         current_stage_pose = self._read_stage_end_effector_pose(stage)
-
-        if self.quest_anchor_position is None or self.sim_anchor_pose is None or self.stage_anchor_pose is None:
-            waiting_pose = current_stage_pose if current_stage_pose is not None else current_sim_pose
-            if time.time() < self.anchor_ready_time:
-                self._update_teleop_debug_visuals(
-                    quest_anchor_position=quest_position,
-                    quest_current_position=quest_position,
-                    quest_mapped_position=waiting_pose[:3, 3],
-                    sim_target_position=waiting_pose[:3, 3],
-                    actual_end_effector_position=self._read_stage_end_effector_position(stage),
-                    actual_end_effector_pose=self._read_stage_end_effector_pose(stage),
-                    waiting_for_anchor=True,
-                )
-                return None
-            self.quest_anchor_position = quest_position.copy()
-            self.quest_anchor_rotation = quest_rotation.copy()
-            self.sim_anchor_pose = current_sim_pose.copy()
-            self.stage_anchor_pose = current_stage_pose.copy() if current_stage_pose is not None else current_sim_pose.copy()
-            try:
-                self.model_to_stage_transform = self.stage_anchor_pose @ np.linalg.inv(self.sim_anchor_pose)
-                self.stage_to_model_transform = np.linalg.inv(self.model_to_stage_transform)
-            except np.linalg.LinAlgError:
-                self.model_to_stage_transform = np.eye(4)
-                self.stage_to_model_transform = np.eye(4)
-            self._append_event(
-                {
-                    "status": "anchor_captured",
-                    "quest_anchor_position": self.quest_anchor_position.tolist(),
-                    "sim_anchor_position": self.sim_anchor_pose[:3, 3].tolist(),
-                    "stage_anchor_position": self.stage_anchor_pose[:3, 3].tolist(),
-                    "anchor_joint_targets_deg": anchor_joint_targets_deg.tolist(),
-                    "active_joint_names": list(self.active_joint_names),
-                    "inactive_joint_behavior": self.inactive_joint_behavior,
-                },
-                dedupe_key=("anchor_captured", tuple(np.round(self.quest_anchor_position, 6))),
+        map_result = self.teleop_mapper.map_packet(
+            packet,
+            current_sim_pose=current_sim_pose,
+            current_stage_pose=current_stage_pose,
+            active_joint_names=self.active_joint_names,
+            inactive_joint_behavior=self.inactive_joint_behavior,
+            anchor_joint_targets_deg=anchor_joint_targets_deg,
+        )
+        if map_result is None:
+            return None
+        if map_result.waiting_for_anchor:
+            self._update_teleop_debug_visuals(
+                quest_anchor_position=map_result.quest_current_position,
+                quest_current_position=map_result.quest_current_position,
+                quest_mapped_position=map_result.quest_mapped_position_stage,
+                sim_target_position=map_result.sim_target_position_stage,
+                actual_end_effector_position=self._read_stage_end_effector_position(stage),
+                actual_end_effector_pose=self._read_stage_end_effector_pose(stage),
+                waiting_for_anchor=True,
             )
-
-        quest_delta = quest_position - self.quest_anchor_position
-        if self.quest_deadband_m > 0.0:
-            small = np.abs(quest_delta) < self.quest_deadband_m
-            quest_delta = np.where(small, 0.0, quest_delta)
-        remapped_delta = quest_delta[list(self.quest_position_axes)] * self.quest_position_signs
-        position_delta_stage = self.world_rotation @ (remapped_delta * self.position_scale)
-        quest_mapped_position_stage = self.stage_anchor_pose[:3, 3] + position_delta_stage
-        desired_target_position_stage = quest_mapped_position_stage + self.world_offset
-        solve_target_position_stage = desired_target_position_stage
-        if self.position_only:
-            target_rotation_stage = self.stage_anchor_pose[:3, :3]
-        else:
-            relative_rotation = quest_rotation @ self.quest_anchor_rotation.T
-            target_rotation_stage = self.world_rotation @ relative_rotation @ self.stage_anchor_pose[:3, :3]
-        target_pose_stage = self.kinematics_module.make_pose(position=solve_target_position_stage, rotation_matrix=target_rotation_stage)
-        target_pose = self.stage_to_model_transform @ target_pose_stage
+            return map_result
+        if map_result.anchor_captured_payload is not None:
+            self._append_event(
+                map_result.anchor_captured_payload,
+                dedupe_key=("anchor_captured", tuple(np.round(self.teleop_mapper.quest_anchor_position, 6))),
+            )
         self._update_teleop_debug_visuals(
-            quest_anchor_position=self.quest_anchor_position,
-            quest_current_position=quest_position,
-            quest_mapped_position=quest_mapped_position_stage,
-            sim_target_position=desired_target_position_stage,
+            quest_anchor_position=map_result.quest_anchor_position,
+            quest_current_position=map_result.quest_current_position,
+            quest_mapped_position=map_result.quest_mapped_position_stage,
+            sim_target_position=map_result.sim_target_position_stage,
             actual_end_effector_position=self._read_stage_end_effector_position(stage),
             actual_end_effector_pose=self._read_stage_end_effector_pose(stage),
         )
-        return target_pose, hand
+        return map_result
 
 
     def _append_event(self, payload: dict[str, Any], *, dedupe_key: tuple[Any, ...] | None = None) -> None:
@@ -544,13 +503,7 @@ class HopeJrSimIkController:
                 vel_attr.Set(0.0)
 
     def reset_target_positions(self, target_value_deg: float = 0.0, reset_joint_state: bool = True) -> None:
-        self.quest_anchor_position = None
-        self.quest_anchor_rotation = None
-        self.sim_anchor_pose = None
-        self.stage_anchor_pose = None
-        self.model_to_stage_transform = np.eye(4)
-        self.stage_to_model_transform = np.eye(4)
-        self.anchor_ready_time = time.time() + self.anchor_delay_s
+        self.teleop_mapper.reset()
         stage = self._get_stage()
         if stage is None:
             return
@@ -620,14 +573,14 @@ class HopeJrSimIkController:
             current_stage_joint_targets_deg = None
             current_joint_targets_deg = self.last_joint_targets_deg
 
-        target = self._packet_to_target_pose(packet, current_joint_targets_deg)
-        if target is None:
-            if self.quest_anchor_position is None and time.time() < self.anchor_ready_time:
+        map_result = self._packet_to_target_pose(packet, current_joint_targets_deg)
+        if map_result is None:
+            if self.teleop_mapper.quest_anchor_position is None and time.time() < self.teleop_mapper.anchor_ready_time:
                 self._write_debug(
                     {
                         "status": "waiting_for_anchor",
                         "anchor_delay_s": self.anchor_delay_s,
-                        "anchor_ready_time": self.anchor_ready_time,
+                        "anchor_ready_time": self.teleop_mapper.anchor_ready_time,
                         "now": time.time(),
                     }
                 )
@@ -639,16 +592,27 @@ class HopeJrSimIkController:
                     "status": "ignored",
                     "reason": "packet_not_usable",
                     "grip": grip,
-                    "grip_threshold": self.grip_threshold,
+                    "grip_threshold": self.teleop_mapper.grip_threshold,
                 }
                 self._append_event(
                     ignored_event,
-                    dedupe_key=("ignored", ignored_event["reason"], round(float(grip or 0.0), 3), round(float(self.grip_threshold), 3)),
+                    dedupe_key=("ignored", ignored_event["reason"], round(float(grip or 0.0), 3), round(float(self.teleop_mapper.grip_threshold), 3)),
                 )
                 if self.last_debug_payload is None or self.last_debug_payload.get("status") != "applied":
                     self._write_debug({**ignored_event, "packet": packet})
             return None
-        target_pose, hand_state = target
+        if map_result.waiting_for_anchor:
+            self._write_debug(
+                {
+                    "status": "waiting_for_anchor",
+                    "anchor_delay_s": self.anchor_delay_s,
+                    "anchor_ready_time": self.teleop_mapper.anchor_ready_time,
+                    "now": time.time(),
+                }
+            )
+            return None
+        target_pose = map_result.target_pose
+        hand_state = map_result.hand_state
 
         ik_seed_deg = current_joint_targets_deg.copy()
         if self.active_joint_names:
@@ -684,8 +648,8 @@ class HopeJrSimIkController:
         achieved_position = achieved_pose[:3, 3]
         target_position = target_pose[:3, 3]
         position_error = target_position - achieved_position
-        target_stage_position = (self.model_to_stage_transform @ target_pose)[:3, 3]
-        achieved_stage_position = (self.model_to_stage_transform @ achieved_pose)[:3, 3]
+        target_stage_position = (self.teleop_mapper.model_to_stage_transform @ target_pose)[:3, 3]
+        achieved_stage_position = (self.teleop_mapper.model_to_stage_transform @ achieved_pose)[:3, 3]
         stage_end_effector_error = None
         if stage_end_effector_position is not None:
             stage_end_effector_error = (target_stage_position - stage_end_effector_position).tolist()
@@ -708,8 +672,8 @@ class HopeJrSimIkController:
             "stage_end_effector_error": stage_end_effector_error,
             "position_error": position_error.tolist(),
             "position_only": self.position_only,
-            "quest_position_axes": list(self.quest_position_axes),
-            "quest_position_signs": self.quest_position_signs.tolist(),
+            "quest_position_axes": list(self.teleop_mapper.quest_position_axes),
+            "quest_position_signs": self.teleop_mapper.quest_position_signs.tolist(),
             "grip": float(hand_state.get("grip", 0.0)),
             "trigger": float(hand_state.get("trigger", 0.0)),
             "active_joint_names": list(self.active_joint_names),
@@ -720,14 +684,14 @@ class HopeJrSimIkController:
             "status": "applied" if stage is not None else "solved",
                 "packet_timestamp": packet_timestamp,
                 "position_only": self.position_only,
-                "quest_position_axes": list(self.quest_position_axes),
-                "quest_position_signs": self.quest_position_signs.tolist(),
+                "quest_position_axes": list(self.teleop_mapper.quest_position_axes),
+                "quest_position_signs": self.teleop_mapper.quest_position_signs.tolist(),
                 "raw_hand_position": hand_state.get("position"),
                 "raw_hand_orientation_xyzw": hand_state.get("orientation_xyzw"),
-                "quest_anchor_position": None if self.quest_anchor_position is None else self.quest_anchor_position.tolist(),
-                "sim_anchor_position": None if self.sim_anchor_pose is None else self.sim_anchor_pose[:3, 3].tolist(),
-                "quest_delta": None if self.quest_anchor_position is None else (hand_position - self.quest_anchor_position).tolist(),
-                "mapped_delta": None if self.sim_anchor_pose is None else (target_position - self.sim_anchor_pose[:3, 3]).tolist(),
+                "quest_anchor_position": None if map_result.quest_anchor_position is None else map_result.quest_anchor_position.tolist(),
+                "sim_anchor_position": None if self.teleop_mapper.sim_anchor_pose is None else self.teleop_mapper.sim_anchor_pose[:3, 3].tolist(),
+                "quest_delta": None if map_result.quest_delta is None else map_result.quest_delta.tolist(),
+                "mapped_delta": None if map_result.mapped_delta_model is None else map_result.mapped_delta_model.tolist(),
                 "current_joint_targets_deg": current_joint_targets_deg.tolist(),
                 "inactive_joint_behavior": self.inactive_joint_behavior,
                 "result": result,

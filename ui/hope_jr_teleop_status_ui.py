@@ -77,7 +77,7 @@ class HopeJrTeleopStatusUi:
             now = float(debug.get("now", time.time()))
             ready = float(debug.get("anchor_ready_time", now))
             status_line = f"waiting ({max(0.0, ready - now):.1f}s)"
-        elif controller.last_packet_timestamp is not None and grip < float(controller.grip_threshold):
+        elif controller.last_packet_timestamp is not None and grip < float(controller.teleop_mapper.grip_threshold):
             status_line = "ignored"
         else:
             status_line = str(status)
@@ -90,7 +90,7 @@ class HopeJrTeleopStatusUi:
             if packet_age is not None and packet_age <= float(controller.packet_stale_timeout_s)
             else "disconnected"
         )
-        anchor = "captured" if controller.quest_anchor_position is not None else "not captured"
+        anchor = "captured" if controller.teleop_mapper.quest_anchor_position is not None else "not captured"
         buttons = (
             f"A={int(bool(hand.get('a_pressed', False)))} "
             f"B={int(bool(hand.get('b_pressed', False)))} "
