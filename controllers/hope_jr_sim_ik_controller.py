@@ -50,6 +50,16 @@ DEFAULT_MODEL_JOINT_SIGNS = {
 }
 DEFAULT_STAGE_DLS_LAMBDA = 0.01
 DEFAULT_STAGE_DLS_MAX_STEP_DEG = 8.0
+DEFAULT_STAGE_TASK_DELTA_CLAMP_M = 0.03
+DEFAULT_STAGE_JOINT_WEIGHTS = {
+    "right_shoulder_pitch": 1.0,
+    "right_shoulder_yaw": 1.0,
+    "right_upper_elbow": 1.0,
+    "right_elbow": 1.0,
+    "right_forearm_twist": 0.7,
+    "right_wrist": 0.45,
+    "right_palm": 0.35,
+}
 
 _ACTIVE_LOOP = None
 
@@ -124,6 +134,10 @@ class HopeJrSimIkController:
             [DEFAULT_MODEL_JOINT_SIGNS.get(name, 1.0) for name in self.model.joint_names],
             dtype=float,
         )
+        self.stage_joint_weights = np.asarray(
+            [DEFAULT_STAGE_JOINT_WEIGHTS.get(name, 1.0) for name in self.model.joint_names],
+            dtype=float,
+        )
         self.last_joint_targets_deg = np.zeros(len(self.model.joint_names), dtype=float)
         self.neutral_model_joint_targets_deg = np.array([DEFAULT_STOP_TARGETS_DEG.get(name, 0.0) for name in self.model.joint_names], dtype=float)
         self.inactive_joint_hold_targets_deg = self.neutral_model_joint_targets_deg.copy()
@@ -176,6 +190,14 @@ class HopeJrSimIkController:
 
     def _load_latest_packet(self) -> dict[str, Any] | None:
         return self.packet_source.read_latest_packet()
+
+
+    @staticmethod
+    def _clip_vector_norm(vector: np.ndarray, max_norm: float) -> np.ndarray:
+        norm = float(np.linalg.norm(vector))
+        if norm <= max_norm or norm <= 1e-12:
+            return vector
+        return vector * (max_norm / norm)
 
 
     def _packet_to_target_pose(
@@ -296,7 +318,8 @@ class HopeJrSimIkController:
             return None
 
         target_stage_pose = self.teleop_mapper.model_to_stage_transform @ target_pose
-        position_error = target_stage_pose[:3, 3] - current_stage_pose[:3, 3]
+        raw_position_error = target_stage_pose[:3, 3] - current_stage_pose[:3, 3]
+        position_error = self._clip_vector_norm(raw_position_error, DEFAULT_STAGE_TASK_DELTA_CLAMP_M)
         if self.position_only:
             task_error = position_error
             task_jacobian = jacobian[:3, :]
@@ -309,7 +332,8 @@ class HopeJrSimIkController:
             active_joint_mask = self.active_joint_mask.astype(float)
         else:
             active_joint_mask = np.ones(task_jacobian.shape[1], dtype=float)
-        task_jacobian = task_jacobian * active_joint_mask[None, :]
+        solve_joint_weights = self.stage_joint_weights * active_joint_mask
+        task_jacobian = task_jacobian * solve_joint_weights[None, :]
 
         damping = DEFAULT_STAGE_DLS_LAMBDA
         try:
@@ -320,11 +344,11 @@ class HopeJrSimIkController:
         except np.linalg.LinAlgError:
             return None
 
-        delta_deg = np.rad2deg(delta_rad)
+        delta_deg = np.rad2deg(delta_rad) * solve_joint_weights
         unclipped_delta_deg = delta_deg.copy()
         delta_deg = np.clip(delta_deg, -DEFAULT_STAGE_DLS_MAX_STEP_DEG, DEFAULT_STAGE_DLS_MAX_STEP_DEG)
         solved_stage_joint_targets_deg = np.asarray(current_stage_joint_positions_deg, dtype=float) + delta_deg
-        return solved_stage_joint_targets_deg, target_stage_pose, delta_deg, unclipped_delta_deg
+        return solved_stage_joint_targets_deg, target_stage_pose, delta_deg, unclipped_delta_deg, raw_position_error, position_error, solve_joint_weights
 
     def solve_once(self, *, apply_to_stage: bool) -> dict[str, Any] | None:
         packet = self._load_latest_packet()
@@ -430,6 +454,9 @@ class HopeJrSimIkController:
         solved_joint_targets_deg = None
         stage_dls_delta_deg = None
         stage_dls_unclipped_delta_deg = None
+        stage_dls_raw_position_error = None
+        stage_dls_clamped_position_error = None
+        stage_dls_joint_weights = None
         stage_dls_debug = None
         if stage is not None and current_stage_joint_positions_deg is not None:
             stage_solve = self._solve_stage_differential_ik(
@@ -439,9 +466,23 @@ class HopeJrSimIkController:
             )
             stage_dls_debug = dict(self.stage_io.last_stage_dls_debug)
             if stage_solve is not None:
-                solved_joint_targets_deg, target_stage_pose, stage_dls_delta_deg, stage_dls_unclipped_delta_deg = stage_solve
+                solved_joint_targets_deg, target_stage_pose, stage_dls_delta_deg, stage_dls_unclipped_delta_deg, stage_dls_raw_position_error, stage_dls_clamped_position_error, stage_dls_joint_weights = stage_solve
         elif stage is not None:
             stage_dls_debug = {"reason": "current_stage_joint_positions_unavailable"}
+
+        if stage is not None and solved_joint_targets_deg is None:
+            stage_dls_unavailable_event = {
+                "status": "ignored",
+                "reason": "stage_dls_unavailable",
+                "packet_timestamp": packet_timestamp,
+                "stage_dls_debug": stage_dls_debug,
+            }
+            self._append_event(
+                stage_dls_unavailable_event,
+                dedupe_key=("ignored", "stage_dls_unavailable", packet_timestamp),
+            )
+            self._write_debug(stage_dls_unavailable_event)
+            return None
 
         if solved_joint_targets_deg is None:
             ik_seed_deg = current_joint_targets_deg.copy()
@@ -501,6 +542,9 @@ class HopeJrSimIkController:
             "joint_targets_deg": solved_joint_targets_deg.tolist(),
             "stage_dls_delta_deg": None if stage_dls_delta_deg is None else stage_dls_delta_deg.tolist(),
             "stage_dls_unclipped_delta_deg": None if stage_dls_unclipped_delta_deg is None else stage_dls_unclipped_delta_deg.tolist(),
+            "stage_dls_raw_position_error": None if stage_dls_raw_position_error is None else stage_dls_raw_position_error.tolist(),
+            "stage_dls_clamped_position_error": None if stage_dls_clamped_position_error is None else stage_dls_clamped_position_error.tolist(),
+            "stage_dls_joint_weights": None if stage_dls_joint_weights is None else stage_dls_joint_weights.tolist(),
             "stage_dls_debug": stage_dls_debug,
             "model_joint_targets_deg": solved_model_joint_targets_deg.tolist(),
             "stage_joint_positions_deg": None if stage_joint_positions_deg is None else stage_joint_positions_deg.tolist(),
