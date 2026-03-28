@@ -38,6 +38,7 @@ DEFAULT_TELEOP_DEBUG_ROOT = "/World/JointTest/TeleopDebug"
 DEFAULT_END_EFFECTOR_PATH = "/World/JointTest/PalmBody/EndEffector"
 DEFAULT_EVENT_LOG_PATH = Path("/tmp/hope_jr_sim_ik_events.ndjson")
 DEFAULT_PACKET_STALE_TIMEOUT_S = 0.75
+DEFAULT_SIM_PLAY_STATE_PATH = Path("/tmp/hope_jr_sim_play_state.json")
 DEFAULT_STOP_TARGETS_DEG = {}
 DEFAULT_MODEL_JOINT_SIGNS = {
     "right_shoulder_pitch": -1.0,
@@ -147,6 +148,7 @@ class HopeJrSimIkController:
         )
         self.last_joint_targets_deg = np.zeros(len(self.model.joint_names), dtype=float)
         self.neutral_model_joint_targets_deg = np.array([DEFAULT_STOP_TARGETS_DEG.get(name, 0.0) for name in self.model.joint_names], dtype=float)
+        self.start_stage_joint_positions_deg = None
         self.last_packet_timestamp = None
         self.stage_error_norm_window = deque(maxlen=DEFAULT_STAGE_ERROR_SCORE_WINDOW)
         self.minimum_packet_timestamp = None
@@ -435,10 +437,6 @@ class HopeJrSimIkController:
                     "grip": grip,
                     "grip_threshold": self.teleop_mapper.grip_threshold,
                 }
-                self._append_event(
-                    ignored_event,
-                    dedupe_key=("ignored", ignored_event["reason"], round(float(grip or 0.0), 3), round(float(self.teleop_mapper.grip_threshold), 3)),
-                )
                 if self.last_debug_payload is None or self.last_debug_payload.get("status") != "applied":
                     self._write_debug({**ignored_event, "packet": packet})
             return None
@@ -464,6 +462,8 @@ class HopeJrSimIkController:
         stage_dls_joint_weights = None
         stage_dls_debug = None
         if stage is not None and current_stage_joint_positions_deg is not None:
+            if self.start_stage_joint_positions_deg is None:
+                self.start_stage_joint_positions_deg = np.asarray(current_stage_joint_positions_deg, dtype=float).copy()
             stage_solve = self._solve_stage_differential_ik(
                 stage=stage,
                 current_stage_joint_positions_deg=current_stage_joint_positions_deg,
@@ -482,10 +482,6 @@ class HopeJrSimIkController:
                 "packet_timestamp": packet_timestamp,
                 "stage_dls_debug": stage_dls_debug,
             }
-            self._append_event(
-                stage_dls_unavailable_event,
-                dedupe_key=("ignored", "stage_dls_unavailable", packet_timestamp),
-            )
             self._write_debug(stage_dls_unavailable_event)
             return None
 
@@ -546,6 +542,7 @@ class HopeJrSimIkController:
             "stage_dls_debug": stage_dls_debug,
             "model_joint_targets_deg": solved_model_joint_targets_deg.tolist(),
             "stage_joint_positions_deg": None if stage_joint_positions_deg is None else stage_joint_positions_deg.tolist(),
+            "stage_start_joint_positions_deg": None if self.start_stage_joint_positions_deg is None else self.start_stage_joint_positions_deg.tolist(),
             "stage_model_joint_positions_deg": None if stage_model_joint_positions_deg is None else stage_model_joint_positions_deg.tolist(),
             "stage_vs_model_joint_delta": stage_vs_model_joint_delta,
             "target_position": target_position.tolist(),
@@ -605,11 +602,27 @@ class HopeJrIsaacUpdateLoop:
         self._last_status = None
         self._last_wait_seconds = None
         self._status_ui = HopeJrTeleopStatusUi()
+        self._last_playing_state = None
+        self._play_state_path = DEFAULT_SIM_PLAY_STATE_PATH
 
     def _refresh_status_window(self) -> None:
         self._status_ui.update(self.controller, self.controller.last_debug_payload)
 
+    def _write_play_state(self, playing: bool) -> None:
+        if self._last_playing_state is playing:
+            return
+        payload = {"playing": bool(playing), "updated_at": time.time()}
+        tmp_path = self._play_state_path.with_suffix(".tmp")
+        tmp_path.write_text(json.dumps(payload) + "\n")
+        tmp_path.replace(self._play_state_path)
+        self._last_playing_state = bool(playing)
+
     def _on_update(self, _event: object) -> None:
+        import omni.timeline
+
+        timeline = omni.timeline.get_timeline_interface()
+        is_playing = bool(timeline.is_playing()) if timeline is not None else True
+        self._write_play_state(is_playing)
         now = time.monotonic()
         if now - self._last_tick_time < self.interval_s:
             return
@@ -668,11 +681,13 @@ class HopeJrIsaacUpdateLoop:
             self._on_update,
             name="HopeJrSimIkController",
         )
+        self._write_play_state(True)
         print(f"Hope Jr IK controller subscribed to Isaac update stream at {self.interval_s:.3f}s interval")
         return self
 
     def stop(self) -> None:
         self._subscription = None
+        self._write_play_state(False)
         if self.reset_targets_on_stop:
             try:
                 self.controller.reset_target_positions(self.reset_target_value_deg, reset_joint_state=True)
