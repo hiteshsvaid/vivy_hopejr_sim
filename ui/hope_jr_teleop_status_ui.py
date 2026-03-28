@@ -38,6 +38,11 @@ class HopeJrTeleopStatusUi:
                     ui.Label("buttons")
                     self._labels["buttons"] = ui.Label("-", word_wrap=True)
 
+                    ui.Label("profile")
+                    self._labels["profile"] = ui.Label("-", word_wrap=True)
+                    ui.Label("err score")
+                    self._labels["error_score"] = ui.Label("-", word_wrap=True)
+
                 with ui.VGrid(column_count=2, row_height=20, column_widths=[90, 0], spacing=6):
                     ui.Label("packet")
                     self._labels["packet"] = ui.Label("-", word_wrap=True)
@@ -102,6 +107,16 @@ class HopeJrTeleopStatusUi:
         packet = controller.last_packet_timestamp
         mapped_delta = debug.get("mapped_delta")
         mapped_text = "-" if mapped_delta is None else ", ".join(f"{float(v):+.3f}" for v in mapped_delta)
+        stage_profile = debug.get("stage_weight_profile") or (debug.get("result") or {}).get("stage_weight_profile") or getattr(controller, "stage_weight_profile", "-")
+        stage_error_score = debug.get("stage_error_score") or (debug.get("result") or {}).get("stage_error_score")
+        if stage_error_score is None:
+            error_text = "-"
+        else:
+            error_text = (
+                f"mean={float(stage_error_score.get('mean_error_norm_m', 0.0)):.4f} "
+                f"latest={float(stage_error_score.get('latest_error_norm_m', 0.0)):.4f} "
+                f"n={int(stage_error_score.get('window_size', 0))}"
+            )
 
         if packet_age is None:
             packet_text = "-"
@@ -115,5 +130,7 @@ class HopeJrTeleopStatusUi:
         self._labels["grip"].text = f"{grip:.2f}"
         self._labels["trigger"].text = f"{trigger:.2f}"
         self._labels["buttons"].text = buttons
+        self._labels["profile"].text = str(stage_profile)
+        self._labels["error_score"].text = error_text
         self._labels["packet"].text = packet_text
         self._labels["mapped_delta"].text = mapped_text

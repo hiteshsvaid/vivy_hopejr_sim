@@ -5,6 +5,7 @@ import importlib.util
 import json
 import sys
 import time
+from collections import deque
 from pathlib import Path
 from typing import Any
 
@@ -16,6 +17,7 @@ if str(REPO_ROOT) not in sys.path:
 from ui.hope_jr_teleop_status_ui import HopeJrTeleopStatusUi
 from ui.teleop_debug_visuals import TeleopDebugVisuals
 from controllers.quest_teleop_mapper import QuestTeleopMapper
+from controllers.ik_weight_profiles import DEFAULT_STAGE_WEIGHT_PROFILE, build_stage_joint_weights, list_stage_weight_profiles
 from controllers.teleop_packet_source import TeleopPacketSource
 from controllers.stage_io import HopeJrStageIo
 
@@ -51,17 +53,31 @@ DEFAULT_MODEL_JOINT_SIGNS = {
 DEFAULT_STAGE_DLS_LAMBDA = 0.01
 DEFAULT_STAGE_DLS_MAX_STEP_DEG = 8.0
 DEFAULT_STAGE_TASK_DELTA_CLAMP_M = 0.03
-DEFAULT_STAGE_JOINT_WEIGHTS = {
-    "right_shoulder_pitch": 1.0,
-    "right_shoulder_yaw": 1.0,
-    "right_upper_elbow": 1.0,
-    "right_elbow": 1.0,
-    "right_forearm_twist": 0.7,
-    "right_wrist": 0.45,
-    "right_palm": 0.35,
+DEFAULT_STAGE_ERROR_SCORE_WINDOW = 120
+DEFAULT_STAGE_POSITION_ONLY_WEIGHT_OVERRIDES = {
+    "right_forearm_twist": 0.0,
+    "right_wrist": 0.0,
+    "right_palm": 0.0,
 }
 
 _ACTIVE_LOOP = None
+
+
+def _sanitize_profile_name(value: str) -> str:
+    return "".join(ch if ch.isalnum() or ch in {"_", "-"} else "_" for ch in str(value))
+
+
+def _profile_specific_log_path(base_path: Path, profile_name: str) -> Path:
+    sanitized = _sanitize_profile_name(profile_name)
+    if base_path == DEFAULT_DEBUG_PATH:
+        return base_path.with_name(f"{base_path.stem}_{sanitized}{base_path.suffix}")
+    if base_path == DEFAULT_EVENT_LOG_PATH:
+        return base_path.with_name(f"{base_path.stem}_{sanitized}{base_path.suffix}")
+    return base_path
+
+
+def _resolve_profile_log_paths(debug_path: Path, event_log_path: Path, profile_name: str) -> tuple[Path, Path]:
+    return _profile_specific_log_path(debug_path, profile_name), _profile_specific_log_path(event_log_path, profile_name)
 
 
 class HopeJrSimIkController:
@@ -90,8 +106,7 @@ class HopeJrSimIkController:
         packet_stale_timeout_s: float,
         end_effector_path: str,
         write_joint_state_directly: bool,
-        active_joint_names: tuple[str, ...] | None = None,
-        inactive_joint_behavior: str = "neutral",
+        stage_weight_profile: str = DEFAULT_STAGE_WEIGHT_PROFILE,
     ):
         self.lerobot_repo = lerobot_repo
         self.packet_path = packet_path
@@ -107,13 +122,7 @@ class HopeJrSimIkController:
         self.packet_stale_timeout_s = float(packet_stale_timeout_s)
         self.end_effector_path = end_effector_path
         self.write_joint_state_directly = bool(write_joint_state_directly)
-        if active_joint_names is None:
-            self.active_joint_names = tuple()
-        else:
-            self.active_joint_names = tuple(active_joint_names)
-        if inactive_joint_behavior not in {"neutral", "hold"}:
-            raise ValueError(f"Unsupported inactive_joint_behavior: {inactive_joint_behavior}")
-        self.inactive_joint_behavior = inactive_joint_behavior
+        self.stage_weight_profile = str(stage_weight_profile)
         self.packet_source = TeleopPacketSource(
             packet_path=packet_path,
             use_udp=use_udp,
@@ -135,18 +144,13 @@ class HopeJrSimIkController:
             dtype=float,
         )
         self.stage_joint_weights = np.asarray(
-            [DEFAULT_STAGE_JOINT_WEIGHTS.get(name, 1.0) for name in self.model.joint_names],
+            build_stage_joint_weights(self.model.joint_names, self.stage_weight_profile),
             dtype=float,
         )
         self.last_joint_targets_deg = np.zeros(len(self.model.joint_names), dtype=float)
         self.neutral_model_joint_targets_deg = np.array([DEFAULT_STOP_TARGETS_DEG.get(name, 0.0) for name in self.model.joint_names], dtype=float)
-        self.inactive_joint_hold_targets_deg = self.neutral_model_joint_targets_deg.copy()
-        if self.active_joint_names:
-            active_set = set(self.active_joint_names)
-            self.active_joint_mask = np.array([1.0 if name in active_set else 0.0 for name in self.model.joint_names], dtype=float)
-        else:
-            self.active_joint_mask = np.ones(len(self.model.joint_names), dtype=float)
         self.last_packet_timestamp = None
+        self.stage_error_norm_window = deque(maxlen=DEFAULT_STAGE_ERROR_SCORE_WINDOW)
         self.minimum_packet_timestamp = None
         self.last_debug_payload = None
         self._last_event_key = None
@@ -174,11 +178,6 @@ class HopeJrSimIkController:
             model_joint_signs=self.model_joint_signs,
         )
 
-    def _inactive_joint_reference_targets_deg(self) -> np.ndarray:
-        if self.inactive_joint_behavior == "hold":
-            return self.inactive_joint_hold_targets_deg
-        return self.neutral_model_joint_targets_deg
-
     def _load_kinematics_module(self, module_path: Path):
         spec = importlib.util.spec_from_file_location("hope_jr_arm_kinematics", module_path)
         if spec is None or spec.loader is None:
@@ -199,6 +198,20 @@ class HopeJrSimIkController:
             return vector
         return vector * (max_norm / norm)
 
+    def _compute_stage_error_score(self, stage_end_effector_error: list[float] | None) -> dict[str, Any] | None:
+        if stage_end_effector_error is not None:
+            error_norm = float(np.linalg.norm(np.asarray(stage_end_effector_error, dtype=float)))
+            self.stage_error_norm_window.append(error_norm)
+        if not self.stage_error_norm_window:
+            return None
+        values = np.asarray(self.stage_error_norm_window, dtype=float)
+        return {
+            "window_size": int(values.size),
+            "mean_error_norm_m": float(values.mean()),
+            "max_error_norm_m": float(values.max()),
+            "latest_error_norm_m": float(values[-1]),
+        }
+
 
     def _packet_to_target_pose(
         self,
@@ -206,12 +219,6 @@ class HopeJrSimIkController:
         current_joint_targets_deg: np.ndarray,
     ) -> Any | None:
         anchor_joint_targets_deg = current_joint_targets_deg.copy()
-        if self.active_joint_names:
-            inactive = self.active_joint_mask < 0.5
-            if self.inactive_joint_behavior == "hold":
-                self.inactive_joint_hold_targets_deg = current_joint_targets_deg.copy()
-            inactive_reference_targets_deg = self._inactive_joint_reference_targets_deg()
-            anchor_joint_targets_deg[inactive] = inactive_reference_targets_deg[inactive]
         current_sim_pose = self.model.forward_kinematics(anchor_joint_targets_deg)
         stage = self.stage_io.get_stage()
         current_stage_pose = self.stage_io.read_stage_end_effector_pose(stage)
@@ -219,8 +226,6 @@ class HopeJrSimIkController:
             packet,
             current_sim_pose=current_sim_pose,
             current_stage_pose=current_stage_pose,
-            active_joint_names=self.active_joint_names,
-            inactive_joint_behavior=self.inactive_joint_behavior,
             anchor_joint_targets_deg=anchor_joint_targets_deg,
         )
         if map_result is None:
@@ -328,11 +333,13 @@ class HopeJrSimIkController:
             task_error = np.concatenate([position_error, rotation_error])
             task_jacobian = jacobian
 
-        if self.active_joint_names:
-            active_joint_mask = self.active_joint_mask.astype(float)
-        else:
-            active_joint_mask = np.ones(task_jacobian.shape[1], dtype=float)
-        solve_joint_weights = self.stage_joint_weights * active_joint_mask
+        solve_joint_weights = self.stage_joint_weights.copy()
+        if self.position_only:
+            solve_joint_weights = solve_joint_weights.copy()
+            for index, name in enumerate(self.model.joint_names):
+                override = DEFAULT_STAGE_POSITION_ONLY_WEIGHT_OVERRIDES.get(name)
+                if override is not None:
+                    solve_joint_weights[index] = min(solve_joint_weights[index], float(override))
         task_jacobian = task_jacobian * solve_joint_weights[None, :]
 
         damping = DEFAULT_STAGE_DLS_LAMBDA
@@ -496,19 +503,9 @@ class HopeJrSimIkController:
                 orientation_weight=0.0 if self.position_only else 1.0,
                 active_joint_mask=self.active_joint_mask,
             )
-            if self.active_joint_names:
-                inactive = self.active_joint_mask < 0.5
-                inactive_reference_targets_deg = self._inactive_joint_reference_targets_deg()
-                solved_model_joint_targets_deg[inactive] = inactive_reference_targets_deg[inactive]
             solved_joint_targets_deg = self.stage_io.model_to_stage_joint_positions_deg(solved_model_joint_targets_deg)
         else:
             solved_model_joint_targets_deg = self.stage_io.stage_to_model_joint_positions_deg(solved_joint_targets_deg)
-            if self.active_joint_names:
-                inactive = self.active_joint_mask < 0.5
-                inactive_reference_targets_deg = self._inactive_joint_reference_targets_deg()
-                inactive_stage_targets_deg = self.stage_io.model_to_stage_joint_positions_deg(inactive_reference_targets_deg)
-                solved_joint_targets_deg[inactive] = inactive_stage_targets_deg[inactive]
-                solved_model_joint_targets_deg[inactive] = inactive_reference_targets_deg[inactive]
 
         self.last_joint_targets_deg = solved_model_joint_targets_deg
 
@@ -536,6 +533,7 @@ class HopeJrSimIkController:
         stage_vs_model_joint_delta = None
         if stage_model_joint_positions_deg is not None:
             stage_vs_model_joint_delta = (stage_model_joint_positions_deg - solved_model_joint_targets_deg).tolist()
+        stage_error_score = self._compute_stage_error_score(stage_end_effector_error)
         result = {
             "timestamp": packet_timestamp,
             "joint_names": self.model.joint_names,
@@ -544,6 +542,8 @@ class HopeJrSimIkController:
             "stage_dls_unclipped_delta_deg": None if stage_dls_unclipped_delta_deg is None else stage_dls_unclipped_delta_deg.tolist(),
             "stage_dls_raw_position_error": None if stage_dls_raw_position_error is None else stage_dls_raw_position_error.tolist(),
             "stage_dls_clamped_position_error": None if stage_dls_clamped_position_error is None else stage_dls_clamped_position_error.tolist(),
+            "stage_weight_profile": self.stage_weight_profile,
+            "stage_error_score": stage_error_score,
             "stage_dls_joint_weights": None if stage_dls_joint_weights is None else stage_dls_joint_weights.tolist(),
             "stage_dls_debug": stage_dls_debug,
             "model_joint_targets_deg": solved_model_joint_targets_deg.tolist(),
@@ -562,8 +562,6 @@ class HopeJrSimIkController:
             "quest_position_signs": self.teleop_mapper.quest_position_signs.tolist(),
             "grip": float(hand_state.get("grip", 0.0)),
             "trigger": float(hand_state.get("trigger", 0.0)),
-            "active_joint_names": list(self.active_joint_names),
-            "inactive_joint_behavior": self.inactive_joint_behavior,
             "ik_method": "stage_differential_dls" if stage_dls_delta_deg is not None else "model_iterative_dls",
         }
         hand_position = np.asarray(hand_state.get("position", [0.0, 0.0, 0.0]), dtype=float)
@@ -580,7 +578,8 @@ class HopeJrSimIkController:
                 "quest_delta": None if map_result.quest_delta is None else map_result.quest_delta.tolist(),
                 "mapped_delta": None if map_result.mapped_delta_model is None else map_result.mapped_delta_model.tolist(),
                 "current_joint_targets_deg": current_joint_targets_deg.tolist(),
-                "inactive_joint_behavior": self.inactive_joint_behavior,
+                "stage_weight_profile": self.stage_weight_profile,
+                "stage_error_score": stage_error_score,
                 "result": result,
             }
         self._append_event(event_payload, dedupe_key=(event_payload["status"], packet_timestamp))
@@ -693,6 +692,7 @@ def _parse_position_axes(value: str) -> tuple[int, int, int]:
 
 
 def build_controller_from_args(args: argparse.Namespace) -> HopeJrSimIkController:
+    debug_path, event_log_path = _resolve_profile_log_paths(Path(args.debug_path), Path(args.event_log_path), args.stage_weight_profile)
     return HopeJrSimIkController(
         lerobot_repo=args.lerobot_repo,
         packet_path=args.packet_path,
@@ -703,7 +703,7 @@ def build_controller_from_args(args: argparse.Namespace) -> HopeJrSimIkControlle
         quest_position_axes=_parse_position_axes(args.quest_position_axes),
         quest_position_signs=np.asarray(args.quest_position_signs, dtype=float),
         position_only=args.position_only,
-        debug_path=args.debug_path,
+        debug_path=debug_path,
         use_udp=args.use_udp,
         udp_listen_host=args.udp_listen_host,
         udp_listen_port=args.udp_listen_port,
@@ -711,13 +711,12 @@ def build_controller_from_args(args: argparse.Namespace) -> HopeJrSimIkControlle
         show_teleop_debug=args.show_teleop_debug,
         anchor_delay_s=args.anchor_delay_s,
         grip_threshold=args.grip_threshold,
-        event_log_path=args.event_log_path,
+        event_log_path=event_log_path,
         quest_deadband_m=args.quest_deadband_m,
         packet_stale_timeout_s=args.packet_stale_timeout_s,
         end_effector_path=args.end_effector_path,
         write_joint_state_directly=args.write_joint_state_directly,
-        active_joint_names=tuple(args.active_joint_names) if getattr(args, 'active_joint_names', None) else None,
-        inactive_joint_behavior=args.inactive_joint_behavior,
+        stage_weight_profile=args.stage_weight_profile,
     )
 
 
@@ -745,8 +744,7 @@ def start_script_editor_loop(
     packet_stale_timeout_s: float = DEFAULT_PACKET_STALE_TIMEOUT_S,
     end_effector_path: str = DEFAULT_END_EFFECTOR_PATH,
     write_joint_state_directly: bool = False,
-    active_joint_names: tuple[str, ...] | list[str] | None = None,
-    inactive_joint_behavior: str = "neutral",
+    stage_weight_profile: str = DEFAULT_STAGE_WEIGHT_PROFILE,
     interval_s: float = 0.05,
     dry_run: bool = False,
     consume_only_new: bool = True,
@@ -755,6 +753,7 @@ def start_script_editor_loop(
 ) -> HopeJrIsaacUpdateLoop:
     global _ACTIVE_LOOP
     stop_script_editor_loop()
+    resolved_debug_path, resolved_event_log_path = _resolve_profile_log_paths(Path(debug_path), Path(event_log_path), stage_weight_profile)
     controller = HopeJrSimIkController(
         lerobot_repo=Path(lerobot_repo),
         packet_path=Path(packet_path),
@@ -765,7 +764,7 @@ def start_script_editor_loop(
         quest_position_axes=_parse_position_axes(quest_position_axes),
         quest_position_signs=np.asarray(quest_position_signs, dtype=float),
         position_only=position_only,
-        debug_path=Path(debug_path),
+        debug_path=resolved_debug_path,
         use_udp=use_udp,
         udp_listen_host=udp_listen_host,
         udp_listen_port=udp_listen_port,
@@ -773,13 +772,12 @@ def start_script_editor_loop(
         show_teleop_debug=show_teleop_debug,
         anchor_delay_s=anchor_delay_s,
         grip_threshold=grip_threshold,
-        event_log_path=Path(event_log_path),
+        event_log_path=resolved_event_log_path,
         quest_deadband_m=quest_deadband_m,
         packet_stale_timeout_s=packet_stale_timeout_s,
         end_effector_path=end_effector_path,
         write_joint_state_directly=write_joint_state_directly,
-        active_joint_names=tuple(active_joint_names) if active_joint_names else None,
-        inactive_joint_behavior=inactive_joint_behavior,
+        stage_weight_profile=stage_weight_profile,
     )
     try:
         controller.event_log_path.unlink(missing_ok=True)
@@ -828,8 +826,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--packet-stale-timeout-s", type=float, default=DEFAULT_PACKET_STALE_TIMEOUT_S)
     parser.add_argument("--end-effector-path", default=DEFAULT_END_EFFECTOR_PATH)
     parser.add_argument("--write-joint-state-directly", action="store_true")
-    parser.add_argument("--active-joint-names", nargs="*", default=None)
-    parser.add_argument("--inactive-joint-behavior", choices=("neutral", "hold"), default="neutral")
+    parser.add_argument("--stage-weight-profile", choices=list_stage_weight_profiles(), default=DEFAULT_STAGE_WEIGHT_PROFILE)
     parser.add_argument("--watch", action="store_true")
     parser.add_argument("--isaac-update-loop", action="store_true")
     parser.add_argument("--interval", type=float, default=0.05)

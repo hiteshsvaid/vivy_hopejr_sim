@@ -66,8 +66,6 @@ class QuestTeleopMapper:
         *,
         current_sim_pose: np.ndarray,
         current_stage_pose: np.ndarray | None,
-        active_joint_names: tuple[str, ...],
-        inactive_joint_behavior: str,
         anchor_joint_targets_deg: np.ndarray,
     ) -> QuestTeleopMapperResult | None:
         normalized = packet.get("normalized")
@@ -115,8 +113,6 @@ class QuestTeleopMapper:
                 "sim_anchor_position": self.sim_anchor_pose[:3, 3].tolist(),
                 "stage_anchor_position": self.stage_anchor_pose[:3, 3].tolist(),
                 "anchor_joint_targets_deg": anchor_joint_targets_deg.tolist(),
-                "active_joint_names": list(active_joint_names),
-                "inactive_joint_behavior": inactive_joint_behavior,
             }
         else:
             anchor_payload = None
