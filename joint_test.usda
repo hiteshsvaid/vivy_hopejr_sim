@@ -815,7 +815,7 @@ def Xform "World"
                 float physics:upperLimit = 7
             }
 
-            def PhysicsRevoluteJoint "right_upper_elbow" (
+            def PhysicsRevoluteJoint "right_arm_twist" (
                 prepend apiSchemas = ["PhysicsDriveAPI:angular"]
             )
             {

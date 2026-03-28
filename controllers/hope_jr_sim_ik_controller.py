@@ -38,13 +38,11 @@ DEFAULT_TELEOP_DEBUG_ROOT = "/World/JointTest/TeleopDebug"
 DEFAULT_END_EFFECTOR_PATH = "/World/JointTest/PalmBody/EndEffector"
 DEFAULT_EVENT_LOG_PATH = Path("/tmp/hope_jr_sim_ik_events.ndjson")
 DEFAULT_PACKET_STALE_TIMEOUT_S = 0.75
-DEFAULT_STOP_TARGETS_DEG = {
-    "right_elbow": 40.5,
-}
+DEFAULT_STOP_TARGETS_DEG = {}
 DEFAULT_MODEL_JOINT_SIGNS = {
     "right_shoulder_pitch": -1.0,
     "right_shoulder_yaw": -1.0,
-    "right_upper_elbow": -1.0,
+    "right_arm_twist": -1.0,
     "right_elbow": -1.0,
     "right_forearm_twist": 1.0,
     "right_wrist": 1.0,

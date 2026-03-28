@@ -8,7 +8,7 @@ STAGE_WEIGHT_PROFILES: dict[str, dict[str, float]] = {
     "baseline_v1": {
         "right_shoulder_pitch": 1.0,
         "right_shoulder_yaw": 1.0,
-        "right_upper_elbow": 1.0,
+        "right_arm_twist": 1.0,
         "right_elbow": 1.0,
         "right_forearm_twist": 0.7,
         "right_wrist": 0.45,
@@ -17,10 +17,10 @@ STAGE_WEIGHT_PROFILES: dict[str, dict[str, float]] = {
     "shoulder_elbow_heavy_v1": {
         "right_shoulder_pitch": 1.2,
         "right_shoulder_yaw": 1.2,
-        "right_upper_elbow": 0.1,
+        "right_arm_twist": 0.3,
         "right_elbow": 1.2,
-        "right_forearm_twist": 0.15,
-        "right_wrist": 0.3,
+        "right_forearm_twist": 0.0,
+        "right_wrist": 0.4,
         "right_palm": 0.2,
     },
 }
