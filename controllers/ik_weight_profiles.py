@@ -25,7 +25,7 @@ STAGE_WEIGHT_PROFILES: dict[str, dict[str, float]] = {
     },
 }
 
-DEFAULT_STAGE_WEIGHT_PROFILE = "upper_elbow_light_v1"
+DEFAULT_STAGE_WEIGHT_PROFILE = "baseline_v1"
 
 
 def list_stage_weight_profiles() -> list[str]:
