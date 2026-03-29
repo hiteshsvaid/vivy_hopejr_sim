@@ -5,7 +5,7 @@ from typing import Any
 
 
 class HopeJrTeleopStatusUi:
-    def __init__(self, *, width: int = 620, height: int = 420):
+    def __init__(self, *, width: int = 620, height: int = 400):
         self.width = width
         self.height = height
         self._window = None
@@ -21,63 +21,100 @@ class HopeJrTeleopStatusUi:
 
         self._window = ui.Window("Hope Jr Teleop", width=self.width, height=self.height)
         with self._window.frame:
-            with ui.VStack(spacing=4):
-                with ui.VGrid(column_count=4, row_height=20, column_widths=[90, 0, 90, 0], spacing=6):
-                    ui.Label("status")
-                    self._labels["status"] = ui.Label("-", word_wrap=True)
-                    ui.Label("messages")
-                    self._labels["messages"] = ui.Label("-", word_wrap=True)
+            with ui.ScrollingFrame(horizontal_scrollbar_policy=ui.ScrollBarPolicy.SCROLLBAR_AS_NEEDED,
+                                   vertical_scrollbar_policy=ui.ScrollBarPolicy.SCROLLBAR_AS_NEEDED):
+                with ui.VStack(spacing=3):
+                    label_style = {"color": 0xFFB8B8B8, "font_size": 13}
+                    section_style = {"color": 0xFFD8D8D8, "font_size": 13}
 
-                    ui.Label("anchor")
-                    self._labels["anchor"] = ui.Label("-", word_wrap=True)
-                    ui.Label("grip")
-                    self._labels["grip"] = ui.Label("-", word_wrap=True)
+                    with ui.VGrid(column_count=4, column_widths=[0, 0, 0, 0], spacing=6):
+                        with ui.VStack(spacing=0):
+                            ui.Label("STATUS", style=label_style)
+                            self._labels["status"] = ui.Label("-", word_wrap=True)
+                        with ui.VStack(spacing=0):
+                            ui.Label("MESSAGES", style=label_style)
+                            self._labels["messages"] = ui.Label("-", word_wrap=True)
+                        with ui.VStack(spacing=0):
+                            ui.Label("ANCHOR", style=label_style)
+                            self._labels["anchor"] = ui.Label("-", word_wrap=True)
+                        with ui.VStack(spacing=0):
+                            ui.Label("GRIP", style=label_style)
+                            self._labels["grip"] = ui.Label("-", word_wrap=True)
 
-                    ui.Label("trigger")
-                    self._labels["trigger"] = ui.Label("-", word_wrap=True)
-                    ui.Label("buttons")
-                    self._labels["buttons"] = ui.Label("-", word_wrap=True)
+                        with ui.VStack(spacing=0):
+                            ui.Label("TRIGGER", style=label_style)
+                            self._labels["trigger"] = ui.Label("-", word_wrap=True)
+                        with ui.VStack(spacing=0):
+                            ui.Label("BUTTONS", style=label_style)
+                            self._labels["buttons"] = ui.Label("-", word_wrap=True)
+                        with ui.VStack(spacing=0):
+                            ui.Label("PROFILE", style=label_style)
+                            self._labels["profile"] = ui.Label("-", word_wrap=True)
+                        with ui.VStack(spacing=0):
+                            ui.Label("", style=label_style)
+                            self._labels["spacer_top"] = ui.Label("", word_wrap=True)
 
-                    ui.Label("profile")
-                    self._labels["profile"] = ui.Label("-", word_wrap=True)
-                    ui.Label("err score")
-                    self._labels["error_score"] = ui.Label("-", word_wrap=True)
+                    ui.Line(style={"color": 0x55FFFFFF})
 
-                with ui.VGrid(column_count=2, row_height=20, column_widths=[90, 0], spacing=6):
-                    ui.Label("packet")
-                    self._labels["packet"] = ui.Label("-", word_wrap=True)
+                    with ui.VStack(spacing=1):
+                        ui.Label("PACKET DATA", style=section_style)
+                        self._labels["packet"] = ui.Label("-", word_wrap=True)
 
-                    ui.Label("mapped delta")
-                    self._labels["mapped_delta"] = ui.Label("-", word_wrap=True)
+                    ui.Line(style={"color": 0x55FFFFFF})
 
-                with ui.VStack(spacing=2):
-                    with ui.VGrid(column_count=4, row_height=20, column_widths=[180, 60, 60, 50], spacing=6):
-                        self._labels["joint_header_name"] = ui.Label("joint")
-                        self._labels["joint_header_start"] = ui.Label("start")
-                        self._labels["joint_header_cur"] = ui.Label("cur")
-                        self._labels["joint_header_wt"] = ui.Label("wt")
-                        for idx in range(7):
-                            self._labels[f"joint_name_{idx}"] = ui.Label("-")
-                            self._labels[f"joint_start_{idx}"] = ui.Label("-")
-                            self._labels[f"joint_cur_{idx}"] = ui.Label("-")
-                            self._labels[f"joint_wt_{idx}"] = ui.Label("-")
+                    with ui.VGrid(column_count=2, column_widths=[0, 0], spacing=6):
+                        with ui.VStack(spacing=0):
+                            ui.Label("MAPPED DELTA", style=section_style)
+                            self._labels["mapped_delta"] = ui.Label("-", word_wrap=True)
+                        with ui.VStack(spacing=0):
+                            ui.Label("ERROR", style=section_style)
+                            self._labels["error_score"] = ui.Label("-", word_wrap=True)
 
-                with ui.VStack(spacing=2):
-                    ui.Label("markers")
-                    with ui.VGrid(column_count=4, row_height=18, column_widths=[18, 0, 18, 0], spacing=6):
-                        with ui.ZStack(width=12, height=12):
-                            ui.Rectangle(style={"background_color": 0xFFFF8000})
-                        ui.Label("QuestMapped", word_wrap=True)
-                        with ui.ZStack(width=12, height=12):
-                            ui.Rectangle(style={"background_color": 0xFFFF0000})
-                        ui.Label("SimTarget live", word_wrap=True)
+                    ui.Line(style={"color": 0x55FFFFFF})
 
-                        with ui.ZStack(width=12, height=12):
-                            ui.Rectangle(style={"background_color": 0xFF00FF00})
-                        ui.Label("SimTarget waiting", word_wrap=True)
-                        with ui.ZStack(width=12, height=12):
-                            ui.Rectangle(style={"background_color": 0xFF1A80FF})
-                        ui.Label("ActualEndEffector", word_wrap=True)
+                    with ui.VStack(spacing=1):
+                        with ui.VStack(spacing=0):
+                            ui.Label("ADVISORY SEV", style=section_style)
+                            self._labels["advisory_severity"] = ui.Label("-", word_wrap=True)
+                        with ui.VStack(spacing=0):
+                            ui.Label("ADVISORY WHY", style=section_style)
+                            self._labels["advisory_reasons"] = ui.Label("-", word_wrap=True)
+                        with ui.VStack(spacing=0):
+                            ui.Label("ADVISORY DO", style=section_style)
+                            self._labels["advisory_recommendations"] = ui.Label("-", word_wrap=True)
+
+                    ui.Line(style={"color": 0x55FFFFFF})
+
+                    with ui.VStack(spacing=2):
+                        with ui.VGrid(column_count=4, row_height=20, column_widths=[180, 60, 60, 50], spacing=6):
+                            self._labels["joint_header_name"] = ui.Label("joint", style=label_style)
+                            self._labels["joint_header_start"] = ui.Label("start", style=label_style)
+                            self._labels["joint_header_cur"] = ui.Label("cur", style=label_style)
+                            self._labels["joint_header_wt"] = ui.Label("wt", style=label_style)
+                            for idx in range(7):
+                                self._labels[f"joint_name_{idx}"] = ui.Label("-")
+                                self._labels[f"joint_start_{idx}"] = ui.Label("-")
+                                self._labels[f"joint_cur_{idx}"] = ui.Label("-")
+                                self._labels[f"joint_wt_{idx}"] = ui.Label("-")
+
+                    ui.Line(style={"color": 0x55FFFFFF})
+
+                    with ui.VStack(spacing=2):
+                        ui.Label("MARKERS", style=section_style)
+                        with ui.VGrid(column_count=4, row_height=18, column_widths=[18, 0, 18, 0], spacing=6):
+                            with ui.ZStack(width=12, height=12):
+                                ui.Rectangle(style={"background_color": 0xFFFF8000})
+                            ui.Label("QuestMapped", word_wrap=True)
+                            with ui.ZStack(width=12, height=12):
+                                ui.Rectangle(style={"background_color": 0xFFFF0000})
+                            ui.Label("SimTarget live", word_wrap=True)
+
+                            with ui.ZStack(width=12, height=12):
+                                ui.Rectangle(style={"background_color": 0xFF00FF00})
+                            ui.Label("SimTarget waiting", word_wrap=True)
+                            with ui.ZStack(width=12, height=12):
+                                ui.Rectangle(style={"background_color": 0xFF1A80FF})
+                            ui.Label("ActualEndEffector", word_wrap=True)
 
     def update(self, controller, debug: dict[str, Any] | None = None) -> None:
         self._ensure_window()
@@ -145,6 +182,7 @@ class HopeJrTeleopStatusUi:
                 weight = joint_weights[idx] if idx < len(joint_weights) else 0.0
                 joint_rows.append((name, f"{float(start_angle):+.1f}", f"{float(angle):+.1f}", f"{float(weight):.2f}"))
         stage_profile = debug.get("stage_weight_profile") or result.get("stage_weight_profile") or getattr(controller, "stage_weight_profile", "-")
+        teleop_safety_advisory = debug.get("teleop_safety_advisory") or result.get("teleop_safety_advisory") or {}
         stage_error_score = debug.get("stage_error_score") or (debug.get("result") or {}).get("stage_error_score")
         if stage_error_score is None:
             error_text = "-"
@@ -161,6 +199,15 @@ class HopeJrTeleopStatusUi:
             packet_label = packet if packet is not None else "-"
             packet_text = f"{packet_label} ({packet_age:.2f}s ago)"
 
+        if not teleop_safety_advisory:
+            advisory_severity = "-"
+            advisory_reasons = "-"
+            advisory_recommendations = "-"
+        else:
+            advisory_severity = str(teleop_safety_advisory.get("severity", "-"))
+            advisory_reasons = ", ".join(teleop_safety_advisory.get("reasons", [])) or "-"
+            advisory_recommendations = ", ".join(teleop_safety_advisory.get("recommendations", [])[:2]) or "-"
+
         self._labels["status"].text = status_line
         self._labels["messages"].text = messages
         self._labels["anchor"].text = anchor
@@ -171,6 +218,9 @@ class HopeJrTeleopStatusUi:
         self._labels["error_score"].text = error_text
         self._labels["packet"].text = packet_text
         self._labels["mapped_delta"].text = mapped_text
+        self._labels["advisory_severity"].text = advisory_severity
+        self._labels["advisory_reasons"].text = advisory_reasons
+        self._labels["advisory_recommendations"].text = advisory_recommendations
         for idx in range(7):
             if idx < len(joint_rows):
                 name, start_text, cur_text, wt_text = joint_rows[idx]

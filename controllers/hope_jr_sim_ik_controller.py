@@ -25,6 +25,7 @@ from controllers.joint_control_policy import (
     build_joint_control_modes,
 )
 from controllers.teleop_packet_source import TeleopPacketSource
+from controllers.teleop_safety_advisor import DEFAULT_TELEOP_ADVISOR_PROFILE, TeleopSafetyAdvisor
 from controllers.stage_io import HopeJrStageIo
 
 import numpy as np
@@ -128,6 +129,7 @@ class HopeJrSimIkController:
         self.end_effector_path = end_effector_path
         self.write_joint_state_directly = bool(write_joint_state_directly)
         self.stage_weight_profile = str(stage_weight_profile)
+        self.teleop_safety_advisor = TeleopSafetyAdvisor(DEFAULT_TELEOP_ADVISOR_PROFILE)
         self.packet_source = TeleopPacketSource(
             packet_path=packet_path,
             use_udp=use_udp,
@@ -557,6 +559,12 @@ class HopeJrSimIkController:
         stage_end_effector_error = None
         if stage_end_effector_position is not None:
             stage_end_effector_error = (target_stage_position - stage_end_effector_position).tolist()
+        teleop_safety_advisory = self.teleop_safety_advisor.evaluate(
+            mapped_delta=None if map_result.mapped_delta_model is None else map_result.mapped_delta_model,
+            stage_end_effector_error=stage_end_effector_error,
+            stage_dls_delta_deg=stage_dls_delta_deg,
+            joint_names=list(self.model.joint_names),
+        )
         stage_vs_model_joint_delta = None
         if stage_model_joint_positions_deg is not None:
             stage_vs_model_joint_delta = (stage_model_joint_positions_deg - solved_model_joint_targets_deg).tolist()
@@ -571,6 +579,7 @@ class HopeJrSimIkController:
             "stage_dls_clamped_position_error": None if stage_dls_clamped_position_error is None else stage_dls_clamped_position_error.tolist(),
             "stage_weight_profile": self.stage_weight_profile,
             "stage_error_score": stage_error_score,
+            "teleop_safety_advisory": teleop_safety_advisory,
             "stage_dls_joint_weights": None if stage_dls_joint_weights is None else stage_dls_joint_weights.tolist(),
             "joint_control_profile": self.position_only_joint_control_profile if self.position_only else "all_solve_v1",
             "joint_control_modes": joint_control_modes,
@@ -610,6 +619,7 @@ class HopeJrSimIkController:
                 "current_joint_targets_deg": current_joint_targets_deg.tolist(),
                 "stage_weight_profile": self.stage_weight_profile,
                 "stage_error_score": stage_error_score,
+                "teleop_safety_advisory": teleop_safety_advisory,
                 "result": result,
             }
         self._append_event(event_payload, dedupe_key=(event_payload["status"], packet_timestamp))
