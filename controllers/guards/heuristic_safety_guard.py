@@ -7,7 +7,7 @@ import numpy as np
 
 
 @dataclass(frozen=True)
-class TeleopSafetyAdvisorConfig:
+class HeuristicSafetyGuardConfig:
     profile_name: str
     forward_mapped_delta_warn_m: float
     forward_mapped_delta_critical_m: float
@@ -17,9 +17,9 @@ class TeleopSafetyAdvisorConfig:
     joint_step_critical_deg: float
 
 
-ADVISOR_PROFILES: dict[str, TeleopSafetyAdvisorConfig] = {
-    "teleop_advisory_v1": TeleopSafetyAdvisorConfig(
-        profile_name="teleop_advisory_v1",
+GUARD_PROFILES: dict[str, HeuristicSafetyGuardConfig] = {
+    "heuristic_guard_v1": HeuristicSafetyGuardConfig(
+        profile_name="heuristic_guard_v1",
         forward_mapped_delta_warn_m=0.10,
         forward_mapped_delta_critical_m=0.20,
         end_effector_error_warn_m=0.10,
@@ -29,16 +29,16 @@ ADVISOR_PROFILES: dict[str, TeleopSafetyAdvisorConfig] = {
     ),
 }
 
-DEFAULT_TELEOP_ADVISOR_PROFILE = "teleop_advisory_v1"
+DEFAULT_HEURISTIC_GUARD_PROFILE = "heuristic_guard_v1"
 
 
-class TeleopSafetyAdvisor:
-    def __init__(self, profile_name: str = DEFAULT_TELEOP_ADVISOR_PROFILE) -> None:
-        if profile_name not in ADVISOR_PROFILES:
+class HeuristicSafetyGuard:
+    def __init__(self, profile_name: str = DEFAULT_HEURISTIC_GUARD_PROFILE) -> None:
+        if profile_name not in GUARD_PROFILES:
             raise ValueError(
-                f"Unknown teleop safety advisor profile '{profile_name}'. Available: {sorted(ADVISOR_PROFILES)}"
+                f"Unknown heuristic safety guard profile '{profile_name}'. Available: {sorted(GUARD_PROFILES)}"
             )
-        self.config = ADVISOR_PROFILES[profile_name]
+        self.config = GUARD_PROFILES[profile_name]
 
     def evaluate(
         self,
@@ -99,6 +99,8 @@ class TeleopSafetyAdvisor:
         recommendations = sorted(set(recommendations))
         reasons = sorted(set(reasons))
         return {
+            "source": "heuristic",
+            "source_label": "Heuristic guard",
             "profile": self.config.profile_name,
             "severity": severity,
             "reasons": reasons,

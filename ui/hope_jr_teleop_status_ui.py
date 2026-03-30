@@ -5,7 +5,7 @@ from typing import Any
 
 
 class HopeJrTeleopStatusUi:
-    def __init__(self, *, width: int = 620, height: int = 400):
+    def __init__(self, *, width: int = 720, height: int = 400):
         self.width = width
         self.height = height
         self._window = None
@@ -56,9 +56,9 @@ class HopeJrTeleopStatusUi:
 
                     ui.Line(style={"color": 0x55FFFFFF})
 
-                    with ui.VStack(spacing=1):
-                        ui.Label("PACKET DATA", style=section_style)
-                        self._labels["packet"] = ui.Label("-", word_wrap=True)
+                    with ui.HStack(height=18, spacing=6):
+                        ui.Label("PACKET DATA", style=section_style, width=110)
+                        self._labels["packet"] = ui.Label("-", word_wrap=False)
 
                     ui.Line(style={"color": 0x55FFFFFF})
 
@@ -74,8 +74,14 @@ class HopeJrTeleopStatusUi:
 
                     with ui.VStack(spacing=1):
                         with ui.VStack(spacing=0):
+                            ui.Label("ADVISORY SOURCE", style=section_style)
+                            self._labels["advisory_source"] = ui.Label("-", word_wrap=True)
+                        with ui.VStack(spacing=0):
                             ui.Label("ADVISORY SEV", style=section_style)
                             self._labels["advisory_severity"] = ui.Label("-", word_wrap=True)
+                        with ui.VStack(spacing=0):
+                            ui.Label("ADVISORY JOINT", style=section_style)
+                            self._labels["advisory_joint"] = ui.Label("-", word_wrap=True)
                         with ui.VStack(spacing=0):
                             ui.Label("ADVISORY WHY", style=section_style)
                             self._labels["advisory_reasons"] = ui.Label("-", word_wrap=True)
@@ -86,16 +92,21 @@ class HopeJrTeleopStatusUi:
                     ui.Line(style={"color": 0x55FFFFFF})
 
                     with ui.VStack(spacing=2):
-                        with ui.VGrid(column_count=4, row_height=20, column_widths=[180, 60, 60, 50], spacing=6):
-                            self._labels["joint_header_name"] = ui.Label("joint", style=label_style)
+                        with ui.VGrid(column_count=5, row_height=18, column_widths=[56, 56, 56, 56, 42], spacing=6):
                             self._labels["joint_header_start"] = ui.Label("start", style=label_style)
+                            self._labels["joint_header_min"] = ui.Label("min", style=label_style)
                             self._labels["joint_header_cur"] = ui.Label("cur", style=label_style)
+                            self._labels["joint_header_max"] = ui.Label("max", style=label_style)
                             self._labels["joint_header_wt"] = ui.Label("wt", style=label_style)
-                            for idx in range(7):
-                                self._labels[f"joint_name_{idx}"] = ui.Label("-")
-                                self._labels[f"joint_start_{idx}"] = ui.Label("-")
-                                self._labels[f"joint_cur_{idx}"] = ui.Label("-")
-                                self._labels[f"joint_wt_{idx}"] = ui.Label("-")
+                        for idx in range(7):
+                            with ui.VStack(spacing=0):
+                                self._labels[f"joint_name_{idx}"] = ui.Label("-", word_wrap=True)
+                                with ui.VGrid(column_count=5, row_height=18, column_widths=[56, 56, 56, 56, 42], spacing=6):
+                                    self._labels[f"joint_start_{idx}"] = ui.Label("-")
+                                    self._labels[f"joint_min_{idx}"] = ui.Label("-")
+                                    self._labels[f"joint_cur_{idx}"] = ui.Label("-")
+                                    self._labels[f"joint_max_{idx}"] = ui.Label("-")
+                                    self._labels[f"joint_wt_{idx}"] = ui.Label("-")
 
                     ui.Line(style={"color": 0x55FFFFFF})
 
@@ -170,19 +181,35 @@ class HopeJrTeleopStatusUi:
         mapped_delta = debug.get("mapped_delta")
         mapped_text = "-" if mapped_delta is None else ", ".join(f"{float(v):+.3f}" for v in mapped_delta)
         result = debug.get("result") or {}
-        stage_joint_positions_deg = result.get("stage_joint_positions_deg") or debug.get("stage_joint_positions_deg")
-        stage_start_joint_positions_deg = result.get("stage_start_joint_positions_deg") or debug.get("stage_start_joint_positions_deg")
+        stage_model_joint_positions_deg = result.get("stage_model_joint_positions_deg") or debug.get("stage_model_joint_positions_deg")
+        stage_start_model_joint_positions_deg = result.get("stage_start_model_joint_positions_deg") or debug.get("stage_start_model_joint_positions_deg")
         joint_names = result.get("joint_names") or []
         joint_weights = result.get("stage_dls_joint_weights") or []
+        joint_lower_limits_deg = result.get("joint_lower_limits_deg") or debug.get("joint_lower_limits_deg") or []
+        joint_upper_limits_deg = result.get("joint_upper_limits_deg") or debug.get("joint_upper_limits_deg") or []
         joint_rows = []
-        if stage_joint_positions_deg:
-            for idx, angle in enumerate(stage_joint_positions_deg):
+        if stage_model_joint_positions_deg:
+            for idx, angle in enumerate(stage_model_joint_positions_deg):
                 name = joint_names[idx] if idx < len(joint_names) else f"joint_{idx}"
-                start_angle = stage_start_joint_positions_deg[idx] if stage_start_joint_positions_deg and idx < len(stage_start_joint_positions_deg) else angle
+                start_angle = (
+                    stage_start_model_joint_positions_deg[idx]
+                    if stage_start_model_joint_positions_deg and idx < len(stage_start_model_joint_positions_deg)
+                    else angle
+                )
+                lower_limit = joint_lower_limits_deg[idx] if idx < len(joint_lower_limits_deg) else None
+                upper_limit = joint_upper_limits_deg[idx] if idx < len(joint_upper_limits_deg) else None
                 weight = joint_weights[idx] if idx < len(joint_weights) else 0.0
-                joint_rows.append((name, f"{float(start_angle):+.1f}", f"{float(angle):+.1f}", f"{float(weight):.2f}"))
+                joint_rows.append((
+                    name,
+                    f"{float(start_angle):+.1f}",
+                    "-" if lower_limit is None else f"{float(lower_limit):+.1f}",
+                    f"{float(angle):+.1f}",
+                    "-" if upper_limit is None else f"{float(upper_limit):+.1f}",
+                    f"{float(weight):.2f}",
+                ))
         stage_profile = debug.get("stage_weight_profile") or result.get("stage_weight_profile") or getattr(controller, "stage_weight_profile", "-")
         teleop_safety_advisory = debug.get("teleop_safety_advisory") or result.get("teleop_safety_advisory") or {}
+        active_advisory = teleop_safety_advisory.get("active", teleop_safety_advisory) if isinstance(teleop_safety_advisory, dict) else {}
         stage_error_score = debug.get("stage_error_score") or (debug.get("result") or {}).get("stage_error_score")
         if stage_error_score is None:
             error_text = "-"
@@ -199,14 +226,18 @@ class HopeJrTeleopStatusUi:
             packet_label = packet if packet is not None else "-"
             packet_text = f"{packet_label} ({packet_age:.2f}s ago)"
 
-        if not teleop_safety_advisory:
+        if not active_advisory:
+            advisory_source = "-"
             advisory_severity = "-"
+            advisory_joint = "-"
             advisory_reasons = "-"
             advisory_recommendations = "-"
         else:
-            advisory_severity = str(teleop_safety_advisory.get("severity", "-"))
-            advisory_reasons = ", ".join(teleop_safety_advisory.get("reasons", [])) or "-"
-            advisory_recommendations = ", ".join(teleop_safety_advisory.get("recommendations", [])[:2]) or "-"
+            advisory_source = str(active_advisory.get("source_label") or active_advisory.get("source") or "-")
+            advisory_severity = str(active_advisory.get("severity", "-"))
+            advisory_joint = str(active_advisory.get("joint_name") or active_advisory.get("joint_step_abs_max_joint") or "-")
+            advisory_reasons = ", ".join(active_advisory.get("reasons", [])) or "-"
+            advisory_recommendations = ", ".join(active_advisory.get("recommendations", [])[:2]) or "-"
 
         self._labels["status"].text = status_line
         self._labels["messages"].text = messages
@@ -218,15 +249,19 @@ class HopeJrTeleopStatusUi:
         self._labels["error_score"].text = error_text
         self._labels["packet"].text = packet_text
         self._labels["mapped_delta"].text = mapped_text
+        self._labels["advisory_source"].text = advisory_source
         self._labels["advisory_severity"].text = advisory_severity
+        self._labels["advisory_joint"].text = advisory_joint
         self._labels["advisory_reasons"].text = advisory_reasons
         self._labels["advisory_recommendations"].text = advisory_recommendations
         for idx in range(7):
             if idx < len(joint_rows):
-                name, start_text, cur_text, wt_text = joint_rows[idx]
+                name, start_text, min_text, cur_text, max_text, wt_text = joint_rows[idx]
             else:
-                name, start_text, cur_text, wt_text = ("-", "-", "-", "-")
+                name, start_text, min_text, cur_text, max_text, wt_text = ("-", "-", "-", "-", "-", "-")
             self._labels[f"joint_name_{idx}"].text = name
             self._labels[f"joint_start_{idx}"].text = start_text
+            self._labels[f"joint_min_{idx}"].text = min_text
             self._labels[f"joint_cur_{idx}"].text = cur_text
+            self._labels[f"joint_max_{idx}"].text = max_text
             self._labels[f"joint_wt_{idx}"].text = wt_text

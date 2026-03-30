@@ -25,7 +25,8 @@ from controllers.joint_control_policy import (
     build_joint_control_modes,
 )
 from controllers.teleop_packet_source import TeleopPacketSource
-from controllers.teleop_safety_advisor import DEFAULT_TELEOP_ADVISOR_PROFILE, TeleopSafetyAdvisor
+from controllers.guards.heuristic_safety_guard import DEFAULT_HEURISTIC_GUARD_PROFILE, HeuristicSafetyGuard
+from controllers.guards.joint_limit_safety_guard import DEFAULT_JOINT_LIMIT_GUARD_PROFILE, JointLimitSafetyGuard
 from controllers.stage_io import HopeJrStageIo
 
 import numpy as np
@@ -129,7 +130,8 @@ class HopeJrSimIkController:
         self.end_effector_path = end_effector_path
         self.write_joint_state_directly = bool(write_joint_state_directly)
         self.stage_weight_profile = str(stage_weight_profile)
-        self.teleop_safety_advisor = TeleopSafetyAdvisor(DEFAULT_TELEOP_ADVISOR_PROFILE)
+        self.heuristic_safety_guard = HeuristicSafetyGuard(DEFAULT_HEURISTIC_GUARD_PROFILE)
+        self.joint_limit_safety_guard = JointLimitSafetyGuard(DEFAULT_JOINT_LIMIT_GUARD_PROFILE)
         self.packet_source = TeleopPacketSource(
             packet_path=packet_path,
             use_udp=use_udp,
@@ -541,6 +543,7 @@ class HopeJrSimIkController:
         stage_end_effector_position = self.stage_io.read_stage_end_effector_position(stage) if stage is not None else None
         stage_joint_positions_deg = None
         stage_model_joint_positions_deg = None
+        stage_start_model_joint_positions_deg = None
         if stage is not None:
             self.stage_io.write_joint_targets_deg(stage, solved_joint_targets_deg)
             if self.write_joint_state_directly:
@@ -548,6 +551,10 @@ class HopeJrSimIkController:
             stage_joint_positions_deg = self.stage_io.read_stage_joint_positions_deg(stage)
             if stage_joint_positions_deg is not None:
                 stage_model_joint_positions_deg = self.stage_io.stage_to_model_joint_positions_deg(stage_joint_positions_deg)
+            if self.start_stage_joint_positions_deg is not None:
+                stage_start_model_joint_positions_deg = self.stage_io.stage_to_model_joint_positions_deg(
+                    self.start_stage_joint_positions_deg
+                )
             stage_end_effector_position = self.stage_io.read_stage_end_effector_position(stage)
 
         achieved_pose = self.model.forward_kinematics(solved_model_joint_targets_deg)
@@ -559,12 +566,27 @@ class HopeJrSimIkController:
         stage_end_effector_error = None
         if stage_end_effector_position is not None:
             stage_end_effector_error = (target_stage_position - stage_end_effector_position).tolist()
-        teleop_safety_advisory = self.teleop_safety_advisor.evaluate(
+        heuristic_safety_advisory = self.heuristic_safety_guard.evaluate(
             mapped_delta=None if map_result.mapped_delta_model is None else map_result.mapped_delta_model,
             stage_end_effector_error=stage_end_effector_error,
             stage_dls_delta_deg=stage_dls_delta_deg,
             joint_names=list(self.model.joint_names),
         )
+        lower_limits_deg = np.asarray([joint.lower_limit_deg for joint in self.model.joints], dtype=float)
+        upper_limits_deg = np.asarray([joint.upper_limit_deg for joint in self.model.joints], dtype=float)
+        joint_limit_safety_advisory = self.joint_limit_safety_guard.evaluate(
+            joint_names=list(self.model.joint_names),
+            proposed_joint_targets_deg=solved_model_joint_targets_deg,
+            lower_limits_deg=lower_limits_deg,
+            upper_limits_deg=upper_limits_deg,
+        )
+        all_advisories = [heuristic_safety_advisory, joint_limit_safety_advisory]
+        severity_rank = {"ok": 0, "warn": 1, "critical": 2}
+        active_advisory = max(all_advisories, key=lambda item: severity_rank.get(str(item.get("severity", "ok")), 0))
+        teleop_safety_advisory = {
+            "active": active_advisory,
+            "all": all_advisories,
+        }
         stage_vs_model_joint_delta = None
         if stage_model_joint_positions_deg is not None:
             stage_vs_model_joint_delta = (stage_model_joint_positions_deg - solved_model_joint_targets_deg).tolist()
@@ -573,6 +595,8 @@ class HopeJrSimIkController:
             "timestamp": packet_timestamp,
             "joint_names": self.model.joint_names,
             "joint_targets_deg": solved_joint_targets_deg.tolist(),
+            "joint_lower_limits_deg": lower_limits_deg.tolist(),
+            "joint_upper_limits_deg": upper_limits_deg.tolist(),
             "stage_dls_delta_deg": None if stage_dls_delta_deg is None else stage_dls_delta_deg.tolist(),
             "stage_dls_unclipped_delta_deg": None if stage_dls_unclipped_delta_deg is None else stage_dls_unclipped_delta_deg.tolist(),
             "stage_dls_raw_position_error": None if stage_dls_raw_position_error is None else stage_dls_raw_position_error.tolist(),
@@ -587,6 +611,7 @@ class HopeJrSimIkController:
             "model_joint_targets_deg": solved_model_joint_targets_deg.tolist(),
             "stage_joint_positions_deg": None if stage_joint_positions_deg is None else stage_joint_positions_deg.tolist(),
             "stage_start_joint_positions_deg": None if self.start_stage_joint_positions_deg is None else self.start_stage_joint_positions_deg.tolist(),
+            "stage_start_model_joint_positions_deg": None if stage_start_model_joint_positions_deg is None else stage_start_model_joint_positions_deg.tolist(),
             "stage_model_joint_positions_deg": None if stage_model_joint_positions_deg is None else stage_model_joint_positions_deg.tolist(),
             "stage_vs_model_joint_delta": stage_vs_model_joint_delta,
             "target_position": target_position.tolist(),
