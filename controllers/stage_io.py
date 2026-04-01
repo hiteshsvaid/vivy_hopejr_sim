@@ -13,13 +13,11 @@ class HopeJrStageIo:
         joint_root_path: str,
         end_effector_path: str,
         joint_names: list[str] | tuple[str, ...],
-        model_joint_signs: np.ndarray,
     ):
         self.articulation_root_path = articulation_root_path
         self.joint_root_path = joint_root_path.rstrip("/")
         self.end_effector_path = end_effector_path
         self.joint_names = tuple(joint_names)
-        self.model_joint_signs = np.asarray(model_joint_signs, dtype=float)
         self._articulation = None
         self._articulation_joint_indices = None
         self.last_stage_dls_debug = {}
@@ -101,10 +99,10 @@ class HopeJrStageIo:
         return self._articulation_joint_indices
 
     def stage_to_model_joint_positions_deg(self, joint_positions_deg: np.ndarray) -> np.ndarray:
-        return np.asarray(joint_positions_deg, dtype=float) * self.model_joint_signs
+        return np.asarray(joint_positions_deg, dtype=float)
 
     def model_to_stage_joint_positions_deg(self, joint_positions_deg: np.ndarray) -> np.ndarray:
-        return np.asarray(joint_positions_deg, dtype=float) * self.model_joint_signs
+        return np.asarray(joint_positions_deg, dtype=float)
 
     def read_current_joint_targets_deg(self, stage) -> np.ndarray:
         articulation = self._get_articulation()

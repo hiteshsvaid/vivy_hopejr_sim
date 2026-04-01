@@ -17,8 +17,8 @@ class JointLimitSafetyGuardConfig:
 GUARD_PROFILES: dict[str, JointLimitSafetyGuardConfig] = {
     "joint_limit_guard_v1": JointLimitSafetyGuardConfig(
         profile_name="joint_limit_guard_v1",
-        soft_margin_deg=5.0,
-        warn_margin_deg=5.0,
+        soft_margin_deg=3.0,
+        warn_margin_deg=3.0,
         critical_margin_deg=1.0,
     ),
 }
@@ -51,6 +51,12 @@ class JointLimitSafetyGuard:
                 "reasons": [],
                 "recommendations": [],
                 "joint_name": None,
+                "joint_index": None,
+                "target_joint_deg": None,
+                "lower_limit_deg": None,
+                "upper_limit_deg": None,
+                "lower_margin_deg": None,
+                "upper_margin_deg": None,
                 "margin_to_limit_deg": None,
                 "would_clamp": False,
                 "per_joint_margins_deg": {},
@@ -66,6 +72,11 @@ class JointLimitSafetyGuard:
         idx = int(np.argmin(nearest_margins)) if nearest_margins.size else 0
         nearest_margin = float(nearest_margins[idx]) if nearest_margins.size else None
         joint_name = joint_names[idx] if idx < len(joint_names) else None
+        target_joint_deg = float(targets[idx]) if idx < len(targets) else None
+        lower_limit_deg = float(lowers[idx]) if idx < len(lowers) else None
+        upper_limit_deg = float(uppers[idx]) if idx < len(uppers) else None
+        lower_margin_deg = float(lower_margins[idx]) if idx < len(lower_margins) else None
+        upper_margin_deg = float(upper_margins[idx]) if idx < len(upper_margins) else None
 
         reasons: list[str] = []
         recommendations: list[str] = []
@@ -101,6 +112,12 @@ class JointLimitSafetyGuard:
             "reasons": sorted(set(reasons)),
             "recommendations": sorted(set(recommendations)),
             "joint_name": joint_name,
+            "joint_index": idx if nearest_margins.size else None,
+            "target_joint_deg": target_joint_deg,
+            "lower_limit_deg": lower_limit_deg,
+            "upper_limit_deg": upper_limit_deg,
+            "lower_margin_deg": lower_margin_deg,
+            "upper_margin_deg": upper_margin_deg,
             "margin_to_limit_deg": nearest_margin,
             "would_clamp": would_clamp,
             "soft_margin_deg": float(self.config.soft_margin_deg),

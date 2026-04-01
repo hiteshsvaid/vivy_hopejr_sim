@@ -48,7 +48,7 @@ class HopeJrTeleopStatusUi:
                             ui.Label("BUTTONS", style=label_style)
                             self._labels["buttons"] = ui.Label("-", word_wrap=True)
                         with ui.VStack(spacing=0):
-                            ui.Label("PROFILE", style=label_style)
+                            ui.Label("CONFIG", style=label_style)
                             self._labels["profile"] = ui.Label("-", word_wrap=True)
                         with ui.VStack(spacing=0):
                             ui.Label("", style=label_style)
@@ -82,6 +82,12 @@ class HopeJrTeleopStatusUi:
                         with ui.VStack(spacing=0):
                             ui.Label("ADVISORY JOINT", style=section_style)
                             self._labels["advisory_joint"] = ui.Label("-", word_wrap=True)
+                        with ui.VStack(spacing=0):
+                            ui.Label("ADVISORY ANGLES", style=section_style)
+                            self._labels["advisory_angles"] = ui.Label("-", word_wrap=True)
+                        with ui.VStack(spacing=0):
+                            ui.Label("ADVISORY LIMITS", style=section_style)
+                            self._labels["advisory_limits"] = ui.Label("-", word_wrap=True)
                         with ui.VStack(spacing=0):
                             ui.Label("ADVISORY WHY", style=section_style)
                             self._labels["advisory_reasons"] = ui.Label("-", word_wrap=True)
@@ -181,19 +187,19 @@ class HopeJrTeleopStatusUi:
         mapped_delta = debug.get("mapped_delta")
         mapped_text = "-" if mapped_delta is None else ", ".join(f"{float(v):+.3f}" for v in mapped_delta)
         result = debug.get("result") or {}
-        stage_model_joint_positions_deg = result.get("stage_model_joint_positions_deg") or debug.get("stage_model_joint_positions_deg")
-        stage_start_model_joint_positions_deg = result.get("stage_start_model_joint_positions_deg") or debug.get("stage_start_model_joint_positions_deg")
+        stage_joint_positions_deg = result.get("stage_joint_positions_deg") or debug.get("stage_joint_positions_deg")
+        stage_start_joint_positions_deg = result.get("stage_start_joint_positions_deg") or debug.get("stage_start_joint_positions_deg")
         joint_names = result.get("joint_names") or []
         joint_weights = result.get("stage_dls_joint_weights") or []
         joint_lower_limits_deg = result.get("joint_lower_limits_deg") or debug.get("joint_lower_limits_deg") or []
         joint_upper_limits_deg = result.get("joint_upper_limits_deg") or debug.get("joint_upper_limits_deg") or []
         joint_rows = []
-        if stage_model_joint_positions_deg:
-            for idx, angle in enumerate(stage_model_joint_positions_deg):
+        if stage_joint_positions_deg:
+            for idx, angle in enumerate(stage_joint_positions_deg):
                 name = joint_names[idx] if idx < len(joint_names) else f"joint_{idx}"
                 start_angle = (
-                    stage_start_model_joint_positions_deg[idx]
-                    if stage_start_model_joint_positions_deg and idx < len(stage_start_model_joint_positions_deg)
+                    stage_start_joint_positions_deg[idx]
+                    if stage_start_joint_positions_deg and idx < len(stage_start_joint_positions_deg)
                     else angle
                 )
                 lower_limit = joint_lower_limits_deg[idx] if idx < len(joint_lower_limits_deg) else None
@@ -207,9 +213,10 @@ class HopeJrTeleopStatusUi:
                     "-" if upper_limit is None else f"{float(upper_limit):+.1f}",
                     f"{float(weight):.2f}",
                 ))
-        stage_profile = debug.get("stage_weight_profile") or result.get("stage_weight_profile") or getattr(controller, "stage_weight_profile", "-")
+        stage_profile = "hope_jr_sim_config.json"
         teleop_safety_advisory = debug.get("teleop_safety_advisory") or result.get("teleop_safety_advisory") or {}
         active_advisory = teleop_safety_advisory.get("active", teleop_safety_advisory) if isinstance(teleop_safety_advisory, dict) else {}
+        advisory_snapshot = teleop_safety_advisory.get("joint_limit_snapshot", {}) if isinstance(teleop_safety_advisory, dict) else {}
         stage_error_score = debug.get("stage_error_score") or (debug.get("result") or {}).get("stage_error_score")
         if stage_error_score is None:
             error_text = "-"
@@ -230,12 +237,30 @@ class HopeJrTeleopStatusUi:
             advisory_source = "-"
             advisory_severity = "-"
             advisory_joint = "-"
+            advisory_angles = "-"
+            advisory_limits = "-"
             advisory_reasons = "-"
             advisory_recommendations = "-"
         else:
             advisory_source = str(active_advisory.get("source_label") or active_advisory.get("source") or "-")
             advisory_severity = str(active_advisory.get("severity", "-"))
             advisory_joint = str(active_advisory.get("joint_name") or active_advisory.get("joint_step_abs_max_joint") or "-")
+            current_joint = advisory_snapshot.get("current_joint_deg")
+            target_joint = active_advisory.get("target_joint_deg", advisory_snapshot.get("target_joint_deg"))
+            advisory_angles = (
+                f"cur={float(current_joint):+.1f} tgt={float(target_joint):+.1f}"
+                if current_joint is not None and target_joint is not None
+                else "-"
+            )
+            lower_limit = active_advisory.get("lower_limit_deg", advisory_snapshot.get("lower_limit_deg"))
+            upper_limit = active_advisory.get("upper_limit_deg", advisory_snapshot.get("upper_limit_deg"))
+            lower_margin = active_advisory.get("lower_margin_deg")
+            upper_margin = active_advisory.get("upper_margin_deg")
+            advisory_limits = (
+                f"[{float(lower_limit):+.1f}, {float(upper_limit):+.1f}] lm={float(lower_margin):+.1f} um={float(upper_margin):+.1f}"
+                if None not in (lower_limit, upper_limit, lower_margin, upper_margin)
+                else "-"
+            )
             advisory_reasons = ", ".join(active_advisory.get("reasons", [])) or "-"
             advisory_recommendations = ", ".join(active_advisory.get("recommendations", [])[:2]) or "-"
 
@@ -252,6 +277,8 @@ class HopeJrTeleopStatusUi:
         self._labels["advisory_source"].text = advisory_source
         self._labels["advisory_severity"].text = advisory_severity
         self._labels["advisory_joint"].text = advisory_joint
+        self._labels["advisory_angles"].text = advisory_angles
+        self._labels["advisory_limits"].text = advisory_limits
         self._labels["advisory_reasons"].text = advisory_reasons
         self._labels["advisory_recommendations"].text = advisory_recommendations
         for idx in range(7):

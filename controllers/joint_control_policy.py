@@ -11,6 +11,7 @@ JOINT_CONTROL_HOLD_LAST = "hold_last"
 JOINT_CONTROL_PROFILES: dict[str, dict[str, str]] = {
     "all_solve_v1": {},
     "position_only_hold_distal_v1": {
+        "right_arm_twist": JOINT_CONTROL_HOLD_START,
         "right_forearm_twist": JOINT_CONTROL_HOLD_START,
         "right_wrist": JOINT_CONTROL_HOLD_START,
         "right_palm": JOINT_CONTROL_HOLD_START,
