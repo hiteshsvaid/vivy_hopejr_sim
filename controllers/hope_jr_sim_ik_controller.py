@@ -34,8 +34,7 @@ from scipy.spatial.transform import Rotation
 
 DEFAULT_LEROBOT_REPO = Path("/home/viaan/huggingface/lerobot")
 DEFAULT_PACKET_PATH = Path("/tmp/hope_jr_quest_latest.json")
-DEFAULT_IK_SPEC_PATH = DEFAULT_LEROBOT_REPO / "src/lerobot/robots/hope_jr/hope_jr_arm_ik_spec.json"
-DEFAULT_SIM_CONFIG_PATH = DEFAULT_LEROBOT_REPO / "src/lerobot/robots/hope_jr/hope_jr_sim_config.json"
+DEFAULT_SIM_CONFIG_PATH = DEFAULT_LEROBOT_REPO / "src/lerobot/robots/hope_jr/hope_global_config.json"
 DEFAULT_KINEMATICS_MODULE_PATH = DEFAULT_LEROBOT_REPO / "src/lerobot/robots/hope_jr/hope_jr_arm_kinematics.py"
 DEFAULT_ARTICULATION_ROOT_PATH = "/World/JointTest"
 DEFAULT_JOINT_ROOT_PATH = "/World/JointTest/Joints"
@@ -48,7 +47,6 @@ DEFAULT_EVENT_LOG_PATH = Path("/tmp/hope_jr_sim_ik_events.ndjson")
 DEFAULT_PACKET_STALE_TIMEOUT_S = 0.75
 DEFAULT_SIM_PLAY_STATE_PATH = Path("/tmp/hope_jr_sim_play_state.json")
 DEFAULT_STOP_TARGETS_DEG = {}
-DEFAULT_NEUTRAL_POSE_PATH = DEFAULT_LEROBOT_REPO / "src/lerobot/robots/hope_jr/hope_jr_sim_neutral_pose.json"
 DEFAULT_STAGE_DLS_LAMBDA = 0.01
 DEFAULT_STAGE_DLS_MAX_STEP_DEG = 8.0
 DEFAULT_STAGE_TASK_DELTA_CLAMP_M = 0.03
@@ -62,19 +60,16 @@ DEFAULT_STAGE_POSITION_ONLY_WEIGHT_OVERRIDES = {
 _ACTIVE_LOOP = None
 
 
-def _load_neutral_pose_map(path: Path) -> dict[str, float]:
-    if not path.exists():
-        return {}
-    try:
-        data = json.loads(path.read_text())
-    except Exception:
-        return {}
-    if not isinstance(data, dict):
+def _load_neutral_pose_map_from_config(config: dict[str, Any]) -> dict[str, float]:
+    joints = config.get("joints")
+    if not isinstance(joints, dict):
         return {}
     stop_targets: dict[str, float] = {}
-    for key, value in data.items():
+    for key, value in joints.items():
+        if not isinstance(value, dict) or "neutral_deg" not in value:
+            continue
         try:
-            stop_targets[str(key)] = float(value)
+            stop_targets[str(key)] = float(value["neutral_deg"])
         except (TypeError, ValueError):
             continue
     return stop_targets
@@ -84,16 +79,16 @@ def _load_sim_config(path: Path) -> dict[str, Any]:
     try:
         data = json.loads(path.read_text())
     except Exception as exc:
-        raise RuntimeError(f"Failed to load Hope Jr sim config from {path}: {exc}") from exc
+        raise RuntimeError(f"Failed to load Hope global config from {path}: {exc}") from exc
     if not isinstance(data, dict):
-        raise RuntimeError(f"Hope Jr sim config must be a JSON object: {path}")
+        raise RuntimeError(f"Hope global config must be a JSON object: {path}")
     return data
 
 
 def _build_stage_joint_weights_from_config(config: dict[str, Any], joint_names: list[str]) -> list[float]:
     joints = config.get("joints")
     if not isinstance(joints, dict):
-        raise RuntimeError("Hope Jr sim config missing object field: joints")
+        raise RuntimeError("Hope global config missing object field: joints")
     weights: list[float] = []
     missing: list[str] = []
     for name in joint_names:
@@ -104,11 +99,47 @@ def _build_stage_joint_weights_from_config(config: dict[str, Any], joint_names: 
         try:
             weights.append(float(joint_cfg["weight"]))
         except (TypeError, ValueError) as exc:
-            raise RuntimeError(f"Invalid weight for joint {name!r} in Hope Jr sim config") from exc
+            raise RuntimeError(f"Invalid weight for joint {name!r} in Hope global config") from exc
     if missing:
         missing_text = ", ".join(missing)
-        raise RuntimeError(f"Missing joint weights in Hope Jr sim config for: {missing_text}")
+        raise RuntimeError(f"Missing joint weights in Hope global config for: {missing_text}")
     return weights
+
+
+def _build_joint_limits_from_config(config: dict[str, Any], joint_names: list[str]) -> tuple[np.ndarray, np.ndarray]:
+    joints = config.get("joints")
+    if not isinstance(joints, dict):
+        raise RuntimeError("Hope global config missing object field: joints")
+    lower_limits: list[float] = []
+    upper_limits: list[float] = []
+    missing: list[str] = []
+    for name in joint_names:
+        joint_cfg = joints.get(name)
+        if not isinstance(joint_cfg, dict) or "min_deg" not in joint_cfg or "max_deg" not in joint_cfg:
+            missing.append(name)
+            continue
+        try:
+            lower_limits.append(float(joint_cfg["min_deg"]))
+            upper_limits.append(float(joint_cfg["max_deg"]))
+        except (TypeError, ValueError) as exc:
+            raise RuntimeError(f"Invalid min/max for joint {name!r} in Hope global config") from exc
+    if missing:
+        missing_text = ", ".join(missing)
+        raise RuntimeError(f"Missing joint limits in Hope global config for: {missing_text}")
+    return np.asarray(lower_limits, dtype=float), np.asarray(upper_limits, dtype=float)
+
+
+def _get_config_section(config: dict[str, Any], name: str) -> dict[str, Any]:
+    value = config.get(name)
+    if not isinstance(value, dict):
+        return {}
+    return dict(value)
+
+
+def _load_repo_sim_config(lerobot_repo: str | Path) -> dict[str, Any]:
+    repo_path = Path(lerobot_repo)
+    config_path = DEFAULT_SIM_CONFIG_PATH if repo_path == DEFAULT_LEROBOT_REPO else repo_path / "src/lerobot/robots/hope_jr/hope_global_config.json"
+    return _load_sim_config(config_path)
 
 
 class HopeJrSimIkController:
@@ -165,26 +196,28 @@ class HopeJrSimIkController:
             if lerobot_repo == DEFAULT_LEROBOT_REPO
             else lerobot_repo / "src/lerobot/robots/hope_jr/hope_jr_arm_kinematics.py"
         )
-        self.model = self.kinematics_module.HopeJrArmKinematics.from_json(
-            DEFAULT_IK_SPEC_PATH
-            if lerobot_repo == DEFAULT_LEROBOT_REPO
-            else lerobot_repo / "src/lerobot/robots/hope_jr/hope_jr_arm_ik_spec.json"
-        )
         self.sim_config = _load_sim_config(
             DEFAULT_SIM_CONFIG_PATH
             if lerobot_repo == DEFAULT_LEROBOT_REPO
-            else lerobot_repo / "src/lerobot/robots/hope_jr/hope_jr_sim_config.json"
+            else lerobot_repo / "src/lerobot/robots/hope_jr/hope_global_config.json"
         )
-        self.stop_targets_deg = self._load_stop_targets_deg(
-            DEFAULT_NEUTRAL_POSE_PATH
+        self.model = self.kinematics_module.HopeJrArmKinematics.from_json(
+            DEFAULT_SIM_CONFIG_PATH
             if lerobot_repo == DEFAULT_LEROBOT_REPO
-            else lerobot_repo / "src/lerobot/robots/hope_jr/hope_jr_sim_neutral_pose.json"
+            else lerobot_repo / "src/lerobot/robots/hope_jr/hope_global_config.json"
         )
+        self.controller_defaults = _get_config_section(self.sim_config, "controller_defaults")
+        self.script_editor_test_defaults = _get_config_section(self.sim_config, "script_editor_test_defaults")
+        self.stop_targets_deg = self._load_stop_targets_deg(self.sim_config)
         self.stage_joint_weights = np.asarray(
             _build_stage_joint_weights_from_config(self.sim_config, list(self.model.joint_names)),
             dtype=float,
         )
-        self.position_only_joint_control_profile = DEFAULT_POSITION_ONLY_JOINT_CONTROL_PROFILE
+        self.lower_joint_limits_deg, self.upper_joint_limits_deg = _build_joint_limits_from_config(
+            self.sim_config,
+            list(self.model.joint_names),
+        )
+        self.position_only_joint_control_profile = str(self.controller_defaults.get("position_only_joint_control_profile", DEFAULT_POSITION_ONLY_JOINT_CONTROL_PROFILE))
         self.position_only_joint_control_modes = build_joint_control_modes(
             self.model.joint_names, self.position_only_joint_control_profile
         )
@@ -193,7 +226,12 @@ class HopeJrSimIkController:
         self.neutral_model_joint_targets_deg = np.array([self.stop_targets_deg.get(name, 0.0) for name in self.model.joint_names], dtype=float)
         self.start_stage_joint_positions_deg = None
         self.last_packet_timestamp = None
-        self.stage_error_norm_window = deque(maxlen=DEFAULT_STAGE_ERROR_SCORE_WINDOW)
+        self.position_only_weight_overrides = {str(k): float(v) for k, v in self.controller_defaults.get("position_only_weight_overrides", DEFAULT_STAGE_POSITION_ONLY_WEIGHT_OVERRIDES).items()}
+        self.stage_dls_lambda = float(self.controller_defaults.get("stage_dls_lambda", DEFAULT_STAGE_DLS_LAMBDA))
+        self.stage_dls_max_step_deg = float(self.controller_defaults.get("stage_dls_max_step_deg", DEFAULT_STAGE_DLS_MAX_STEP_DEG))
+        self.stage_task_delta_clamp_m = float(self.controller_defaults.get("stage_task_delta_clamp_m", DEFAULT_STAGE_TASK_DELTA_CLAMP_M))
+        self.stage_error_score_window = int(self.controller_defaults.get("stage_error_score_window", DEFAULT_STAGE_ERROR_SCORE_WINDOW))
+        self.stage_error_norm_window = deque(maxlen=self.stage_error_score_window)
         self.minimum_packet_timestamp = None
         self.last_debug_payload = None
         self._last_event_key = None
@@ -232,9 +270,9 @@ class HopeJrSimIkController:
     def _load_latest_packet(self) -> dict[str, Any] | None:
         return self.packet_source.read_latest_packet()
 
-    def _load_stop_targets_deg(self, neutral_pose_path: Path) -> dict[str, float]:
+    def _load_stop_targets_deg(self, sim_config: dict[str, Any]) -> dict[str, float]:
         stop_targets = dict(DEFAULT_STOP_TARGETS_DEG)
-        stop_targets.update(_load_neutral_pose_map(neutral_pose_path))
+        stop_targets.update(_load_neutral_pose_map_from_config(sim_config))
         return stop_targets
 
     @staticmethod
@@ -372,7 +410,7 @@ class HopeJrSimIkController:
 
         target_stage_pose = self.teleop_mapper.model_to_stage_transform @ target_pose
         raw_position_error = target_stage_pose[:3, 3] - current_stage_pose[:3, 3]
-        position_error = self._clip_vector_norm(raw_position_error, DEFAULT_STAGE_TASK_DELTA_CLAMP_M)
+        position_error = self._clip_vector_norm(raw_position_error, self.stage_task_delta_clamp_m)
         if self.position_only:
             task_error = position_error
             task_jacobian = jacobian[:3, :]
@@ -385,12 +423,12 @@ class HopeJrSimIkController:
         if self.position_only:
             solve_joint_weights = solve_joint_weights.copy()
             for index, name in enumerate(self.model.joint_names):
-                override = DEFAULT_STAGE_POSITION_ONLY_WEIGHT_OVERRIDES.get(name)
+                override = self.position_only_weight_overrides.get(name)
                 if override is not None:
                     solve_joint_weights[index] = min(solve_joint_weights[index], float(override))
         task_jacobian = task_jacobian * solve_joint_weights[None, :]
 
-        damping = DEFAULT_STAGE_DLS_LAMBDA
+        damping = self.stage_dls_lambda
         try:
             delta_rad = task_jacobian.T @ np.linalg.solve(
                 task_jacobian @ task_jacobian.T + (damping**2) * np.eye(task_jacobian.shape[0]),
@@ -401,7 +439,7 @@ class HopeJrSimIkController:
 
         delta_deg = np.rad2deg(delta_rad) * solve_joint_weights
         unclipped_delta_deg = delta_deg.copy()
-        delta_deg = np.clip(delta_deg, -DEFAULT_STAGE_DLS_MAX_STEP_DEG, DEFAULT_STAGE_DLS_MAX_STEP_DEG)
+        delta_deg = np.clip(delta_deg, -self.stage_dls_max_step_deg, self.stage_dls_max_step_deg)
         solved_stage_joint_targets_deg = np.asarray(current_stage_joint_positions_deg, dtype=float) + delta_deg
         return solved_stage_joint_targets_deg, target_stage_pose, delta_deg, unclipped_delta_deg, raw_position_error, position_error, solve_joint_weights
 
@@ -595,8 +633,8 @@ class HopeJrSimIkController:
             stage_dls_delta_deg=stage_dls_delta_deg,
             joint_names=list(self.model.joint_names),
         )
-        lower_limits_deg = np.asarray([joint.lower_limit_deg for joint in self.model.joints], dtype=float)
-        upper_limits_deg = np.asarray([joint.upper_limit_deg for joint in self.model.joints], dtype=float)
+        lower_limits_deg = self.lower_joint_limits_deg
+        upper_limits_deg = self.upper_joint_limits_deg
         joint_limit_safety_advisory = self.joint_limit_safety_guard.evaluate(
             joint_names=list(self.model.joint_names),
             proposed_joint_targets_deg=solved_model_joint_targets_deg,
@@ -837,35 +875,66 @@ def build_controller_from_args(args: argparse.Namespace) -> HopeJrSimIkControlle
 def start_script_editor_loop(
     *,
     lerobot_repo: str | Path = DEFAULT_LEROBOT_REPO,
-    packet_path: str | Path = DEFAULT_PACKET_PATH,
-    joint_root_path: str = DEFAULT_JOINT_ROOT_PATH,
-    position_scale: float = 1.0,
-    world_offset: list[float] | tuple[float, float, float] = (0.0, 0.0, 0.0),
-    world_rotate_xyz: list[float] | tuple[float, float, float] = (0.0, 0.0, 0.0),
-    quest_position_axes: str = "xyz",
-    quest_position_signs: list[float] | tuple[float, float, float] = (1.0, 1.0, 1.0),
-    position_only: bool = True,
-    debug_path: str | Path = DEFAULT_DEBUG_PATH,
-    use_udp: bool = True,
-    udp_listen_host: str = DEFAULT_UDP_LISTEN_HOST,
-    udp_listen_port: int = DEFAULT_UDP_LISTEN_PORT,
-    teleop_debug_root: str = DEFAULT_TELEOP_DEBUG_ROOT,
-    show_teleop_debug: bool = True,
-    anchor_delay_s: float = 3.0,
-    grip_threshold: float = 0.25,
-    event_log_path: str | Path = DEFAULT_EVENT_LOG_PATH,
-    quest_deadband_m: float = 0.01,
-    packet_stale_timeout_s: float = DEFAULT_PACKET_STALE_TIMEOUT_S,
-    end_effector_path: str = DEFAULT_END_EFFECTOR_PATH,
-    write_joint_state_directly: bool = False,
-    interval_s: float = 0.05,
-    dry_run: bool = False,
-    consume_only_new: bool = True,
-    reset_targets_on_stop: bool = True,
-    reset_target_value_deg: float = 0.0,
+    packet_path: str | Path | None = None,
+    joint_root_path: str | None = None,
+    position_scale: float | None = None,
+    world_offset: list[float] | tuple[float, float, float] | None = None,
+    world_rotate_xyz: list[float] | tuple[float, float, float] | None = None,
+    quest_position_axes: str | None = None,
+    quest_position_signs: list[float] | tuple[float, float, float] | None = None,
+    position_only: bool | None = None,
+    debug_path: str | Path | None = None,
+    use_udp: bool | None = None,
+    udp_listen_host: str | None = None,
+    udp_listen_port: int | None = None,
+    teleop_debug_root: str | None = None,
+    show_teleop_debug: bool | None = None,
+    anchor_delay_s: float | None = None,
+    grip_threshold: float | None = None,
+    event_log_path: str | Path | None = None,
+    quest_deadband_m: float | None = None,
+    packet_stale_timeout_s: float | None = None,
+    end_effector_path: str | None = None,
+    write_joint_state_directly: bool | None = None,
+    interval_s: float | None = None,
+    dry_run: bool | None = None,
+    consume_only_new: bool | None = None,
+    reset_targets_on_stop: bool | None = None,
+    reset_target_value_deg: float | None = None,
 ) -> HopeJrIsaacUpdateLoop:
     global _ACTIVE_LOOP
     stop_script_editor_loop()
+    sim_config = _load_repo_sim_config(lerobot_repo)
+    controller_defaults = _get_config_section(sim_config, "controller_defaults")
+    script_defaults = _get_config_section(sim_config, "script_editor_test_defaults")
+
+    packet_path = packet_path if packet_path is not None else controller_defaults.get("packet_path", str(DEFAULT_PACKET_PATH))
+    joint_root_path = joint_root_path if joint_root_path is not None else controller_defaults.get("joint_root_path", DEFAULT_JOINT_ROOT_PATH)
+    position_scale = float(position_scale if position_scale is not None else script_defaults.get("position_scale", controller_defaults.get("position_scale", 1.0)))
+    world_offset = world_offset if world_offset is not None else controller_defaults.get("world_offset", [0.0, 0.0, 0.0])
+    world_rotate_xyz = world_rotate_xyz if world_rotate_xyz is not None else controller_defaults.get("world_rotate_xyz", [0.0, 0.0, 0.0])
+    quest_position_axes = quest_position_axes if quest_position_axes is not None else script_defaults.get("quest_position_axes", controller_defaults.get("quest_position_axes", "xyz"))
+    quest_position_signs = quest_position_signs if quest_position_signs is not None else script_defaults.get("quest_position_signs", controller_defaults.get("quest_position_signs", [1.0, 1.0, 1.0]))
+    position_only = bool(position_only if position_only is not None else script_defaults.get("position_only", True))
+    debug_path = debug_path if debug_path is not None else controller_defaults.get("debug_path", str(DEFAULT_DEBUG_PATH))
+    use_udp = bool(use_udp if use_udp is not None else script_defaults.get("use_udp", controller_defaults.get("use_udp", True)))
+    udp_listen_host = udp_listen_host if udp_listen_host is not None else controller_defaults.get("udp_listen_host", DEFAULT_UDP_LISTEN_HOST)
+    udp_listen_port = int(udp_listen_port if udp_listen_port is not None else controller_defaults.get("udp_listen_port", DEFAULT_UDP_LISTEN_PORT))
+    teleop_debug_root = teleop_debug_root if teleop_debug_root is not None else controller_defaults.get("teleop_debug_root", DEFAULT_TELEOP_DEBUG_ROOT)
+    show_teleop_debug = bool(show_teleop_debug if show_teleop_debug is not None else script_defaults.get("show_teleop_debug", controller_defaults.get("show_teleop_debug", True)))
+    anchor_delay_s = float(anchor_delay_s if anchor_delay_s is not None else script_defaults.get("anchor_delay_s", controller_defaults.get("anchor_delay_s", 3.0)))
+    grip_threshold = float(grip_threshold if grip_threshold is not None else script_defaults.get("grip_threshold", controller_defaults.get("grip_threshold", 0.25)))
+    event_log_path = event_log_path if event_log_path is not None else controller_defaults.get("event_log_path", str(DEFAULT_EVENT_LOG_PATH))
+    quest_deadband_m = float(quest_deadband_m if quest_deadband_m is not None else controller_defaults.get("quest_deadband_m", 0.01))
+    packet_stale_timeout_s = float(packet_stale_timeout_s if packet_stale_timeout_s is not None else controller_defaults.get("packet_stale_timeout_s", DEFAULT_PACKET_STALE_TIMEOUT_S))
+    end_effector_path = end_effector_path if end_effector_path is not None else controller_defaults.get("end_effector_path", DEFAULT_END_EFFECTOR_PATH)
+    write_joint_state_directly = bool(write_joint_state_directly if write_joint_state_directly is not None else script_defaults.get("write_joint_state_directly", False))
+    interval_s = float(interval_s if interval_s is not None else script_defaults.get("interval_s", 0.05))
+    dry_run = bool(dry_run if dry_run is not None else script_defaults.get("dry_run", False))
+    consume_only_new = bool(consume_only_new if consume_only_new is not None else script_defaults.get("consume_only_new", True))
+    reset_targets_on_stop = bool(reset_targets_on_stop if reset_targets_on_stop is not None else script_defaults.get("reset_targets_on_stop", True))
+    reset_target_value_deg = float(reset_target_value_deg if reset_target_value_deg is not None else script_defaults.get("reset_target_value_deg", 0.0))
+
     controller = HopeJrSimIkController(
         lerobot_repo=Path(lerobot_repo),
         packet_path=Path(packet_path),
@@ -914,28 +983,30 @@ def stop_script_editor_loop() -> None:
 
 
 def parse_args() -> argparse.Namespace:
+    config = _load_repo_sim_config(DEFAULT_LEROBOT_REPO)
+    controller_defaults = _get_config_section(config, "controller_defaults")
     parser = argparse.ArgumentParser(description="First-pass Hope Jr Quest -> Sim IK controller")
     parser.add_argument("--lerobot-repo", type=Path, default=DEFAULT_LEROBOT_REPO)
-    parser.add_argument("--packet-path", type=Path, default=DEFAULT_PACKET_PATH)
-    parser.add_argument("--joint-root-path", default=DEFAULT_JOINT_ROOT_PATH)
-    parser.add_argument("--position-scale", type=float, default=1.0)
-    parser.add_argument("--world-offset", nargs=3, type=float, default=[0.0, 0.0, 0.0])
-    parser.add_argument("--world-rotate-xyz", nargs=3, type=float, default=[0.0, 0.0, 0.0])
-    parser.add_argument("--quest-position-axes", default="xyz")
-    parser.add_argument("--quest-position-signs", nargs=3, type=float, default=[1.0, 1.0, 1.0])
+    parser.add_argument("--packet-path", type=Path, default=Path(controller_defaults.get("packet_path", str(DEFAULT_PACKET_PATH))))
+    parser.add_argument("--joint-root-path", default=controller_defaults.get("joint_root_path", DEFAULT_JOINT_ROOT_PATH))
+    parser.add_argument("--position-scale", type=float, default=float(controller_defaults.get("position_scale", 1.0)))
+    parser.add_argument("--world-offset", nargs=3, type=float, default=list(controller_defaults.get("world_offset", [0.0, 0.0, 0.0])))
+    parser.add_argument("--world-rotate-xyz", nargs=3, type=float, default=list(controller_defaults.get("world_rotate_xyz", [0.0, 0.0, 0.0])))
+    parser.add_argument("--quest-position-axes", default=controller_defaults.get("quest_position_axes", "xyz"))
+    parser.add_argument("--quest-position-signs", nargs=3, type=float, default=list(controller_defaults.get("quest_position_signs", [1.0, 1.0, 1.0])))
     parser.add_argument("--position-only", action="store_true")
-    parser.add_argument("--debug-path", type=Path, default=DEFAULT_DEBUG_PATH)
-    parser.add_argument("--use-udp", action="store_true")
-    parser.add_argument("--udp-listen-host", default=DEFAULT_UDP_LISTEN_HOST)
-    parser.add_argument("--udp-listen-port", type=int, default=DEFAULT_UDP_LISTEN_PORT)
-    parser.add_argument("--teleop-debug-root", default=DEFAULT_TELEOP_DEBUG_ROOT)
-    parser.add_argument("--show-teleop-debug", action="store_true")
-    parser.add_argument("--anchor-delay-s", type=float, default=3.0)
-    parser.add_argument("--grip-threshold", type=float, default=0.25)
-    parser.add_argument("--event-log-path", type=Path, default=DEFAULT_EVENT_LOG_PATH)
-    parser.add_argument("--quest-deadband-m", type=float, default=0.01)
-    parser.add_argument("--packet-stale-timeout-s", type=float, default=DEFAULT_PACKET_STALE_TIMEOUT_S)
-    parser.add_argument("--end-effector-path", default=DEFAULT_END_EFFECTOR_PATH)
+    parser.add_argument("--debug-path", type=Path, default=Path(controller_defaults.get("debug_path", str(DEFAULT_DEBUG_PATH))))
+    parser.add_argument("--use-udp", action="store_true", default=bool(controller_defaults.get("use_udp", True)))
+    parser.add_argument("--udp-listen-host", default=controller_defaults.get("udp_listen_host", DEFAULT_UDP_LISTEN_HOST))
+    parser.add_argument("--udp-listen-port", type=int, default=int(controller_defaults.get("udp_listen_port", DEFAULT_UDP_LISTEN_PORT)))
+    parser.add_argument("--teleop-debug-root", default=controller_defaults.get("teleop_debug_root", DEFAULT_TELEOP_DEBUG_ROOT))
+    parser.add_argument("--show-teleop-debug", action="store_true", default=bool(controller_defaults.get("show_teleop_debug", True)))
+    parser.add_argument("--anchor-delay-s", type=float, default=float(controller_defaults.get("anchor_delay_s", 3.0)))
+    parser.add_argument("--grip-threshold", type=float, default=float(controller_defaults.get("grip_threshold", 0.25)))
+    parser.add_argument("--event-log-path", type=Path, default=Path(controller_defaults.get("event_log_path", str(DEFAULT_EVENT_LOG_PATH))))
+    parser.add_argument("--quest-deadband-m", type=float, default=float(controller_defaults.get("quest_deadband_m", 0.01)))
+    parser.add_argument("--packet-stale-timeout-s", type=float, default=float(controller_defaults.get("packet_stale_timeout_s", DEFAULT_PACKET_STALE_TIMEOUT_S)))
+    parser.add_argument("--end-effector-path", default=controller_defaults.get("end_effector_path", DEFAULT_END_EFFECTOR_PATH))
     parser.add_argument("--write-joint-state-directly", action="store_true")
     parser.add_argument("--watch", action="store_true")
     parser.add_argument("--isaac-update-loop", action="store_true")
