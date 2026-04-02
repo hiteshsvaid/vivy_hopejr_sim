@@ -23,9 +23,10 @@ from controllers.joint_control_policy import (
     JOINT_CONTROL_HOLD_START,
     build_joint_control_modes,
 )
+from controllers.joint_target_conditioner import JointTargetConditioner
 from controllers.teleop_packet_source import TeleopPacketSource
-from controllers.guards.heuristic_safety_guard import DEFAULT_HEURISTIC_GUARD_PROFILE, HeuristicSafetyGuard
-from controllers.guards.joint_limit_safety_guard import DEFAULT_JOINT_LIMIT_GUARD_PROFILE, JointLimitSafetyGuard
+from controllers.guards.heuristic_safety_guard import HeuristicSafetyGuard
+from controllers.guards.joint_limit_safety_guard import JointLimitSafetyGuard
 from controllers.stage_io import HopeJrStageIo
 
 import numpy as np
@@ -33,7 +34,6 @@ from scipy.spatial.transform import Rotation
 
 
 DEFAULT_LEROBOT_REPO = Path("/home/viaan/huggingface/lerobot")
-DEFAULT_PACKET_PATH = Path("/tmp/hope_jr_quest_latest.json")
 DEFAULT_SIM_CONFIG_PATH = DEFAULT_LEROBOT_REPO / "src/lerobot/robots/hope_jr/hope_global_config.json"
 DEFAULT_KINEMATICS_MODULE_PATH = DEFAULT_LEROBOT_REPO / "src/lerobot/robots/hope_jr/hope_jr_arm_kinematics.py"
 DEFAULT_ARTICULATION_ROOT_PATH = "/World/JointTest"
@@ -51,6 +51,7 @@ DEFAULT_STAGE_DLS_LAMBDA = 0.01
 DEFAULT_STAGE_DLS_MAX_STEP_DEG = 8.0
 DEFAULT_STAGE_TASK_DELTA_CLAMP_M = 0.03
 DEFAULT_STAGE_ERROR_SCORE_WINDOW = 120
+DEFAULT_JOINT_TARGET_MAX_DELTA_DEG_PER_TICK = 2.0
 DEFAULT_STAGE_POSITION_ONLY_WEIGHT_OVERRIDES = {
     "right_forearm_twist": 0.0,
     "right_wrist": 0.0,
@@ -142,12 +143,15 @@ def _load_repo_sim_config(lerobot_repo: str | Path) -> dict[str, Any]:
     return _load_sim_config(config_path)
 
 
+def _build_run_log_path(base_path: Path, run_id: str) -> Path:
+    return base_path.with_name(f"{base_path.stem}_{run_id}{base_path.suffix}")
+
+
 class HopeJrSimIkController:
     def __init__(
         self,
         *,
         lerobot_repo: Path,
-        packet_path: Path,
         joint_root_path: str,
         position_scale: float,
         world_offset: np.ndarray,
@@ -170,23 +174,21 @@ class HopeJrSimIkController:
         write_joint_state_directly: bool,
     ):
         self.lerobot_repo = lerobot_repo
-        self.packet_path = packet_path
         self.joint_root_path = joint_root_path.rstrip("/")
         self.articulation_root_path = self.joint_root_path.rsplit("/", 1)[0]
         self.position_only = position_only
         self.debug_path = debug_path
+        self.latest_debug_path = debug_path
 
         self.teleop_debug_root = teleop_debug_root.rstrip("/")
         self.show_teleop_debug = show_teleop_debug
         self.anchor_delay_s = anchor_delay_s
         self.event_log_path = event_log_path
+        self.latest_event_log_path = event_log_path
         self.packet_stale_timeout_s = float(packet_stale_timeout_s)
         self.end_effector_path = end_effector_path
         self.write_joint_state_directly = bool(write_joint_state_directly)
-        self.heuristic_safety_guard = HeuristicSafetyGuard(DEFAULT_HEURISTIC_GUARD_PROFILE)
-        self.joint_limit_safety_guard = JointLimitSafetyGuard(DEFAULT_JOINT_LIMIT_GUARD_PROFILE)
         self.packet_source = TeleopPacketSource(
-            packet_path=packet_path,
             use_udp=use_udp,
             udp_listen_host=udp_listen_host,
             udp_listen_port=udp_listen_port,
@@ -201,6 +203,9 @@ class HopeJrSimIkController:
             if lerobot_repo == DEFAULT_LEROBOT_REPO
             else lerobot_repo / "src/lerobot/robots/hope_jr/hope_global_config.json"
         )
+        self.safety_guard_config = _get_config_section(self.sim_config, "safety_guards")
+        self.heuristic_safety_guard = HeuristicSafetyGuard(self.safety_guard_config.get("heuristic"))
+        self.joint_limit_safety_guard = JointLimitSafetyGuard(self.safety_guard_config.get("joint_limit"))
         self.model = self.kinematics_module.HopeJrArmKinematics.from_json(
             DEFAULT_SIM_CONFIG_PATH
             if lerobot_repo == DEFAULT_LEROBOT_REPO
@@ -231,6 +236,12 @@ class HopeJrSimIkController:
         self.stage_dls_max_step_deg = float(self.controller_defaults.get("stage_dls_max_step_deg", DEFAULT_STAGE_DLS_MAX_STEP_DEG))
         self.stage_task_delta_clamp_m = float(self.controller_defaults.get("stage_task_delta_clamp_m", DEFAULT_STAGE_TASK_DELTA_CLAMP_M))
         self.stage_error_score_window = int(self.controller_defaults.get("stage_error_score_window", DEFAULT_STAGE_ERROR_SCORE_WINDOW))
+        self.joint_target_max_delta_deg_per_tick = float(
+            self.controller_defaults.get("joint_target_max_delta_deg_per_tick", DEFAULT_JOINT_TARGET_MAX_DELTA_DEG_PER_TICK)
+        )
+        self.joint_target_conditioner = JointTargetConditioner(
+            max_delta_deg_per_tick=self.joint_target_max_delta_deg_per_tick
+        )
         self.stage_error_norm_window = deque(maxlen=self.stage_error_score_window)
         self.minimum_packet_timestamp = None
         self.last_debug_payload = None
@@ -346,14 +357,30 @@ class HopeJrSimIkController:
             return
         self._last_event_key = dedupe_key
         event = {"logged_at": time.time(), **payload}
-        with self.event_log_path.open("a", encoding="utf-8") as fh:
-            fh.write(json.dumps(event) + "\n")
+        serialized = json.dumps(event) + "\n"
+        for path in [self.event_log_path, self.latest_event_log_path]:
+            if path is None:
+                continue
+            try:
+                path.parent.mkdir(parents=True, exist_ok=True)
+                with path.open("a", encoding="utf-8") as fh:
+                    fh.write(serialized)
+            except Exception:
+                continue
 
     def _write_debug(self, payload: dict[str, Any]) -> None:
         self.last_debug_payload = payload
-        tmp_path = self.debug_path.with_suffix(".tmp")
-        tmp_path.write_text(json.dumps(payload, indent=2) + "\n")
-        tmp_path.replace(self.debug_path)
+        serialized = json.dumps(payload, indent=2) + "\n"
+        for path in [self.debug_path, self.latest_debug_path]:
+            if path is None:
+                continue
+            try:
+                path.parent.mkdir(parents=True, exist_ok=True)
+                tmp_path = path.with_suffix(".tmp")
+                tmp_path.write_text(serialized)
+                tmp_path.replace(path)
+            except Exception:
+                continue
 
     def _update_teleop_debug_visuals(
         self,
@@ -604,6 +631,11 @@ class HopeJrSimIkController:
             current_stage_joint_positions_deg=current_stage_joint_positions_deg,
             solved_stage_joint_targets_deg=solved_joint_targets_deg,
         )
+        conditioning_result = self.joint_target_conditioner.condition(
+            reference_joint_positions_deg=current_stage_joint_positions_deg,
+            proposed_joint_targets_deg=solved_joint_targets_deg,
+        )
+        solved_joint_targets_deg = conditioning_result.conditioned_targets_deg
         solved_model_joint_targets_deg = solved_joint_targets_deg
 
         self.last_joint_targets_deg = solved_model_joint_targets_deg
@@ -679,6 +711,14 @@ class HopeJrSimIkController:
             "stage_error_score": stage_error_score,
             "teleop_safety_advisory": teleop_safety_advisory,
             "stage_dls_joint_weights": None if stage_dls_joint_weights is None else stage_dls_joint_weights.tolist(),
+            "joint_target_conditioning": {
+                "max_delta_deg_per_tick": self.joint_target_max_delta_deg_per_tick,
+                "clipped": conditioning_result.clipped,
+                "delta_before_clip_deg": conditioning_result.delta_before_clip_deg.tolist(),
+                "delta_after_clip_deg": conditioning_result.delta_after_clip_deg.tolist(),
+                "unclipped_joint_targets_deg": conditioning_result.unclipped_targets_deg.tolist(),
+                "conditioned_joint_targets_deg": conditioning_result.conditioned_targets_deg.tolist(),
+            },
             "joint_control_profile": self.position_only_joint_control_profile if self.position_only else "all_solve_v1",
             "joint_control_modes": joint_control_modes,
             "stage_dls_debug": stage_dls_debug,
@@ -848,7 +888,6 @@ def _parse_position_axes(value: str) -> tuple[int, int, int]:
 def build_controller_from_args(args: argparse.Namespace) -> HopeJrSimIkController:
     return HopeJrSimIkController(
         lerobot_repo=args.lerobot_repo,
-        packet_path=args.packet_path,
         joint_root_path=args.joint_root_path,
         position_scale=args.position_scale,
         world_offset=np.asarray(args.world_offset, dtype=float),
@@ -875,7 +914,6 @@ def build_controller_from_args(args: argparse.Namespace) -> HopeJrSimIkControlle
 def start_script_editor_loop(
     *,
     lerobot_repo: str | Path = DEFAULT_LEROBOT_REPO,
-    packet_path: str | Path | None = None,
     joint_root_path: str | None = None,
     position_scale: float | None = None,
     world_offset: list[float] | tuple[float, float, float] | None = None,
@@ -907,8 +945,6 @@ def start_script_editor_loop(
     sim_config = _load_repo_sim_config(lerobot_repo)
     controller_defaults = _get_config_section(sim_config, "controller_defaults")
     script_defaults = _get_config_section(sim_config, "script_editor_test_defaults")
-
-    packet_path = packet_path if packet_path is not None else controller_defaults.get("packet_path", str(DEFAULT_PACKET_PATH))
     joint_root_path = joint_root_path if joint_root_path is not None else controller_defaults.get("joint_root_path", DEFAULT_JOINT_ROOT_PATH)
     position_scale = float(position_scale if position_scale is not None else script_defaults.get("position_scale", controller_defaults.get("position_scale", 1.0)))
     world_offset = world_offset if world_offset is not None else controller_defaults.get("world_offset", [0.0, 0.0, 0.0])
@@ -934,10 +970,14 @@ def start_script_editor_loop(
     consume_only_new = bool(consume_only_new if consume_only_new is not None else script_defaults.get("consume_only_new", True))
     reset_targets_on_stop = bool(reset_targets_on_stop if reset_targets_on_stop is not None else script_defaults.get("reset_targets_on_stop", True))
     reset_target_value_deg = float(reset_target_value_deg if reset_target_value_deg is not None else script_defaults.get("reset_target_value_deg", 0.0))
+    latest_debug_path = Path(debug_path)
+    latest_event_log_path = Path(event_log_path)
+    run_id = time.strftime("%Y%m%d_%H%M%S") + f"_{int((time.time() % 1.0) * 1000):03d}"
+    run_debug_path = _build_run_log_path(latest_debug_path, run_id)
+    run_event_log_path = _build_run_log_path(latest_event_log_path, run_id)
 
     controller = HopeJrSimIkController(
         lerobot_repo=Path(lerobot_repo),
-        packet_path=Path(packet_path),
         joint_root_path=joint_root_path,
         position_scale=position_scale,
         world_offset=np.asarray(world_offset, dtype=float),
@@ -945,7 +985,7 @@ def start_script_editor_loop(
         quest_position_axes=_parse_position_axes(quest_position_axes),
         quest_position_signs=np.asarray(quest_position_signs, dtype=float),
         position_only=position_only,
-        debug_path=Path(debug_path),
+        debug_path=run_debug_path,
         use_udp=use_udp,
         udp_listen_host=udp_listen_host,
         udp_listen_port=udp_listen_port,
@@ -953,16 +993,21 @@ def start_script_editor_loop(
         show_teleop_debug=show_teleop_debug,
         anchor_delay_s=anchor_delay_s,
         grip_threshold=grip_threshold,
-        event_log_path=Path(event_log_path),
+        event_log_path=run_event_log_path,
         quest_deadband_m=quest_deadband_m,
         packet_stale_timeout_s=packet_stale_timeout_s,
         end_effector_path=end_effector_path,
         write_joint_state_directly=write_joint_state_directly,
     )
+    controller.latest_debug_path = latest_debug_path
+    controller.latest_event_log_path = latest_event_log_path
     try:
-        controller.event_log_path.unlink(missing_ok=True)
+        controller.latest_event_log_path.unlink(missing_ok=True)
+        controller.latest_debug_path.unlink(missing_ok=True)
     except Exception:
         pass
+    print(f"Hope Jr IK run log: {controller.event_log_path}")
+    print(f"Hope Jr IK run debug: {controller.debug_path}")
     if consume_only_new:
         controller.minimum_packet_timestamp = time.time()
     _ACTIVE_LOOP = HopeJrIsaacUpdateLoop(
@@ -987,7 +1032,6 @@ def parse_args() -> argparse.Namespace:
     controller_defaults = _get_config_section(config, "controller_defaults")
     parser = argparse.ArgumentParser(description="First-pass Hope Jr Quest -> Sim IK controller")
     parser.add_argument("--lerobot-repo", type=Path, default=DEFAULT_LEROBOT_REPO)
-    parser.add_argument("--packet-path", type=Path, default=Path(controller_defaults.get("packet_path", str(DEFAULT_PACKET_PATH))))
     parser.add_argument("--joint-root-path", default=controller_defaults.get("joint_root_path", DEFAULT_JOINT_ROOT_PATH))
     parser.add_argument("--position-scale", type=float, default=float(controller_defaults.get("position_scale", 1.0)))
     parser.add_argument("--world-offset", nargs=3, type=float, default=list(controller_defaults.get("world_offset", [0.0, 0.0, 0.0])))
@@ -1024,7 +1068,7 @@ def main() -> None:
         return
 
     if args.watch:
-        print(f"watching {args.packet_path}")
+        print(f"watching udp://{args.udp_listen_host}:{args.udp_listen_port}")
         print(f"joint root path: {args.joint_root_path}")
         while True:
             result = controller.solve_once(apply_to_stage=not args.dry_run)
