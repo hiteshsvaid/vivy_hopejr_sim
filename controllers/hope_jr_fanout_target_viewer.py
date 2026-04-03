@@ -9,9 +9,9 @@ from pathlib import Path
 import numpy as np
 
 
-SIM_CONFIG_PATH = Path("/home/viaan/huggingface/lerobot/src/lerobot/robots/hope_jr/hope_global_config.json")
-KINEMATICS_PATH = Path("/home/viaan/huggingface/lerobot/src/lerobot/robots/hope_jr/hope_jr_arm_kinematics.py")
-SHARED_SIGNAL_PATH = Path("/home/viaan/huggingface/lerobot/src/lerobot/robots/hope_jr/fanout/shared_target_signal.py")
+SIM_CONFIG_PATH = Path("/home/viaan/huggingface/lerobot/src/lerobot/robots/vivy/vivy_global_config.json")
+KINEMATICS_PATH = Path("/home/viaan/huggingface/lerobot/src/lerobot/robots/vivy/vivy_arm_kinematics.py")
+SHARED_SIGNAL_PATH = Path("/home/viaan/huggingface/lerobot/src/lerobot/robots/vivy/fanout/shared_target_signal.py")
 TELEOP_DEBUG_VISUALS_PATH = Path("/home/viaan/vivy_hopejr_sim/ui/teleop_debug_visuals.py")
 FANOUT_SIDE_PANEL_PATH = Path("/home/viaan/vivy_hopejr_sim/ui/hope_jr_fanout_side_panel.py")
 

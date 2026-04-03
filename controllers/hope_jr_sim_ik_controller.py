@@ -34,8 +34,8 @@ from scipy.spatial.transform import Rotation
 
 
 DEFAULT_LEROBOT_REPO = Path("/home/viaan/huggingface/lerobot")
-DEFAULT_SIM_CONFIG_PATH = DEFAULT_LEROBOT_REPO / "src/lerobot/robots/hope_jr/hope_global_config.json"
-DEFAULT_KINEMATICS_MODULE_PATH = DEFAULT_LEROBOT_REPO / "src/lerobot/robots/hope_jr/hope_jr_arm_kinematics.py"
+DEFAULT_SIM_CONFIG_PATH = DEFAULT_LEROBOT_REPO / "src/lerobot/robots/vivy/vivy_global_config.json"
+DEFAULT_KINEMATICS_MODULE_PATH = DEFAULT_LEROBOT_REPO / "src/lerobot/robots/vivy/vivy_arm_kinematics.py"
 DEFAULT_ARTICULATION_ROOT_PATH = "/World/JointTest"
 DEFAULT_JOINT_ROOT_PATH = "/World/JointTest/Joints"
 DEFAULT_UDP_LISTEN_HOST = "127.0.0.1"
@@ -52,6 +52,7 @@ DEFAULT_STAGE_DLS_MAX_STEP_DEG = 8.0
 DEFAULT_STAGE_TASK_DELTA_CLAMP_M = 0.03
 DEFAULT_STAGE_ERROR_SCORE_WINDOW = 120
 DEFAULT_JOINT_TARGET_MAX_DELTA_DEG_PER_TICK = 2.0
+DEFAULT_LIMIT_PUSH_FREEZE_CONSECUTIVE_FRAMES = 3
 DEFAULT_STAGE_POSITION_ONLY_WEIGHT_OVERRIDES = {
     "right_forearm_twist": 0.0,
     "right_wrist": 0.0,
@@ -139,7 +140,7 @@ def _get_config_section(config: dict[str, Any], name: str) -> dict[str, Any]:
 
 def _load_repo_sim_config(lerobot_repo: str | Path) -> dict[str, Any]:
     repo_path = Path(lerobot_repo)
-    config_path = DEFAULT_SIM_CONFIG_PATH if repo_path == DEFAULT_LEROBOT_REPO else repo_path / "src/lerobot/robots/hope_jr/hope_global_config.json"
+    config_path = DEFAULT_SIM_CONFIG_PATH if repo_path == DEFAULT_LEROBOT_REPO else repo_path / "src/lerobot/robots/vivy/vivy_global_config.json"
     return _load_sim_config(config_path)
 
 
@@ -196,12 +197,12 @@ class HopeJrSimIkController:
         self.kinematics_module = self._load_kinematics_module(
             DEFAULT_KINEMATICS_MODULE_PATH
             if lerobot_repo == DEFAULT_LEROBOT_REPO
-            else lerobot_repo / "src/lerobot/robots/hope_jr/hope_jr_arm_kinematics.py"
+            else lerobot_repo / "src/lerobot/robots/vivy/vivy_arm_kinematics.py"
         )
         self.sim_config = _load_sim_config(
             DEFAULT_SIM_CONFIG_PATH
             if lerobot_repo == DEFAULT_LEROBOT_REPO
-            else lerobot_repo / "src/lerobot/robots/hope_jr/hope_global_config.json"
+            else lerobot_repo / "src/lerobot/robots/vivy/vivy_global_config.json"
         )
         self.safety_guard_config = _get_config_section(self.sim_config, "safety_guards")
         self.heuristic_safety_guard = HeuristicSafetyGuard(self.safety_guard_config.get("heuristic"))
@@ -209,7 +210,7 @@ class HopeJrSimIkController:
         self.model = self.kinematics_module.HopeJrArmKinematics.from_json(
             DEFAULT_SIM_CONFIG_PATH
             if lerobot_repo == DEFAULT_LEROBOT_REPO
-            else lerobot_repo / "src/lerobot/robots/hope_jr/hope_global_config.json"
+            else lerobot_repo / "src/lerobot/robots/vivy/vivy_global_config.json"
         )
         self.controller_defaults = _get_config_section(self.sim_config, "controller_defaults")
         self.script_editor_test_defaults = _get_config_section(self.sim_config, "script_editor_test_defaults")
@@ -239,6 +240,12 @@ class HopeJrSimIkController:
         self.joint_target_max_delta_deg_per_tick = float(
             self.controller_defaults.get("joint_target_max_delta_deg_per_tick", DEFAULT_JOINT_TARGET_MAX_DELTA_DEG_PER_TICK)
         )
+        self.limit_push_freeze_consecutive_frames = int(
+            self.controller_defaults.get(
+                "limit_push_freeze_consecutive_frames",
+                DEFAULT_LIMIT_PUSH_FREEZE_CONSECUTIVE_FRAMES,
+            )
+        )
         self.joint_target_conditioner = JointTargetConditioner(
             max_delta_deg_per_tick=self.joint_target_max_delta_deg_per_tick
         )
@@ -262,6 +269,9 @@ class HopeJrSimIkController:
         self._a_pressed_last = False
         self.last_hand_state = {}
         self.last_packet_received_at = None
+        self.limit_push_freeze_active = False
+        self.limit_push_freeze_streak = 0
+        self.limit_push_freeze_payload: dict[str, Any] | None = None
         self.stage_io = HopeJrStageIo(
             articulation_root_path=self.articulation_root_path,
             joint_root_path=self.joint_root_path,
@@ -409,6 +419,9 @@ class HopeJrSimIkController:
 
     def reset_target_positions(self, target_value_deg: float = 0.0, reset_joint_state: bool = True) -> None:
         self.teleop_mapper.reset()
+        self.limit_push_freeze_active = False
+        self.limit_push_freeze_streak = 0
+        self.limit_push_freeze_payload = None
         stage = self.stage_io.get_stage()
         if stage is None:
             return
@@ -422,6 +435,75 @@ class HopeJrSimIkController:
         self.last_joint_targets_deg = self.stage_io.stage_to_model_joint_positions_deg(target_values)
         self.last_commanded_stage_joint_targets_deg = np.asarray(target_values, dtype=float).copy()
         self.start_stage_joint_positions_deg = np.asarray(target_values, dtype=float).copy()
+
+    def _check_limit_push_freeze(
+        self,
+        *,
+        current_stage_joint_positions_deg: np.ndarray | None,
+        proposed_joint_targets_deg: np.ndarray,
+    ) -> dict[str, Any] | None:
+        if current_stage_joint_positions_deg is None:
+            self.limit_push_freeze_streak = 0
+            return None
+        current = np.asarray(current_stage_joint_positions_deg, dtype=float)
+        proposed = np.asarray(proposed_joint_targets_deg, dtype=float)
+        lower = self.lower_joint_limits_deg
+        upper = self.upper_joint_limits_deg
+        saturation_tol_deg = 0.5
+        push_tol_deg = 0.25
+        for index, joint_name in enumerate(self.model.joint_names):
+            current_deg = float(current[index])
+            target_deg = float(proposed[index])
+            lower_limit_deg = float(lower[index])
+            upper_limit_deg = float(upper[index])
+            pinned_upper = current_deg >= (upper_limit_deg - saturation_tol_deg)
+            pinned_lower = current_deg <= (lower_limit_deg + saturation_tol_deg)
+            pushing_upper = target_deg > max(upper_limit_deg + push_tol_deg, current_deg + push_tol_deg)
+            pushing_lower = target_deg < min(lower_limit_deg - push_tol_deg, current_deg - push_tol_deg)
+            if pinned_upper and pushing_upper:
+                self.limit_push_freeze_streak += 1
+                return {
+                    "active": True,
+                    "source": "output_freeze",
+                    "source_label": "Output freeze",
+                    "severity": "critical",
+                    "reasons": [
+                        "Joint is pinned at its upper limit while IK keeps pushing farther",
+                        f"Freeze triggered after {self.limit_push_freeze_streak} consecutive limit-push frames",
+                    ],
+                    "recommendations": ["Press A to reset and re-anchor"],
+                    "joint_name": joint_name,
+                    "joint_index": index,
+                    "current_joint_deg": current_deg,
+                    "target_joint_deg": target_deg,
+                    "lower_limit_deg": lower_limit_deg,
+                    "upper_limit_deg": upper_limit_deg,
+                    "freeze_trigger": "upper_limit_push",
+                    "consecutive_frames": self.limit_push_freeze_streak,
+                }
+            if pinned_lower and pushing_lower:
+                self.limit_push_freeze_streak += 1
+                return {
+                    "active": True,
+                    "source": "output_freeze",
+                    "source_label": "Output freeze",
+                    "severity": "critical",
+                    "reasons": [
+                        "Joint is pinned at its lower limit while IK keeps pushing farther",
+                        f"Freeze triggered after {self.limit_push_freeze_streak} consecutive limit-push frames",
+                    ],
+                    "recommendations": ["Press A to reset and re-anchor"],
+                    "joint_name": joint_name,
+                    "joint_index": index,
+                    "current_joint_deg": current_deg,
+                    "target_joint_deg": target_deg,
+                    "lower_limit_deg": lower_limit_deg,
+                    "upper_limit_deg": upper_limit_deg,
+                    "freeze_trigger": "lower_limit_push",
+                    "consecutive_frames": self.limit_push_freeze_streak,
+                }
+        self.limit_push_freeze_streak = 0
+        return None
 
     def _solve_stage_differential_ik(
         self,
@@ -631,6 +713,23 @@ class HopeJrSimIkController:
             current_stage_joint_positions_deg=current_stage_joint_positions_deg,
             solved_stage_joint_targets_deg=solved_joint_targets_deg,
         )
+        limit_push_freeze = self._check_limit_push_freeze(
+            current_stage_joint_positions_deg=current_stage_joint_positions_deg,
+            proposed_joint_targets_deg=solved_joint_targets_deg,
+        )
+        if self.limit_push_freeze_active:
+            limit_push_freeze = self.limit_push_freeze_payload
+        elif limit_push_freeze is not None and int(limit_push_freeze.get("consecutive_frames", 0)) >= self.limit_push_freeze_consecutive_frames:
+            self.limit_push_freeze_active = True
+            self.limit_push_freeze_payload = dict(limit_push_freeze)
+            limit_push_freeze = self.limit_push_freeze_payload
+        if self.limit_push_freeze_active:
+            if self.last_commanded_stage_joint_targets_deg is not None:
+                solved_joint_targets_deg = np.asarray(self.last_commanded_stage_joint_targets_deg, dtype=float).copy()
+            elif current_stage_joint_positions_deg is not None:
+                solved_joint_targets_deg = np.asarray(current_stage_joint_positions_deg, dtype=float).copy()
+            if limit_push_freeze is None:
+                limit_push_freeze = self.limit_push_freeze_payload
         conditioning_result = self.joint_target_conditioner.condition(
             reference_joint_positions_deg=current_stage_joint_positions_deg,
             proposed_joint_targets_deg=solved_joint_targets_deg,
@@ -689,6 +788,9 @@ class HopeJrSimIkController:
         all_advisories = [heuristic_safety_advisory, joint_limit_safety_advisory]
         severity_rank = {"ok": 0, "warn": 1, "critical": 2}
         active_advisory = max(all_advisories, key=lambda item: severity_rank.get(str(item.get("severity", "ok")), 0))
+        if limit_push_freeze is not None:
+            active_advisory = dict(limit_push_freeze)
+            all_advisories = [active_advisory, *all_advisories]
         teleop_safety_advisory = {
             "active": active_advisory,
             "all": all_advisories,
@@ -719,6 +821,7 @@ class HopeJrSimIkController:
                 "unclipped_joint_targets_deg": conditioning_result.unclipped_targets_deg.tolist(),
                 "conditioned_joint_targets_deg": conditioning_result.conditioned_targets_deg.tolist(),
             },
+            "output_freeze": limit_push_freeze,
             "joint_control_profile": self.position_only_joint_control_profile if self.position_only else "all_solve_v1",
             "joint_control_modes": joint_control_modes,
             "stage_dls_debug": stage_dls_debug,
@@ -742,7 +845,7 @@ class HopeJrSimIkController:
         }
         hand_position = np.asarray(hand_state.get("position", [0.0, 0.0, 0.0]), dtype=float)
         event_payload = {
-            "status": "applied" if stage is not None else "solved",
+            "status": "frozen" if self.limit_push_freeze_active else ("applied" if stage is not None else "solved"),
                 "packet_timestamp": packet_timestamp,
                 "position_only": self.position_only,
                 "quest_position_axes": list(self.teleop_mapper.quest_position_axes),
@@ -755,6 +858,7 @@ class HopeJrSimIkController:
                 "mapped_delta": None if map_result.mapped_delta_model is None else map_result.mapped_delta_model.tolist(),
                 "current_joint_targets_deg": current_joint_targets_deg.tolist(),
                     "stage_error_score": stage_error_score,
+                "output_freeze": limit_push_freeze,
                 "teleop_safety_advisory": teleop_safety_advisory,
                 "result": result,
             }
@@ -824,6 +928,13 @@ class HopeJrIsaacUpdateLoop:
                 return
 
             if result is not None:
+                if status == "frozen":
+                    joint_name = ((debug_payload.get("output_freeze") or {}).get("joint_name") or "?")
+                    if self._last_status != "frozen":
+                        print(f"Hope Jr teleop: output frozen on {joint_name}; press A to reset")
+                    self._last_status = "frozen"
+                    self._last_wait_seconds = None
+                    return
                 if result.get("status") == "reset_to_neutral":
                     print("Hope Jr teleop: reset to neutral")
                     self._last_status = "reset_to_neutral"
