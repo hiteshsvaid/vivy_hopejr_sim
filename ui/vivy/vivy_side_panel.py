@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 
-class HopeJrFanoutSidePanel:
+class VivySidePanel:
     _TEXT_NEUTRAL = 0xFFB8B8B8
 
     def __init__(self, *, width: int = 420, height: int = 240):
@@ -22,7 +22,7 @@ class HopeJrFanoutSidePanel:
             workspace = ui_module.Workspace
             right_target = workspace.get_window("Hope Jr Side") or workspace.get_window("Stage")
             if right_target is not None:
-                ui_module.Workspace.show_window("Hope Jr Quest", True)
+                ui_module.Workspace.show_window("Vivy Quest", True)
                 self._window.dock_in(right_target, ui_module.DockPosition.SAME)
                 try:
                     self._window.focus()
@@ -40,7 +40,7 @@ class HopeJrFanoutSidePanel:
         except ImportError:
             return
 
-        self._window = ui.Window("Hope Jr Quest", width=self.width, height=self.height)
+        self._window = ui.Window("Vivy Quest", width=self.width, height=self.height)
         try:
             self._window.focus()
         except Exception:

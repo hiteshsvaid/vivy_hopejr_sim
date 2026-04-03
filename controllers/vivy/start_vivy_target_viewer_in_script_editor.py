@@ -1,8 +1,8 @@
 import importlib.util
 import sys
 
-module_name = "hope_jr_fanout_target_viewer"
-path = "/home/viaan/vivy_hopejr_sim/controllers/hope_jr_fanout_target_viewer.py"
+module_name = "vivy_target_viewer"
+path = "/home/viaan/vivy_hopejr_sim/controllers/vivy/vivy_target_viewer.py"
 
 old_module = sys.modules.get(module_name)
 if old_module is not None and hasattr(old_module, "stop_script_editor_loop"):
