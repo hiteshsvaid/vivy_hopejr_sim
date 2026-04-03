@@ -88,11 +88,14 @@ class VivyTargetViewer:
         controller_defaults = dict(self.sim_config.get("controller_defaults") or {})
         self.end_effector_path = controller_defaults.get("end_effector_path", "/World/JointTest/PalmBody/EndEffector")
         self.teleop_debug_root = controller_defaults.get("teleop_debug_root", "/World/JointTest/TeleopDebug")
+        self.world_offset = np.asarray(controller_defaults.get("world_offset", [0.0, 0.0, 0.0]), dtype=float)
         joint_names = list(self.sim_config["joint_names"])
         neutral_deg = np.asarray([float(self.sim_config["joints"][name]["neutral_deg"]) for name in joint_names], dtype=float)
         self.kinematics = VivyArmKinematics.from_json(SIM_CONFIG_PATH)
         self.model_neutral_pose = self.kinematics.forward_kinematics(neutral_deg)
         self.model_to_stage_transform = np.eye(4)
+        self._stage_anchor_pose = None
+        self._last_waiting_for_anchor = True
         TeleopDebugVisuals = _load_visuals_class()
         VivySidePanel = _load_side_panel_class()
         VivyFlowPanel = _load_flow_panel_class()
@@ -162,15 +165,28 @@ class VivyTargetViewer:
         except Exception:
             pass
 
+        waiting_for_anchor = bool(payload.get("waiting_for_anchor", True))
+        if waiting_for_anchor:
+            self._stage_anchor_pose = None
+        elif self._stage_anchor_pose is None or self._last_waiting_for_anchor:
+            self._stage_anchor_pose = stage_pose.copy()
+        self._last_waiting_for_anchor = waiting_for_anchor
+
         signal_timestamp = payload.get("timestamp")
         if signal_timestamp == self._last_signal_timestamp:
             return
         self._last_signal_timestamp = signal_timestamp
 
         target_pose_model = payload.get("target_pose_model")
-        waiting_for_anchor = bool(payload.get("waiting_for_anchor", True))
         if target_pose_model is None:
             target_pose_stage = stage_pose
+        elif self._stage_anchor_pose is not None and payload.get("position_delta_world") is not None:
+            target_pose_stage = self._stage_anchor_pose.copy()
+            target_pose_stage[:3, 3] = (
+                self._stage_anchor_pose[:3, 3]
+                + np.asarray(payload.get("position_delta_world"), dtype=float)
+                + self.world_offset
+            )
         else:
             target_pose_stage = self.model_to_stage_transform @ np.asarray(target_pose_model, dtype=float)
 

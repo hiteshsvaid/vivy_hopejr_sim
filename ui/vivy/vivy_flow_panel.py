@@ -23,7 +23,13 @@ class VivyFlowPanel:
         "quest": ["processor"],
         "processor": ["teleop_state"],
         "teleop_state": ["ik", "sim"],
-        "ik": ["fanout"],
+        "ik": ["quest_anchor_capture"],
+        "quest_anchor_capture": ["anchor_delta"],
+        "anchor_delta": ["deadband"],
+        "deadband": ["axis_remap"],
+        "axis_remap": ["world_transform"],
+        "world_transform": ["target_pose"],
+        "target_pose": ["fanout"],
         "fanout": ["real", "log"],
         "sim": [],
         "real": [],
@@ -36,7 +42,13 @@ class VivyFlowPanel:
         "teleop_state": "processor",
         "ik": "teleop_state",
         "sim": "teleop_state",
-        "fanout": "ik",
+        "quest_anchor_capture": "ik",
+        "anchor_delta": "quest_anchor_capture",
+        "deadband": "anchor_delta",
+        "axis_remap": "deadband",
+        "world_transform": "axis_remap",
+        "target_pose": "world_transform",
+        "fanout": "target_pose",
         "real": "fanout",
         "log": "fanout",
     }
@@ -48,9 +60,15 @@ class VivyFlowPanel:
         "teleop_state": 3,
         "ik": 4,
         "sim": 4,
-        "fanout": 5,
-        "real": 6,
-        "log": 6,
+        "quest_anchor_capture": 5,
+        "anchor_delta": 6,
+        "deadband": 7,
+        "axis_remap": 8,
+        "world_transform": 9,
+        "target_pose": 10,
+        "fanout": 11,
+        "real": 12,
+        "log": 12,
     }
 
     def __init__(self, *, width: int = 420, height: int = 320):
@@ -162,7 +180,23 @@ class VivyFlowPanel:
                 with ui.VStack(spacing=6, height=0):
                     header_style = {"color": self._TEXT_HEADER, "font_size": 15}
                     ui.Label("Vivy Teleop", style=header_style)
-                    for key in ["root", "quest", "processor", "teleop_state", "ik", "fanout", "real", "log", "sim"]:
+                    for key in [
+                        "root",
+                        "quest",
+                        "processor",
+                        "teleop_state",
+                        "ik",
+                        "quest_anchor_capture",
+                        "anchor_delta",
+                        "deadband",
+                        "axis_remap",
+                        "world_transform",
+                        "target_pose",
+                        "fanout",
+                        "real",
+                        "log",
+                        "sim",
+                    ]:
                         self._row(ui, key)
         self._dock_window(ui)
 
@@ -234,6 +268,12 @@ class VivyFlowPanel:
         self._set_row("processor", "quest_signal_processor", "active" if source_active else "inactive", selected == "processor", flow_state)
         self._set_row("teleop_state", "Teleop State", "active" if state_active or source_active else "inactive", selected == "teleop_state", flow_state)
         self._set_row("ik", "IK  (quest_ik_arm)", "warn" if freeze_active else ("active" if target == "real" else "inactive"), selected == "ik", flow_state)
+        self._set_row("quest_anchor_capture", "anchor capture", "active" if target == "real" else "inactive", selected == "quest_anchor_capture", flow_state)
+        self._set_row("anchor_delta", "anchor-relative delta", "active" if target == "real" else "inactive", selected == "anchor_delta", flow_state)
+        self._set_row("deadband", "deadband", "active" if target == "real" else "inactive", selected == "deadband", flow_state)
+        self._set_row("axis_remap", "axis/sign remap", "active" if target == "real" else "inactive", selected == "axis_remap", flow_state)
+        self._set_row("world_transform", "world transform", "active" if target == "real" else "inactive", selected == "world_transform", flow_state)
+        self._set_row("target_pose", "target pose", "active" if state_active or target == "real" else "inactive", selected == "target_pose", flow_state)
         self._set_row("fanout", "fanout_target_arm", "warn" if freeze_active else ("active" if target == "real" else "inactive"), selected == "fanout", flow_state)
         self._set_row("real", "Real Arm", "warn" if freeze_active else ("active" if robot_branch_active else "inactive"), selected == "real", flow_state)
         self._set_row("log", "Log Sink", "active" if log_branch_active else "inactive", selected == "log", flow_state)
