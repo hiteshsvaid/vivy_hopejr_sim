@@ -295,6 +295,17 @@ class HopeJrTeleopSidePanel:
         self._labels["advisory_limits"].text = advisory_limits
         self._labels["advisory_reasons"].text = advisory_reasons
         self._labels["advisory_recommendations"].text = advisory_recommendations
+        advisory_color = self._TEXT_CRITICAL if str(active_advisory.get("severity", "")).lower() == "critical" else self._TEXT_NEUTRAL
+        for key in (
+            "advisory_source",
+            "advisory_severity",
+            "advisory_joint",
+            "advisory_angles",
+            "advisory_limits",
+            "advisory_reasons",
+            "advisory_recommendations",
+        ):
+            self._set_label_color(self._labels[key], advisory_color)
 
         for idx in range(7):
             row = joint_rows[idx] if idx < len(joint_rows) else {

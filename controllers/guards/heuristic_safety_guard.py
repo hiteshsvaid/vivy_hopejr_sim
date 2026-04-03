@@ -8,7 +8,6 @@ import numpy as np
 
 @dataclass(frozen=True)
 class HeuristicSafetyGuardConfig:
-    profile_name: str
     forward_mapped_delta_warn_m: float
     forward_mapped_delta_critical_m: float
     end_effector_error_warn_m: float
@@ -17,28 +16,31 @@ class HeuristicSafetyGuardConfig:
     joint_step_critical_deg: float
 
 
-GUARD_PROFILES: dict[str, HeuristicSafetyGuardConfig] = {
-    "heuristic_guard_v1": HeuristicSafetyGuardConfig(
-        profile_name="heuristic_guard_v1",
-        forward_mapped_delta_warn_m=0.10,
-        forward_mapped_delta_critical_m=0.20,
-        end_effector_error_warn_m=0.10,
-        end_effector_error_critical_m=0.12,
-        joint_step_warn_deg=6.0,
-        joint_step_critical_deg=8.0,
-    ),
-}
-
-DEFAULT_HEURISTIC_GUARD_PROFILE = "heuristic_guard_v1"
+DEFAULT_HEURISTIC_GUARD_CONFIG = HeuristicSafetyGuardConfig(
+    forward_mapped_delta_warn_m=0.10,
+    forward_mapped_delta_critical_m=0.20,
+    end_effector_error_warn_m=0.10,
+    end_effector_error_critical_m=0.12,
+    joint_step_warn_deg=6.0,
+    joint_step_critical_deg=8.0,
+)
 
 
 class HeuristicSafetyGuard:
-    def __init__(self, profile_name: str = DEFAULT_HEURISTIC_GUARD_PROFILE) -> None:
-        if profile_name not in GUARD_PROFILES:
-            raise ValueError(
-                f"Unknown heuristic safety guard profile '{profile_name}'. Available: {sorted(GUARD_PROFILES)}"
+    def __init__(self, config: HeuristicSafetyGuardConfig | dict[str, float] | None = None) -> None:
+        if config is None:
+            self.config = DEFAULT_HEURISTIC_GUARD_CONFIG
+        elif isinstance(config, HeuristicSafetyGuardConfig):
+            self.config = config
+        else:
+            self.config = HeuristicSafetyGuardConfig(
+                forward_mapped_delta_warn_m=float(config["forward_mapped_delta_warn_m"]),
+                forward_mapped_delta_critical_m=float(config["forward_mapped_delta_critical_m"]),
+                end_effector_error_warn_m=float(config["end_effector_error_warn_m"]),
+                end_effector_error_critical_m=float(config["end_effector_error_critical_m"]),
+                joint_step_warn_deg=float(config["joint_step_warn_deg"]),
+                joint_step_critical_deg=float(config["joint_step_critical_deg"]),
             )
-        self.config = GUARD_PROFILES[profile_name]
 
     def evaluate(
         self,
@@ -101,7 +103,6 @@ class HeuristicSafetyGuard:
         return {
             "source": "heuristic",
             "source_label": "Heuristic guard",
-            "profile": self.config.profile_name,
             "severity": severity,
             "reasons": reasons,
             "recommendations": recommendations,

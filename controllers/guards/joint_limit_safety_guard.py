@@ -8,31 +8,30 @@ import numpy as np
 
 @dataclass(frozen=True)
 class JointLimitSafetyGuardConfig:
-    profile_name: str
     soft_margin_deg: float
     warn_margin_deg: float
     critical_margin_deg: float
 
 
-GUARD_PROFILES: dict[str, JointLimitSafetyGuardConfig] = {
-    "joint_limit_guard_v1": JointLimitSafetyGuardConfig(
-        profile_name="joint_limit_guard_v1",
-        soft_margin_deg=3.0,
-        warn_margin_deg=3.0,
-        critical_margin_deg=1.0,
-    ),
-}
-
-DEFAULT_JOINT_LIMIT_GUARD_PROFILE = "joint_limit_guard_v1"
+DEFAULT_JOINT_LIMIT_GUARD_CONFIG = JointLimitSafetyGuardConfig(
+    soft_margin_deg=3.0,
+    warn_margin_deg=3.0,
+    critical_margin_deg=1.0,
+)
 
 
 class JointLimitSafetyGuard:
-    def __init__(self, profile_name: str = DEFAULT_JOINT_LIMIT_GUARD_PROFILE) -> None:
-        if profile_name not in GUARD_PROFILES:
-            raise ValueError(
-                f"Unknown joint limit safety guard profile '{profile_name}'. Available: {sorted(GUARD_PROFILES)}"
+    def __init__(self, config: JointLimitSafetyGuardConfig | dict[str, float] | None = None) -> None:
+        if config is None:
+            self.config = DEFAULT_JOINT_LIMIT_GUARD_CONFIG
+        elif isinstance(config, JointLimitSafetyGuardConfig):
+            self.config = config
+        else:
+            self.config = JointLimitSafetyGuardConfig(
+                soft_margin_deg=float(config["soft_margin_deg"]),
+                warn_margin_deg=float(config["warn_margin_deg"]),
+                critical_margin_deg=float(config["critical_margin_deg"]),
             )
-        self.config = GUARD_PROFILES[profile_name]
 
     def evaluate(
         self,
@@ -46,7 +45,6 @@ class JointLimitSafetyGuard:
             return {
                 "source": "joint_limit",
                 "source_label": "Joint-limit guard",
-                "profile": self.config.profile_name,
                 "severity": "ok",
                 "reasons": [],
                 "recommendations": [],
@@ -107,7 +105,6 @@ class JointLimitSafetyGuard:
         return {
             "source": "joint_limit",
             "source_label": "Joint-limit guard",
-            "profile": self.config.profile_name,
             "severity": severity,
             "reasons": sorted(set(reasons)),
             "recommendations": sorted(set(recommendations)),
