@@ -11,9 +11,12 @@ import numpy as np
 
 SIM_CONFIG_PATH = Path("/home/viaan/huggingface/lerobot/src/lerobot/robots/vivy/vivy_global_config.json")
 KINEMATICS_PATH = Path("/home/viaan/huggingface/lerobot/src/lerobot/robots/vivy/vivy_arm_kinematics.py")
-SHARED_SIGNAL_PATH = Path("/home/viaan/huggingface/lerobot/src/lerobot/robots/vivy/fanout/shared_target_signal.py")
+TELEOP_STATE_PATH = Path("/home/viaan/huggingface/lerobot/src/lerobot/robots/vivy/fanout/teleop_state.py")
 TELEOP_DEBUG_VISUALS_PATH = Path("/home/viaan/vivy_hopejr_sim/ui/teleop_debug_visuals.py")
 VIVY_SIDE_PANEL_PATH = Path("/home/viaan/vivy_hopejr_sim/ui/vivy/vivy_side_panel.py")
+VIVY_FLOW_PANEL_PATH = Path("/home/viaan/vivy_hopejr_sim/ui/vivy/vivy_flow_panel.py")
+VIVY_FLOW_DETAIL_PANEL_PATH = Path("/home/viaan/vivy_hopejr_sim/ui/vivy/vivy_flow_detail_panel.py")
+FLOW_CONTROL_PATH = Path("/tmp/vivy_flow_control.json")
 
 _ACTIVE_LOOP = None
 
@@ -37,8 +40,8 @@ def _load_kinematics_class():
 
 
 def _load_shared_signal_helpers():
-    module = _load_module("vivy_target_viewer_shared_signal", SHARED_SIGNAL_PATH)
-    return module.DEFAULT_SHARED_TARGET_SIGNAL_PATH, module.read_shared_target_signal
+    module = _load_module("vivy_target_viewer_teleop_state", TELEOP_STATE_PATH)
+    return module.DEFAULT_TELEOP_STATE_PATH, module.read_teleop_state
 
 
 def _load_visuals_class():
@@ -51,11 +54,30 @@ def _load_side_panel_class():
     return module.VivySidePanel
 
 
+def _load_flow_panel_class():
+    module = _load_module("vivy_flow_panel", VIVY_FLOW_PANEL_PATH)
+    return module.VivyFlowPanel
+
+
+def _load_flow_detail_panel_class():
+    module = _load_module("vivy_flow_detail_panel", VIVY_FLOW_DETAIL_PANEL_PATH)
+    return module.VivyFlowDetailPanel
+
+
+def _read_flow_control(path: Path = FLOW_CONTROL_PATH) -> dict:
+    if not path.exists():
+        return {}
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+
+
 class VivyTargetViewer:
     def __init__(self, *, signal_path: str | Path | None = None, interval_s: float = 0.05):
-        default_signal_path, read_shared_target_signal = _load_shared_signal_helpers()
+        default_signal_path, read_teleop_state = _load_shared_signal_helpers()
         VivyArmKinematics = _load_kinematics_class()
-        self._read_shared_target_signal = read_shared_target_signal
+        self._read_teleop_state = read_teleop_state
         self.signal_path = Path(default_signal_path if signal_path is None else signal_path)
         self.interval_s = float(interval_s)
         self._last_tick_time = 0.0
@@ -73,8 +95,12 @@ class VivyTargetViewer:
         self.model_to_stage_transform = np.eye(4)
         TeleopDebugVisuals = _load_visuals_class()
         VivySidePanel = _load_side_panel_class()
+        VivyFlowPanel = _load_flow_panel_class()
+        VivyFlowDetailPanel = _load_flow_detail_panel_class()
         self.visuals = TeleopDebugVisuals(teleop_debug_root=self.teleop_debug_root, enabled=True)
         self.side_panel = VivySidePanel()
+        self.flow_panel = VivyFlowPanel()
+        self.flow_detail_panel = VivyFlowDetailPanel()
 
     def _read_stage(self):
         import omni.usd
@@ -119,11 +145,20 @@ class VivyTargetViewer:
         if stage is None or stage_pose is None:
             return
 
-        payload = self._read_shared_target_signal(self.signal_path)
+        payload = self._read_teleop_state(self.signal_path)
         if not isinstance(payload, dict):
             return
+        flow_control = _read_flow_control()
         try:
             self.side_panel.update(payload)
+        except Exception:
+            pass
+        try:
+            self.flow_panel.update(payload, flow_control)
+        except Exception:
+            pass
+        try:
+            self.flow_detail_panel.update(payload, flow_control)
         except Exception:
             pass
 
@@ -140,6 +175,7 @@ class VivyTargetViewer:
             target_pose_stage = self.model_to_stage_transform @ np.asarray(target_pose_model, dtype=float)
 
         sim_target_position = np.asarray(target_pose_stage[:3, 3], dtype=float)
+        self.visuals.enabled = bool(flow_control.get("sim_view_enabled", True))
         self.visuals.update(
             stage,
             quest_anchor_position=np.asarray(payload.get("quest_anchor_position") or [0.0, 0.0, 0.0], dtype=float),
