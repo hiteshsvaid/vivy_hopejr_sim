@@ -13,6 +13,7 @@ SIM_CONFIG_PATH = Path("/home/viaan/huggingface/lerobot/src/lerobot/robots/hope_
 KINEMATICS_PATH = Path("/home/viaan/huggingface/lerobot/src/lerobot/robots/hope_jr/hope_jr_arm_kinematics.py")
 SHARED_SIGNAL_PATH = Path("/home/viaan/huggingface/lerobot/src/lerobot/robots/hope_jr/fanout/shared_target_signal.py")
 TELEOP_DEBUG_VISUALS_PATH = Path("/home/viaan/vivy_hopejr_sim/ui/teleop_debug_visuals.py")
+FANOUT_SIDE_PANEL_PATH = Path("/home/viaan/vivy_hopejr_sim/ui/hope_jr_fanout_side_panel.py")
 
 _ACTIVE_LOOP = None
 
@@ -45,6 +46,11 @@ def _load_visuals_class():
     return module.TeleopDebugVisuals
 
 
+def _load_side_panel_class():
+    module = _load_module("hope_jr_fanout_side_panel", FANOUT_SIDE_PANEL_PATH)
+    return module.HopeJrFanoutSidePanel
+
+
 class HopeJrFanoutTargetViewer:
     def __init__(self, *, signal_path: str | Path | None = None, interval_s: float = 0.05):
         default_signal_path, read_shared_target_signal = _load_shared_signal_helpers()
@@ -66,7 +72,9 @@ class HopeJrFanoutTargetViewer:
         self.model_neutral_pose = self.kinematics.forward_kinematics(neutral_deg)
         self.model_to_stage_transform = np.eye(4)
         TeleopDebugVisuals = _load_visuals_class()
+        HopeJrFanoutSidePanel = _load_side_panel_class()
         self.visuals = TeleopDebugVisuals(teleop_debug_root=self.teleop_debug_root, enabled=True)
+        self.side_panel = HopeJrFanoutSidePanel()
 
     def _read_stage(self):
         import omni.usd
@@ -114,6 +122,10 @@ class HopeJrFanoutTargetViewer:
         payload = self._read_shared_target_signal(self.signal_path)
         if not isinstance(payload, dict):
             return
+        try:
+            self.side_panel.update(payload)
+        except Exception:
+            pass
 
         signal_timestamp = payload.get("timestamp")
         if signal_timestamp == self._last_signal_timestamp:
