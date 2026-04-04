@@ -50,6 +50,9 @@ class VivySidePanel:
                 with ui.VStack(spacing=6, height=0):
                     section_style = {"color": 0xFFD8D8D8, "font_size": 13}
                     value_style = {"color": self._TEXT_NEUTRAL, "font_size": 13}
+                    joint_value_style = {"color": self._TEXT_NEUTRAL, "font_size": 12}
+                    header_style = {"color": 0xFFD8D8D8, "font_size": 12}
+                    joint_name_style = {"color": 0xFFD8D8D8, "font_size": 12}
 
                     ui.Label("QUEST", style=section_style)
                     with ui.VGrid(column_count=2, column_widths=[110, 0], row_height=22):
@@ -74,19 +77,23 @@ class VivySidePanel:
 
                     ui.Spacer(height=4)
                     ui.Label("JOINTS", style=section_style)
-                    with ui.VGrid(column_count=5, column_widths=[170, 70, 70, 55, 35], row_height=22):
-                        header_style = {"color": 0xFFD8D8D8, "font_size": 13}
-                        ui.Label("JOINT", style=header_style)
-                        ui.Label("TGT_DEG", style=header_style)
+                    with ui.VGrid(column_count=6, column_widths=[45, 45, 45, 50, 45, 20], row_height=20):
+                        ui.Label("MIN", style=header_style)
+                        ui.Label("TGT", style=header_style)
+                        ui.Label("MAX", style=header_style)
                         ui.Label("NORM", style=header_style)
                         ui.Label("MODE", style=header_style)
-                        ui.Label("FLAG", style=header_style)
-                        for index in range(7):
-                            self._labels[f"joint_name_{index}"] = ui.Label("", style=value_style)
-                            self._labels[f"joint_target_deg_{index}"] = ui.Label("", style=value_style)
-                            self._labels[f"joint_norm_{index}"] = ui.Label("", style=value_style)
-                            self._labels[f"joint_mode_{index}"] = ui.Label("", style=value_style)
-                            self._labels[f"joint_flag_{index}"] = ui.Label("", style=value_style)
+                        ui.Label("F", style=header_style)
+                    for index in range(7):
+                        with ui.VStack(spacing=2):
+                            self._labels[f"joint_name_{index}"] = ui.Label("", style=joint_name_style)
+                            with ui.VGrid(column_count=6, column_widths=[45, 45, 45, 50, 45, 20], row_height=20):
+                                self._labels[f"joint_min_deg_{index}"] = ui.Label("", style=joint_value_style)
+                                self._labels[f"joint_target_deg_{index}"] = ui.Label("", style=joint_value_style)
+                                self._labels[f"joint_max_deg_{index}"] = ui.Label("", style=joint_value_style)
+                                self._labels[f"joint_norm_{index}"] = ui.Label("", style=joint_value_style)
+                                self._labels[f"joint_mode_{index}"] = ui.Label("", style=joint_value_style)
+                                self._labels[f"joint_flag_{index}"] = ui.Label("", style=joint_value_style)
         self._dock_window(ui)
 
     @staticmethod
@@ -127,14 +134,18 @@ class VivySidePanel:
         rows = payload.get("joint_display_rows") or []
         for index in range(7):
             self._labels[f"joint_name_{index}"].text = ""
+            self._labels[f"joint_min_deg_{index}"].text = ""
             self._labels[f"joint_target_deg_{index}"].text = ""
+            self._labels[f"joint_max_deg_{index}"].text = ""
             self._labels[f"joint_norm_{index}"].text = ""
             self._labels[f"joint_mode_{index}"].text = ""
             self._labels[f"joint_flag_{index}"].text = ""
             if index < len(rows):
                 row = rows[index]
                 self._labels[f"joint_name_{index}"].text = str(row.get("joint") or "")
+                self._labels[f"joint_min_deg_{index}"].text = str(row.get("min_deg") or "").strip()
                 self._labels[f"joint_target_deg_{index}"].text = str(row.get("target_deg") or "").strip()
+                self._labels[f"joint_max_deg_{index}"].text = str(row.get("max_deg") or "").strip()
                 self._labels[f"joint_norm_{index}"].text = str(row.get("norm") or "").strip()
                 self._labels[f"joint_mode_{index}"].text = str(row.get("mode") or "")
                 self._labels[f"joint_flag_{index}"].text = str(row.get("freeze") or "")
