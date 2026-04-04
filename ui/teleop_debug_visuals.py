@@ -5,6 +5,11 @@ from __future__ import annotations
 import numpy as np
 from scipy.spatial.transform import Rotation
 
+try:
+    from isaacsim.core.api.objects.ground_plane import GroundPlane
+except ImportError:
+    GroundPlane = None
+
 
 class TeleopDebugVisuals:
     def __init__(self, *, teleop_debug_root: str, enabled: bool = True):
@@ -68,115 +73,19 @@ class TeleopDebugVisuals:
             self._set_orient(prim, sdf, gf, quat_wxyz)
             self._set_order(prim, ["xformOp:orient"])
 
+    def _ensure_ground_plane(self) -> None:
+        if GroundPlane is None:
+            return
+        try:
+            GroundPlane(prim_path="/World/GroundPlane", z_position=-0.65)
+        except Exception:
+            pass
+
     def _define_scene_backdrop(self, stage, usd_geom, sdf, gf, reference_position) -> None:
         root_path = "/World/TeleopBackdrop"
-        root = stage.DefinePrim(root_path, "Xform")
-        anchor = np.asarray(reference_position, dtype=float)
-        backdrop_origin = anchor + np.array([0.16, 0.0, -0.09], dtype=float)
-        self._set_translate(root, sdf, gf, backdrop_origin)
-        self._set_order(root, ["xformOp:translate"])
-
-        wall = usd_geom.Cube.Define(stage, f"{root_path}/Wall")
-        wall_prim = wall.GetPrim()
-        wall.GetSizeAttr().Set(1.0)
-        self._set_display_color(wall_prim, sdf, gf, (0.72, 0.72, 0.72))
-        wall_translate = wall_prim.GetAttribute("xformOp:translate")
-        if not wall_translate.IsValid():
-            wall_translate = wall_prim.CreateAttribute("xformOp:translate", sdf.ValueTypeNames.Double3)
-        wall_translate.Set(gf.Vec3d(0.06, 0.0, 0.12))
-        wall_scale = wall_prim.GetAttribute("xformOp:scale")
-        if not wall_scale.IsValid():
-            wall_scale = wall_prim.CreateAttribute("xformOp:scale", sdf.ValueTypeNames.Double3)
-        wall_scale.Set(gf.Vec3d(0.004, 0.48, 0.32))
-        self._set_order(wall_prim, ["xformOp:translate", "xformOp:scale"])
-
-        wall_grid_root_path = f"{root_path}/WallGrid"
-        wall_grid_root = stage.DefinePrim(wall_grid_root_path, "Xform")
-        self._set_order(wall_grid_root, [])
-
-        wall_y_positions = (-0.20, -0.10, 0.0, 0.10, 0.20)
-        wall_z_positions = (-0.12, -0.04, 0.04, 0.12)
-
-        for idx, y in enumerate(wall_y_positions):
-            line = usd_geom.Cube.Define(stage, f"{wall_grid_root_path}/Vertical{idx}")
-            prim = line.GetPrim()
-            line.GetSizeAttr().Set(1.0)
-            self._set_display_color(prim, sdf, gf, (0.92, 0.92, 0.92) if y == 0.0 else (0.80, 0.80, 0.80))
-            translate = prim.GetAttribute("xformOp:translate")
-            if not translate.IsValid():
-                translate = prim.CreateAttribute("xformOp:translate", sdf.ValueTypeNames.Double3)
-            translate.Set(gf.Vec3d(0.058, float(y), 0.12))
-            scale = prim.GetAttribute("xformOp:scale")
-            if not scale.IsValid():
-                scale = prim.CreateAttribute("xformOp:scale", sdf.ValueTypeNames.Double3)
-            scale.Set(gf.Vec3d(0.001, 0.0012, 0.16))
-            self._set_order(prim, ["xformOp:translate", "xformOp:scale"])
-
-        for idx, z in enumerate(wall_z_positions):
-            line = usd_geom.Cube.Define(stage, f"{wall_grid_root_path}/Horizontal{idx}")
-            prim = line.GetPrim()
-            line.GetSizeAttr().Set(1.0)
-            self._set_display_color(prim, sdf, gf, (0.92, 0.92, 0.92) if abs(z - 0.04) < 1e-9 else (0.80, 0.80, 0.80))
-            translate = prim.GetAttribute("xformOp:translate")
-            if not translate.IsValid():
-                translate = prim.CreateAttribute("xformOp:translate", sdf.ValueTypeNames.Double3)
-            translate.Set(gf.Vec3d(0.058, 0.0, float(z) + 0.12))
-            scale = prim.GetAttribute("xformOp:scale")
-            if not scale.IsValid():
-                scale = prim.CreateAttribute("xformOp:scale", sdf.ValueTypeNames.Double3)
-            scale.Set(gf.Vec3d(0.001, 0.24, 0.0012))
-            self._set_order(prim, ["xformOp:translate", "xformOp:scale"])
-
-        floor = usd_geom.Cube.Define(stage, f"{root_path}/Floor")
-        floor_prim = floor.GetPrim()
-        floor.GetSizeAttr().Set(1.0)
-        self._set_display_color(floor_prim, sdf, gf, (0.58, 0.58, 0.58))
-        floor_translate = floor_prim.GetAttribute("xformOp:translate")
-        if not floor_translate.IsValid():
-            floor_translate = floor_prim.CreateAttribute("xformOp:translate", sdf.ValueTypeNames.Double3)
-        floor_translate.Set(gf.Vec3d(-0.10, 0.0, -0.04))
-        floor_scale = floor_prim.GetAttribute("xformOp:scale")
-        if not floor_scale.IsValid():
-            floor_scale = floor_prim.CreateAttribute("xformOp:scale", sdf.ValueTypeNames.Double3)
-        floor_scale.Set(gf.Vec3d(0.56, 0.44, 0.004))
-        self._set_order(floor_prim, ["xformOp:translate", "xformOp:scale"])
-
-        grid_root_path = f"{root_path}/FloorGrid"
-        grid_root = stage.DefinePrim(grid_root_path, "Xform")
-        self._set_order(grid_root, [])
-
-        x_positions = (-0.38, -0.24, -0.10, 0.04, 0.18)
-        y_positions = (-0.20, -0.10, 0.0, 0.10, 0.20)
-
-        for idx, x in enumerate(x_positions):
-            line = usd_geom.Cube.Define(stage, f"{grid_root_path}/XLine{idx}")
-            prim = line.GetPrim()
-            line.GetSizeAttr().Set(1.0)
-            self._set_display_color(prim, sdf, gf, (0.90, 0.90, 0.90) if x == -0.10 else (0.78, 0.78, 0.78))
-            translate = prim.GetAttribute("xformOp:translate")
-            if not translate.IsValid():
-                translate = prim.CreateAttribute("xformOp:translate", sdf.ValueTypeNames.Double3)
-            translate.Set(gf.Vec3d(float(x), 0.0, -0.036))
-            scale = prim.GetAttribute("xformOp:scale")
-            if not scale.IsValid():
-                scale = prim.CreateAttribute("xformOp:scale", sdf.ValueTypeNames.Double3)
-            scale.Set(gf.Vec3d(0.0015, 0.44, 0.0015))
-            self._set_order(prim, ["xformOp:translate", "xformOp:scale"])
-
-        for idx, y in enumerate(y_positions):
-            line = usd_geom.Cube.Define(stage, f"{grid_root_path}/YLine{idx}")
-            prim = line.GetPrim()
-            line.GetSizeAttr().Set(1.0)
-            self._set_display_color(prim, sdf, gf, (0.90, 0.90, 0.90) if y == 0.0 else (0.78, 0.78, 0.78))
-            translate = prim.GetAttribute("xformOp:translate")
-            if not translate.IsValid():
-                translate = prim.CreateAttribute("xformOp:translate", sdf.ValueTypeNames.Double3)
-            translate.Set(gf.Vec3d(-0.10, float(y), -0.0355))
-            scale = prim.GetAttribute("xformOp:scale")
-            if not scale.IsValid():
-                scale = prim.CreateAttribute("xformOp:scale", sdf.ValueTypeNames.Double3)
-            scale.Set(gf.Vec3d(0.28, 0.0015, 0.0015))
-            self._set_order(prim, ["xformOp:translate", "xformOp:scale"])
+        prim = stage.GetPrimAtPath(root_path)
+        if prim.IsValid():
+            stage.RemovePrim(root_path)
 
     def update(
         self,
@@ -198,6 +107,7 @@ class TeleopDebugVisuals:
         except ImportError:
             return
 
+        self._ensure_ground_plane()
         stage.DefinePrim(self.teleop_debug_root, "Xform")
         sim_target_color = (0.0, 1.0, 0.0) if waiting_for_anchor else (1.0, 0.0, 0.0)
         if reference_position is not None:
