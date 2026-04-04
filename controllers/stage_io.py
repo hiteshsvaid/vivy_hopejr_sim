@@ -226,43 +226,16 @@ class HopeJrStageIo:
     def write_joint_targets_deg(self, stage, joint_targets_deg: np.ndarray) -> None:
         articulation = self._get_articulation()
         joint_indices = self._get_articulation_joint_indices()
-        if articulation is not None and joint_indices is not None:
-            try:
-                from isaacsim.core.utils.types import ArticulationAction
-                articulation.apply_action(
-                    ArticulationAction(
-                        joint_positions=np.deg2rad(np.asarray(joint_targets_deg, dtype=float))[None, :],
-                        joint_indices=joint_indices,
-                    )
-                )
-                return
-            except Exception:
-                pass
-        for joint_name, target_deg in zip(self.joint_names, joint_targets_deg, strict=True):
-            prim = stage.GetPrimAtPath(f"{self.joint_root_path}/{joint_name}")
-            if not prim.IsValid():
-                raise RuntimeError(f"Joint prim not found: {self.joint_root_path}/{joint_name}")
-            attr = prim.GetAttribute("drive:angular:physics:targetPosition")
-            if not attr.IsValid():
-                raise RuntimeError(f"Joint drive target attribute missing on {self.joint_root_path}/{joint_name}")
-            attr.Set(float(target_deg))
+        if articulation is None or joint_indices is None:
+            raise RuntimeError("Articulation unavailable for write_joint_targets_deg")
+        articulation.set_joint_position_targets(
+            positions=np.deg2rad(np.asarray(joint_targets_deg, dtype=float))[None, :],
+            joint_indices=joint_indices,
+        )
 
     def write_joint_state_deg(self, stage, joint_positions_deg: np.ndarray) -> None:
         articulation = self._get_articulation()
         joint_indices = self._get_articulation_joint_indices()
-        if articulation is not None and joint_indices is not None:
-            try:
-                articulation.set_joint_positions(np.deg2rad(np.asarray(joint_positions_deg, dtype=float))[None, :], joint_indices=joint_indices)
-                return
-            except Exception:
-                pass
-        for joint_name, position_deg in zip(self.joint_names, joint_positions_deg, strict=True):
-            prim = stage.GetPrimAtPath(f"{self.joint_root_path}/{joint_name}")
-            if not prim.IsValid():
-                continue
-            pos_attr = prim.GetAttribute("state:angular:physics:position")
-            vel_attr = prim.GetAttribute("state:angular:physics:velocity")
-            if pos_attr.IsValid():
-                pos_attr.Set(float(position_deg))
-            if vel_attr.IsValid():
-                vel_attr.Set(0.0)
+        if articulation is None or joint_indices is None:
+            raise RuntimeError("Articulation unavailable for write_joint_state_deg")
+        articulation.set_joint_positions(np.deg2rad(np.asarray(joint_positions_deg, dtype=float))[None, :], joint_indices=joint_indices)

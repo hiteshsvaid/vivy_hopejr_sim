@@ -13,6 +13,7 @@ SIM_CONFIG_PATH = Path("/home/viaan/huggingface/lerobot/src/lerobot/robots/vivy/
 KINEMATICS_PATH = Path("/home/viaan/huggingface/lerobot/src/lerobot/robots/vivy/vivy_arm_kinematics.py")
 TELEOP_STATE_PATH = Path("/home/viaan/huggingface/lerobot/src/lerobot/robots/vivy/fanout/teleop_state.py")
 TELEOP_DEBUG_VISUALS_PATH = Path("/home/viaan/vivy_hopejr_sim/ui/teleop_debug_visuals.py")
+STAGE_IO_PATH = Path("/home/viaan/vivy_hopejr_sim/controllers/stage_io.py")
 VIVY_SIDE_PANEL_PATH = Path("/home/viaan/vivy_hopejr_sim/ui/vivy/vivy_side_panel.py")
 VIVY_FLOW_PANEL_PATH = Path("/home/viaan/vivy_hopejr_sim/ui/vivy/vivy_flow_panel.py")
 VIVY_FLOW_DETAIL_PANEL_PATH = Path("/home/viaan/vivy_hopejr_sim/ui/vivy/vivy_flow_detail_panel.py")
@@ -47,6 +48,11 @@ def _load_shared_signal_helpers():
 def _load_visuals_class():
     module = _load_module("vivy_target_viewer_visuals", TELEOP_DEBUG_VISUALS_PATH)
     return module.TeleopDebugVisuals
+
+
+def _load_stage_io_class():
+    module = _load_module("vivy_target_viewer_stage_io", STAGE_IO_PATH)
+    return module.HopeJrStageIo
 
 
 def _load_side_panel_class():
@@ -88,6 +94,8 @@ class VivyTargetViewer:
         controller_defaults = dict(self.sim_config.get("controller_defaults") or {})
         self.end_effector_path = controller_defaults.get("end_effector_path", "/World/JointTest/PalmBody/EndEffector")
         self.teleop_debug_root = controller_defaults.get("teleop_debug_root", "/World/JointTest/TeleopDebug")
+        self.articulation_root_path = controller_defaults.get("articulation_root_path", "/World/JointTest")
+        self.joint_root_path = controller_defaults.get("joint_root_path", "/World/JointTest/Joints")
         self.world_offset = np.asarray(controller_defaults.get("world_offset", [0.0, 0.0, 0.0]), dtype=float)
         joint_names = list(self.sim_config["joint_names"])
         neutral_deg = np.asarray([float(self.sim_config["joints"][name]["neutral_deg"]) for name in joint_names], dtype=float)
@@ -96,10 +104,17 @@ class VivyTargetViewer:
         self.model_to_stage_transform = np.eye(4)
         self._stage_anchor_pose = None
         self._last_waiting_for_anchor = True
+        HopeJrStageIo = _load_stage_io_class()
         TeleopDebugVisuals = _load_visuals_class()
         VivySidePanel = _load_side_panel_class()
         VivyFlowPanel = _load_flow_panel_class()
         VivyFlowDetailPanel = _load_flow_detail_panel_class()
+        self.stage_io = HopeJrStageIo(
+            articulation_root_path=self.articulation_root_path,
+            joint_root_path=self.joint_root_path,
+            end_effector_path=self.end_effector_path,
+            joint_names=joint_names,
+        )
         self.visuals = TeleopDebugVisuals(teleop_debug_root=self.teleop_debug_root, enabled=True)
         self.side_panel = VivySidePanel()
         self.flow_panel = VivyFlowPanel()
@@ -176,6 +191,13 @@ class VivyTargetViewer:
         if signal_timestamp == self._last_signal_timestamp:
             return
         self._last_signal_timestamp = signal_timestamp
+
+        joint_targets_deg = payload.get("current_joint_targets_deg")
+        if isinstance(joint_targets_deg, list) and len(joint_targets_deg) == len(self.sim_config["joint_names"]):
+            try:
+                self.stage_io.write_joint_targets_deg(stage, np.asarray(joint_targets_deg, dtype=float))
+            except Exception as exc:
+                print(f"Vivy target viewer joint write failed: {exc}")
 
         target_pose_model = payload.get("target_pose_model")
         if target_pose_model is None:

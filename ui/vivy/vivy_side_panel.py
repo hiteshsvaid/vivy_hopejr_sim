@@ -8,7 +8,7 @@ from typing import Any
 class VivySidePanel:
     _TEXT_NEUTRAL = 0xFFB8B8B8
 
-    def __init__(self, *, width: int = 420, height: int = 240):
+    def __init__(self, *, width: int = 460, height: int = 380):
         self.width = width
         self.height = height
         self._window = None
@@ -46,26 +46,47 @@ class VivySidePanel:
         except Exception:
             pass
         with self._window.frame:
-            with ui.VStack(spacing=4):
-                section_style = {"color": 0xFFD8D8D8, "font_size": 13}
-                value_style = {"color": self._TEXT_NEUTRAL, "font_size": 13}
-                with ui.VGrid(column_count=2, column_widths=[120, 0], spacing=8):
+            with ui.ScrollingFrame():
+                with ui.VStack(spacing=6, height=0):
+                    section_style = {"color": 0xFFD8D8D8, "font_size": 13}
+                    value_style = {"color": self._TEXT_NEUTRAL, "font_size": 13}
+
+                    ui.Label("QUEST", style=section_style)
+                    with ui.VGrid(column_count=2, column_widths=[110, 0], row_height=22):
+                        ui.Label("position", style=value_style)
+                        self._labels["quest_pos"] = ui.Label("-", style=value_style)
+                        ui.Label("grip / trigger", style=value_style)
+                        self._labels["quest_grip_trigger"] = ui.Label("-", style=value_style)
+
                     ui.Label("STATE", style=section_style)
-                    self._labels["state"] = ui.Label("-", style=value_style, word_wrap=True)
-                    ui.Label("HAND POS", style=section_style)
-                    self._labels["hand_pos"] = ui.Label("-", style=value_style, word_wrap=True)
-                    ui.Label("QUEST DELTA", style=section_style)
-                    self._labels["quest_delta"] = ui.Label("-", style=value_style, word_wrap=True)
-                    ui.Label("WORLD DELTA", style=section_style)
-                    self._labels["world_delta"] = ui.Label("-", style=value_style, word_wrap=True)
-                    ui.Label("GRIP/TRIGGER", style=section_style)
-                    self._labels["grip_trigger"] = ui.Label("-", style=value_style, word_wrap=True)
-                    ui.Label("BUTTONS", style=section_style)
-                    self._labels["buttons"] = ui.Label("-", style=value_style, word_wrap=True)
-                    ui.Label("ANCHOR", style=section_style)
-                    self._labels["anchor"] = ui.Label("-", style=value_style, word_wrap=True)
-                    ui.Label("FREEZE", style=section_style)
-                    self._labels["freeze"] = ui.Label("-", style=value_style, word_wrap=True)
+                    with ui.VGrid(column_count=2, column_widths=[110, 0], row_height=22):
+                        ui.Label("enabled / clutch", style=value_style)
+                        self._labels["state_enabled_clutch"] = ui.Label("-", style=value_style)
+                        ui.Label("anchor / frozen", style=value_style)
+                        self._labels["state_anchor_frozen"] = ui.Label("-", style=value_style)
+
+                    ui.Label("DELTA", style=section_style)
+                    with ui.VGrid(column_count=2, column_widths=[110, 0], row_height=22):
+                        ui.Label("quest", style=value_style)
+                        self._labels["delta_quest"] = ui.Label("-", style=value_style)
+                        ui.Label("world", style=value_style)
+                        self._labels["delta_world"] = ui.Label("-", style=value_style)
+
+                    ui.Spacer(height=4)
+                    ui.Label("JOINTS", style=section_style)
+                    with ui.VGrid(column_count=5, column_widths=[170, 70, 70, 55, 35], row_height=22):
+                        header_style = {"color": 0xFFD8D8D8, "font_size": 13}
+                        ui.Label("JOINT", style=header_style)
+                        ui.Label("TGT_DEG", style=header_style)
+                        ui.Label("NORM", style=header_style)
+                        ui.Label("MODE", style=header_style)
+                        ui.Label("FLAG", style=header_style)
+                        for index in range(7):
+                            self._labels[f"joint_name_{index}"] = ui.Label("", style=value_style)
+                            self._labels[f"joint_target_deg_{index}"] = ui.Label("", style=value_style)
+                            self._labels[f"joint_norm_{index}"] = ui.Label("", style=value_style)
+                            self._labels[f"joint_mode_{index}"] = ui.Label("", style=value_style)
+                            self._labels[f"joint_flag_{index}"] = ui.Label("", style=value_style)
         self._dock_window(ui)
 
     @staticmethod
@@ -73,7 +94,7 @@ class VivySidePanel:
         if not isinstance(value, (list, tuple)) or len(value) != 3:
             return "-"
         try:
-            return ", ".join(f"{float(v):+.3f}" for v in value)
+            return f"({float(value[0]):+.3f}, {float(value[1]):+.3f}, {float(value[2]):+.3f})"
         except Exception:
             return "-"
 
@@ -89,31 +110,31 @@ class VivySidePanel:
 
         payload = payload or {}
         hand = payload.get("hand_state") or {}
-
         grip = float(hand.get("grip", 0.0)) if isinstance(hand, dict) else 0.0
         trigger = float(hand.get("trigger", 0.0)) if isinstance(hand, dict) else 0.0
         enabled = bool(hand.get("enabled", True)) if isinstance(hand, dict) else False
         clutch = bool(hand.get("clutch", False)) if isinstance(hand, dict) else False
-        buttons = (
-            f"A={int(bool(hand.get('a_pressed', False)))} "
-            f"B={int(bool(hand.get('b_pressed', False)))} "
-            f"X={int(bool(hand.get('x_pressed', False)))} "
-            f"Y={int(bool(hand.get('y_pressed', False)))} "
-            f"P={int(bool(hand.get('primary_button', False)))} "
-            f"S={int(bool(hand.get('secondary_button', False)))}"
-        )
-
         anchor = "captured" if payload.get("quest_anchor_position") is not None else "pending"
-        freeze = "no"
-        if payload.get("freeze_active"):
-            freeze_joint = payload.get("freeze_joint_name") or "unknown"
-            freeze = f"yes ({freeze_joint})"
+        frozen = "yes" if payload.get("freeze_active") else "no"
 
-        self._labels["state"].text = f"enabled={enabled} clutch={clutch}"
-        self._labels["hand_pos"].text = self._fmt_vec3(hand.get("position"))
-        self._labels["quest_delta"].text = self._fmt_vec3(payload.get("quest_delta"))
-        self._labels["world_delta"].text = self._fmt_vec3(payload.get("position_delta_world"))
-        self._labels["grip_trigger"].text = f"grip={grip:.2f} trigger={trigger:.2f}"
-        self._labels["buttons"].text = buttons
-        self._labels["anchor"].text = anchor
-        self._labels["freeze"].text = freeze
+        self._labels["quest_pos"].text = self._fmt_vec3(hand.get("position"))
+        self._labels["quest_grip_trigger"].text = f"grip={grip:.2f}  trigger={trigger:.2f}"
+        self._labels["state_enabled_clutch"].text = f"enabled={enabled}  clutch={clutch}"
+        self._labels["state_anchor_frozen"].text = f"anchor={anchor}  frozen={frozen}"
+        self._labels["delta_quest"].text = self._fmt_vec3(payload.get("quest_delta"))
+        self._labels["delta_world"].text = self._fmt_vec3(payload.get("position_delta_world"))
+
+        rows = payload.get("joint_display_rows") or []
+        for index in range(7):
+            self._labels[f"joint_name_{index}"].text = ""
+            self._labels[f"joint_target_deg_{index}"].text = ""
+            self._labels[f"joint_norm_{index}"].text = ""
+            self._labels[f"joint_mode_{index}"].text = ""
+            self._labels[f"joint_flag_{index}"].text = ""
+            if index < len(rows):
+                row = rows[index]
+                self._labels[f"joint_name_{index}"].text = str(row.get("joint") or "")
+                self._labels[f"joint_target_deg_{index}"].text = str(row.get("target_deg") or "").strip()
+                self._labels[f"joint_norm_{index}"].text = str(row.get("norm") or "").strip()
+                self._labels[f"joint_mode_{index}"].text = str(row.get("mode") or "")
+                self._labels[f"joint_flag_{index}"].text = str(row.get("freeze") or "")
