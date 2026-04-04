@@ -23,6 +23,10 @@ class VivyFlowDetailPanel:
         self._labels: dict[str, Any] = {}
         self._docked = False
         self._last_selected = None
+        self._last_saved_replay_name: str | None = None
+        self._last_saved_record_name: str | None = None
+        self._quest_recording_names: list[str] = []
+        self._quest_replay_container = None
 
     def _dock_window(self, ui_module: Any) -> None:
         if self._window is None or self._docked:
@@ -115,9 +119,49 @@ class VivyFlowDetailPanel:
         control["sim_view_enabled"] = not bool(control.get("sim_view_enabled", True))
         self._write_flow_control(control)
 
+    @staticmethod
+    def _list_recording_names() -> list[str]:
+        if not RECORDINGS_DIR.exists():
+            return []
+        return sorted(path.stem for path in RECORDINGS_DIR.glob("*.ndjson"))
+
+    def _refresh_replay_dropdown(self, selected_name: str | None = None) -> None:
+        try:
+            import omni.ui as ui
+        except ImportError:
+            return
+        container = self._quest_replay_container
+        if container is None:
+            return
+        names = self._list_recording_names()
+        self._quest_recording_names = names
+        display_names = names or ["(none)"]
+        try:
+            container.clear()
+        except Exception:
+            pass
+        with container:
+            ui.Label("replay", width=48, style={"color": self._TEXT_NEUTRAL, "font_size": 13})
+            combo = ui.ComboBox(0, *display_names, width=220)
+            self._labels["quest_replay_combo"] = combo
+            self._labels["quest_replay_combo_model"] = combo.model
+        if names:
+            if selected_name in names:
+                selected_index = names.index(selected_name)
+            else:
+                selected_index = 0
+            self._labels["quest_replay_combo_model"].get_item_value_model().set_value(selected_index)
+
     def _save_replay_name(self) -> None:
         try:
-            replay_name = str(self._labels["quest_replay_model"].get_value_as_string()).strip()
+            replay_name = ""
+            combo_model = self._labels.get("quest_replay_combo_model")
+            if combo_model is not None:
+                selected_index = int(combo_model.get_item_value_model().as_int)
+                if 0 <= selected_index < len(self._quest_recording_names):
+                    replay_name = self._quest_recording_names[selected_index]
+            if not replay_name:
+                raise ValueError("select a replay name")
             if not replay_name:
                 raise ValueError("replay name must not be empty")
             replay_path = RECORDINGS_DIR / f"{replay_name}.ndjson"
@@ -129,6 +173,43 @@ class VivyFlowDetailPanel:
             self._labels["quest_status"].text = f"Saved replay={replay_name}. Restart the teleop run to apply."
         except Exception as exc:
             self._labels["quest_status"].text = f"Save failed: {exc}"
+
+    def _save_record_name(self) -> None:
+        try:
+            record_name = str(self._labels["quest_record_model"].get_value_as_string()).strip()
+            if not record_name:
+                raise ValueError("record name must not be empty")
+            control = self._read_flow_control()
+            control["record_name"] = record_name
+            self._write_flow_control(control)
+            self._labels["quest_status"].text = f"Saved record={record_name}. Live recording is armed now; press A to start."
+        except Exception as exc:
+            self._labels["quest_status"].text = f"Save failed: {exc}"
+
+    def _delete_selected_replay(self) -> None:
+        try:
+            combo_model = self._labels.get("quest_replay_combo_model")
+            if combo_model is None:
+                raise ValueError("replay dropdown unavailable")
+            selected_index = int(combo_model.get_item_value_model().as_int)
+            if not (0 <= selected_index < len(self._quest_recording_names)):
+                raise ValueError("select a replay to delete")
+            replay_name = self._quest_recording_names[selected_index]
+            replay_path = RECORDINGS_DIR / f"{replay_name}.ndjson"
+            if not replay_path.exists():
+                raise ValueError(f"recording not found: {replay_name}")
+            replay_path.unlink()
+            control = self._read_flow_control()
+            if str(control.get("replay_name") or "") == replay_name:
+                control["replay_name"] = ""
+                self._write_flow_control(control)
+                self._last_saved_replay_name = ""
+            remaining = self._list_recording_names()
+            next_selected = remaining[0] if remaining else None
+            self._refresh_replay_dropdown(next_selected)
+            self._labels["quest_status"].text = f"Deleted replay={replay_name}."
+        except Exception as exc:
+            self._labels["quest_status"].text = f"Delete failed: {exc}"
 
     def _ensure_window(self) -> None:
         if self._window is not None:
@@ -155,15 +236,28 @@ class VivyFlowDetailPanel:
                     )
                     with ui.VStack(spacing=4) as quest_editor:
                         self._labels["quest_editor"] = quest_editor
-                        ui.Label("Quest Replay", style=header_style)
-                        with ui.HStack(height=26, spacing=6):
-                            ui.Label("file", width=48, style=value_style)
-                            replay_field = ui.StringField(width=220)
-                            self._labels["quest_replay_model"] = replay_field.model
+                        ui.Label("Quest Files", style=header_style)
+                        with ui.HStack(height=26, spacing=6) as replay_container:
+                            self._quest_replay_container = replay_container
+                            self._refresh_replay_dropdown()
                         self._labels["quest_save_button"] = ui.Button(
                             "Save Replay Name",
                             height=28,
                             clicked_fn=lambda: self._save_replay_name(),
+                        )
+                        self._labels["quest_delete_button"] = ui.Button(
+                            "Delete Replay",
+                            height=28,
+                            clicked_fn=lambda: self._delete_selected_replay(),
+                        )
+                        with ui.HStack(height=26, spacing=6):
+                            ui.Label("record", width=48, style=value_style)
+                            record_field = ui.StringField(width=220)
+                            self._labels["quest_record_model"] = record_field.model
+                        self._labels["quest_record_button"] = ui.Button(
+                            "Save Record Name",
+                            height=28,
+                            clicked_fn=lambda: self._save_record_name(),
                         )
                         self._labels["quest_status"] = ui.Label("", style=value_style, word_wrap=True)
                     with ui.VStack(spacing=4) as axis_editor:
@@ -217,8 +311,12 @@ class VivyFlowDetailPanel:
 
         waiting_for_anchor = bool(payload.get("waiting_for_anchor", True))
         freeze_active = bool(payload.get("freeze_active", False))
+        recording_name = str(payload.get("recording_name") or "-")
+        recording_status = str(payload.get("recording_status") or "idle")
+        recording_packet_count = int(payload.get("recording_packet_count") or 0)
         sim_view_enabled = bool(flow_state.get("sim_view_enabled", True))
         replay_name = str(flow_state.get("replay_name") or "-")
+        record_name = str(flow_state.get("record_name") or "-")
         quest_mode = str(flow_state.get("quest_mode") or "?")
         robot_output = str(flow_state.get("robot_output") or "-")
 
@@ -237,7 +335,7 @@ class VivyFlowDetailPanel:
                 pass
         else:
             detail = {
-                "quest": f"quest_mode={quest_mode} replay={replay_name}",
+                "quest": f"quest_mode={quest_mode} replay={replay_name} record={record_name} recording={recording_status}",
                 "processor": "Processes Quest packets into teleop state",
                 "teleop_state": f"waiting_for_anchor={waiting_for_anchor} freeze_active={freeze_active}",
                 "ik": "Quest IK teleoperator branch",
@@ -255,13 +353,32 @@ class VivyFlowDetailPanel:
             self._labels["action_hint"].text = ""
             try:
                 self._labels["sim_toggle_button"].visible = False
-                self._labels["quest_editor"].visible = selected == "quest" and quest_mode == "replay"
+                self._labels["quest_editor"].visible = selected == "quest"
                 self._labels["axis_editor"].visible = selected == "axis_remap"
             except Exception:
                 pass
-            if selected == "quest" and quest_mode == "replay":
+            if selected == "quest":
                 try:
-                    self._labels["quest_replay_model"].set_value(replay_name if replay_name != "-" else "")
-                    self._labels["quest_status"].text = "Save a different replay name, then restart the teleop run."
+                    names = self._list_recording_names()
+                    if names != self._quest_recording_names:
+                        self._refresh_replay_dropdown(replay_name if replay_name != "-" else None)
+                        names = self._quest_recording_names
+                    elif names and replay_name != self._last_saved_replay_name:
+                        selected_index = names.index(replay_name) if replay_name in names else 0
+                        self._labels["quest_replay_combo_model"].get_item_value_model().set_value(selected_index)
+                    if record_name != self._last_saved_record_name:
+                        self._labels["quest_record_model"].set_value(record_name if record_name != "-" else "")
+                    self._last_saved_replay_name = replay_name
+                    self._last_saved_record_name = record_name
+                    pass
+                    if recording_status == "waiting_for_a":
+                        status_text = f"Recording armed for {recording_name}. Waiting for A."
+                    elif recording_status == "recording":
+                        status_text = f"Recording {recording_name}. packets={recording_packet_count}"
+                    elif recording_status == "recording_ended":
+                        status_text = f"Recording ended for {recording_name}. packets={recording_packet_count}"
+                    else:
+                        status_text = "Set replay or record names here."
+                    self._labels["quest_status"].text = status_text
                 except Exception:
                     pass
