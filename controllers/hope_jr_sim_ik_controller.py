@@ -233,12 +233,12 @@ class HopeJrSimIkController:
         self.start_stage_joint_positions_deg = None
         self.last_packet_timestamp = None
         self.position_only_weight_overrides = {str(k): float(v) for k, v in self.controller_defaults.get("position_only_weight_overrides", DEFAULT_STAGE_POSITION_ONLY_WEIGHT_OVERRIDES).items()}
-        self.stage_dls_lambda = float(self.controller_defaults.get("stage_dls_lambda", DEFAULT_STAGE_DLS_LAMBDA))
-        self.stage_dls_max_step_deg = float(self.controller_defaults.get("stage_dls_max_step_deg", DEFAULT_STAGE_DLS_MAX_STEP_DEG))
+        self.ik_damping = float(self.controller_defaults.get("ik_damping", self.controller_defaults.get("stage_dls_lambda", DEFAULT_STAGE_DLS_LAMBDA)))
+        self.ik_max_step_deg = float(self.controller_defaults.get("ik_max_step_deg", self.controller_defaults.get("stage_dls_max_step_deg", DEFAULT_STAGE_DLS_MAX_STEP_DEG)))
         self.stage_task_delta_clamp_m = float(self.controller_defaults.get("stage_task_delta_clamp_m", DEFAULT_STAGE_TASK_DELTA_CLAMP_M))
         self.stage_error_score_window = int(self.controller_defaults.get("stage_error_score_window", DEFAULT_STAGE_ERROR_SCORE_WINDOW))
-        self.joint_target_max_delta_deg_per_tick = float(
-            self.controller_defaults.get("joint_target_max_delta_deg_per_tick", DEFAULT_JOINT_TARGET_MAX_DELTA_DEG_PER_TICK)
+        self.output_max_delta_deg_per_tick = float(
+            self.controller_defaults.get("output_max_delta_deg_per_tick", self.controller_defaults.get("joint_target_max_delta_deg_per_tick", DEFAULT_JOINT_TARGET_MAX_DELTA_DEG_PER_TICK))
         )
         self.limit_push_freeze_consecutive_frames = int(
             self.controller_defaults.get(
@@ -247,7 +247,7 @@ class HopeJrSimIkController:
             )
         )
         self.joint_target_conditioner = JointTargetConditioner(
-            max_delta_deg_per_tick=self.joint_target_max_delta_deg_per_tick
+            max_delta_deg_per_tick=self.output_max_delta_deg_per_tick
         )
         self.stage_error_norm_window = deque(maxlen=self.stage_error_score_window)
         self.minimum_packet_timestamp = None
@@ -537,7 +537,7 @@ class HopeJrSimIkController:
                     solve_joint_weights[index] = min(solve_joint_weights[index], float(override))
         task_jacobian = task_jacobian * solve_joint_weights[None, :]
 
-        damping = self.stage_dls_lambda
+        damping = self.ik_damping
         try:
             delta_rad = task_jacobian.T @ np.linalg.solve(
                 task_jacobian @ task_jacobian.T + (damping**2) * np.eye(task_jacobian.shape[0]),
@@ -548,7 +548,7 @@ class HopeJrSimIkController:
 
         delta_deg = np.rad2deg(delta_rad) * solve_joint_weights
         unclipped_delta_deg = delta_deg.copy()
-        delta_deg = np.clip(delta_deg, -self.stage_dls_max_step_deg, self.stage_dls_max_step_deg)
+        delta_deg = np.clip(delta_deg, -self.ik_max_step_deg, self.ik_max_step_deg)
         solved_stage_joint_targets_deg = np.asarray(current_stage_joint_positions_deg, dtype=float) + delta_deg
         return solved_stage_joint_targets_deg, target_stage_pose, delta_deg, unclipped_delta_deg, raw_position_error, position_error, solve_joint_weights
 
@@ -814,7 +814,7 @@ class HopeJrSimIkController:
             "teleop_safety_advisory": teleop_safety_advisory,
             "stage_dls_joint_weights": None if stage_dls_joint_weights is None else stage_dls_joint_weights.tolist(),
             "joint_target_conditioning": {
-                "max_delta_deg_per_tick": self.joint_target_max_delta_deg_per_tick,
+                "max_delta_deg_per_tick": self.output_max_delta_deg_per_tick,
                 "clipped": conditioning_result.clipped,
                 "delta_before_clip_deg": conditioning_result.delta_before_clip_deg.tolist(),
                 "delta_after_clip_deg": conditioning_result.delta_after_clip_deg.tolist(),

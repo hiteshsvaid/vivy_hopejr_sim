@@ -2,10 +2,32 @@
 
 from __future__ import annotations
 
+import importlib.util
 import json
+import sys
 from pathlib import Path
 from typing import Any
 
+
+def _load_module(module_name: str, path: Path):
+    spec = importlib.util.spec_from_file_location(module_name, path)
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    sys.modules[module_name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+_DETAIL_SECTION_DIR = Path(__file__).resolve().parent / "detail_sections"
+QuestDetailSection = _load_module(
+    "vivy_quest_detail_section", _DETAIL_SECTION_DIR / "quest_detail_section.py"
+).QuestDetailSection
+MappingDetailSection = _load_module(
+    "vivy_mapping_detail_section", _DETAIL_SECTION_DIR / "mapping_detail_section.py"
+).MappingDetailSection
+IkDetailSection = _load_module(
+    "vivy_ik_detail_section", _DETAIL_SECTION_DIR / "ik_detail_section.py"
+).IkDetailSection
 
 FLOW_CONTROL_PATH = Path("/tmp/vivy_flow_control.json")
 VIVY_CONFIG_PATH = Path("/home/viaan/huggingface/lerobot/src/lerobot/robots/vivy/vivy_global_config.json")
@@ -30,6 +52,9 @@ class VivyFlowDetailPanel:
         self._ik_joint_names: list[str] = []
         self._ik_joint_container = None
         self._last_payload_rows: dict[str, dict[str, Any]] = {}
+        self._quest_section = QuestDetailSection(self)
+        self._mapping_section = MappingDetailSection(self)
+        self._ik_section = IkDetailSection(self)
 
     def _dock_window(self, ui_module: Any) -> None:
         if self._window is None or self._docked:
@@ -277,6 +302,23 @@ class VivyFlowDetailPanel:
         except Exception as exc:
             self._labels["ik_status"].text = f"Toggle failed: {exc}"
 
+    def _save_ik_tuning(self) -> None:
+        try:
+            config = self._read_vivy_config()
+            controller_defaults = dict(config.get("controller_defaults") or {})
+            controller_defaults["ik_damping"] = float(self._labels["ik_damping_model"].get_value_as_string())
+            controller_defaults["ik_max_step_deg"] = float(self._labels["ik_max_step_model"].get_value_as_string())
+            controller_defaults["output_max_delta_deg_per_tick"] = float(
+                self._labels["output_max_delta_model"].get_value_as_string()
+            )
+            config["controller_defaults"] = controller_defaults
+            self._write_vivy_config(config)
+            self._labels["ik_status"].text = (
+                "Saved IK tuning. Applies live and persists for next run."
+            )
+        except Exception as exc:
+            self._labels["ik_status"].text = f"Save failed: {exc}"
+
     @staticmethod
     def _current_payload_rows(payload: dict[str, Any] | None = None) -> dict[str, dict[str, Any]]:
         payload = payload or {}
@@ -306,71 +348,13 @@ class VivyFlowDetailPanel:
                         height=28,
                         clicked_fn=lambda: self._toggle_sim_view(),
                     )
-                    with ui.VStack(spacing=4) as quest_editor:
-                        self._labels["quest_editor"] = quest_editor
-                        ui.Label("Quest Files", style=header_style)
-                        with ui.HStack(height=26, spacing=6) as replay_container:
-                            self._quest_replay_container = replay_container
-                            self._refresh_replay_dropdown()
-                        self._labels["quest_save_button"] = ui.Button(
-                            "Save Replay Name",
-                            height=28,
-                            clicked_fn=lambda: self._save_replay_name(),
-                        )
-                        self._labels["quest_delete_button"] = ui.Button(
-                            "Delete Replay",
-                            height=28,
-                            clicked_fn=lambda: self._delete_selected_replay(),
-                        )
-                        with ui.HStack(height=26, spacing=6):
-                            ui.Label("record", width=48, style=value_style)
-                            record_field = ui.StringField(width=220)
-                            self._labels["quest_record_model"] = record_field.model
-                        self._labels["quest_record_button"] = ui.Button(
-                            "Save Record Name",
-                            height=28,
-                            clicked_fn=lambda: self._save_record_name(),
-                        )
-                        self._labels["quest_status"] = ui.Label("", style=value_style, word_wrap=True)
-                    with ui.VStack(spacing=4) as axis_editor:
-                        self._labels["axis_editor"] = axis_editor
-                        ui.Label("Axis / Sign Remap", style=header_style)
-                        with ui.HStack(height=26, spacing=6):
-                            ui.Label("axes", width=48, style=value_style)
-                            axis_field = ui.StringField(width=80)
-                            self._labels["axis_axes_model"] = axis_field.model
-                        with ui.HStack(height=26, spacing=6):
-                            ui.Label("sign x", width=48, style=value_style)
-                            sign_x = ui.StringField(width=60)
-                            self._labels["axis_sign_x_model"] = sign_x.model
-                            ui.Label("sign y", width=48, style=value_style)
-                            sign_y = ui.StringField(width=60)
-                            self._labels["axis_sign_y_model"] = sign_y.model
-                            ui.Label("sign z", width=48, style=value_style)
-                            sign_z = ui.StringField(width=60)
-                            self._labels["axis_sign_z_model"] = sign_z.model
-                        self._labels["axis_save_button"] = ui.Button(
-                            "Save Axis Remap",
-                            height=28,
-                            clicked_fn=lambda: self._save_axis_remap(),
-                        )
-                        self._labels["axis_status"] = ui.Label("", style=value_style, word_wrap=True)
-                    with ui.VStack(spacing=4) as ik_editor:
-                        self._labels["ik_editor"] = ik_editor
-                        ui.Label("IK Hold Control", style=header_style)
-                        with ui.HStack(height=26, spacing=6) as ik_joint_container:
-                            self._ik_joint_container = ik_joint_container
-                            self._refresh_hold_dropdown()
-                        self._labels["ik_toggle_button"] = ui.Button(
-                            "Set Hold",
-                            height=28,
-                            clicked_fn=lambda: self._toggle_hold_selected_joint(),
-                        )
-                        self._labels["ik_status"] = ui.Label("", style=value_style, word_wrap=True)
+                    self._quest_section.build(ui, self._window.frame, header_style, value_style)
+                    self._mapping_section.build(ui, self._window.frame, header_style, value_style)
+                    self._ik_section.build(ui, self._window.frame, header_style, value_style)
                     try:
-                        quest_editor.visible = False
-                        axis_editor.visible = False
-                        ik_editor.visible = False
+                        self._labels["quest_editor"].visible = False
+                        self._labels["axis_editor"].visible = False
+                        self._labels["ik_editor"].visible = False
                     except Exception:
                         pass
         self._dock_window(ui)
@@ -392,7 +376,9 @@ class VivyFlowDetailPanel:
         self._labels["selected"].text = selected
         if selected != self._last_selected:
             if selected == "axis_remap":
-                self._load_axis_remap_fields_from_config()
+                self._mapping_section.load_from_config()
+            elif selected == "ik":
+                self._ik_section.load_from_config()
             self._last_selected = selected
 
         waiting_for_anchor = bool(payload.get("waiting_for_anchor", True))
@@ -447,41 +433,17 @@ class VivyFlowDetailPanel:
                 pass
             if selected == "quest":
                 try:
-                    names = self._list_recording_names()
-                    if names != self._quest_recording_names:
-                        self._refresh_replay_dropdown(replay_name if replay_name != "-" else None)
-                        names = self._quest_recording_names
-                    elif names and replay_name != self._last_saved_replay_name:
-                        selected_index = names.index(replay_name) if replay_name in names else 0
-                        self._labels["quest_replay_combo_model"].get_item_value_model().set_value(selected_index)
-                    if record_name != self._last_saved_record_name:
-                        self._labels["quest_record_model"].set_value(record_name if record_name != "-" else "")
-                    self._last_saved_replay_name = replay_name
-                    self._last_saved_record_name = record_name
-                    if recording_status == "waiting_for_a":
-                        status_text = f"Recording armed for {recording_name}. Waiting for A."
-                    elif recording_status == "recording":
-                        status_text = f"Recording {recording_name}. packets={recording_packet_count}"
-                    elif recording_status == "recording_ended":
-                        status_text = f"Recording ended for {recording_name}. packets={recording_packet_count}"
-                    else:
-                        status_text = "Set replay or record names here."
-                    self._labels["quest_status"].text = status_text
+                    self._quest_section.update(
+                        replay_name=replay_name,
+                        record_name=record_name,
+                        recording_name=recording_name,
+                        recording_status=recording_status,
+                        recording_packet_count=recording_packet_count,
+                    )
                 except Exception:
                     pass
             elif selected == "ik":
                 try:
-                    rows = dict(self._last_payload_rows)
-                    names = self._list_joint_names()
-                    current_joint = self._selected_hold_joint()
-                    if names != self._ik_joint_names:
-                        self._refresh_hold_dropdown(current_joint)
-                        current_joint = self._selected_hold_joint()
-                    row = rows.get(str(current_joint or ""), {})
-                    current_mode = str(row.get("mode") or "solve")
-                    self._labels["ik_toggle_button"].text = "Set Solve" if current_mode == "hold" else "Set Hold"
-                    self._labels["ik_status"].text = (
-                        f"Selected joint={current_joint or '-'} current_mode={current_mode}. Saves to main config and applies live."
-                    )
+                    self._ik_section.update(dict(self._last_payload_rows))
                 except Exception:
                     pass
