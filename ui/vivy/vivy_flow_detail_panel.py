@@ -50,7 +50,9 @@ class VivyFlowDetailPanel:
         self._quest_recording_names: list[str] = []
         self._quest_replay_container = None
         self._ik_joint_names: list[str] = []
-        self._ik_joint_container = None
+        self._ik_jacobian_modes = ["finite_difference", "analytic"]
+        self._ik_jacobian_mode_container = None
+        self._joint_axis_options = ["X", "Y", "Z", "-X", "-Y", "-Z"]
         self._last_payload_rows: dict[str, dict[str, Any]] = {}
         self._quest_section = QuestDetailSection(self)
         self._mapping_section = MappingDetailSection(self)
@@ -246,66 +248,123 @@ class VivyFlowDetailPanel:
             return [str(name) for name in names]
         return []
 
-    def _refresh_hold_dropdown(self, selected_name: str | None = None) -> None:
+    def _joint_axis_map(self) -> dict[str, str]:
+        config = self._read_vivy_config()
+        joints = dict(config.get("joints") or {})
+        result: dict[str, str] = {}
+        for name in self._list_joint_names():
+            result[name] = str(dict(joints.get(name) or {}).get("axis") or "-")
+        return result
+
+    def _refresh_ik_jacobian_mode_dropdown(self, selected_mode: str | None = None) -> None:
         try:
             import omni.ui as ui
         except ImportError:
             return
-        container = self._ik_joint_container
+        container = self._labels.get("ik_jacobian_mode_container")
         if container is None:
             return
-        names = self._list_joint_names()
-        self._ik_joint_names = names
-        display_names = names or ["(none)"]
         try:
             container.clear()
         except Exception:
             pass
         with container:
-            ui.Label("joint", width=48, style={"color": self._TEXT_NEUTRAL, "font_size": 13})
-            combo = ui.ComboBox(0, *display_names, width=220)
-            self._labels["ik_joint_combo"] = combo
-            self._labels["ik_joint_combo_model"] = combo.model
-        if names:
-            if selected_name in names:
-                selected_index = names.index(selected_name)
-            else:
-                selected_index = 0
-            self._labels["ik_joint_combo_model"].get_item_value_model().set_value(selected_index)
+            combo = ui.ComboBox(0, *self._ik_jacobian_modes, width=160)
+            self._labels["ik_jacobian_mode_combo"] = combo
+            self._labels["ik_jacobian_mode_combo_model"] = combo.model
+        if selected_mode in self._ik_jacobian_modes:
+            selected_index = self._ik_jacobian_modes.index(selected_mode)
+        else:
+            selected_index = 0
+        self._labels["ik_jacobian_mode_combo_model"].get_item_value_model().set_value(selected_index)
 
-    def _selected_hold_joint(self) -> str | None:
-        combo_model = self._labels.get("ik_joint_combo_model")
+    def _selected_ik_jacobian_mode(self) -> str:
+        combo_model = self._labels.get("ik_jacobian_mode_combo_model")
         if combo_model is None:
-            return None
+            return "finite_difference"
         selected_index = int(combo_model.get_item_value_model().as_int)
-        if 0 <= selected_index < len(self._ik_joint_names):
-            return self._ik_joint_names[selected_index]
-        return None
+        if 0 <= selected_index < len(self._ik_jacobian_modes):
+            return self._ik_jacobian_modes[selected_index]
+        return "finite_difference"
 
-    def _toggle_hold_selected_joint(self) -> None:
+    def _save_joint_mode_axis(self, joint_name: str, *, mode: str | None = None, axis: str | None = None) -> None:
         try:
-            joint_name = self._selected_hold_joint()
-            if not joint_name:
-                raise ValueError("select a joint")
             config = self._read_vivy_config()
             joints = dict(config.get("joints") or {})
             joint_entry = dict(joints.get(joint_name) or {})
-            current_hold = bool(joint_entry.get("hold_start", False))
-            next_hold = not current_hold
-            joint_entry["hold_start"] = next_hold
+            if mode is not None:
+                if mode not in {"hold", "solve"}:
+                    raise ValueError("mode must be hold or solve")
+                joint_entry["hold_start"] = mode == "hold"
+            if axis is not None:
+                if axis not in self._joint_axis_options:
+                    raise ValueError("invalid axis")
+                joint_entry["axis"] = axis
             joints[joint_name] = joint_entry
             config["joints"] = joints
             self._write_vivy_config(config)
-            self._labels["ik_status"].text = (
-                f"Saved {joint_name} -> {'hold' if next_hold else 'solve'}. Applies live and persists for next run."
-            )
+            mode_text = "hold" if bool(joint_entry.get("hold_start", False)) else "solve"
+            axis_text = str(joint_entry.get("axis") or "-")
+            self._labels["ik_status"].text = f"Saved {joint_name}: axis={axis_text} mode={mode_text}. Applies live."
         except Exception as exc:
-            self._labels["ik_status"].text = f"Toggle failed: {exc}"
+            self._labels["ik_status"].text = f"Save failed: {exc}"
+
+    def _refresh_ik_joint_table(self, rows: dict[str, dict[str, Any]]) -> None:
+        try:
+            import omni.ui as ui
+        except ImportError:
+            return
+        container = self._labels.get("ik_joint_table_container")
+        if container is None:
+            return
+        names = self._list_joint_names()
+        self._ik_joint_names = names
+        axis_map = self._joint_axis_map()
+        try:
+            container.clear()
+        except Exception:
+            pass
+        header_style = {"color": self._TEXT_NEUTRAL, "font_size": 12}
+        with container:
+            with ui.HStack(height=22, spacing=8):
+                ui.Label("joint", width=170, style=header_style)
+                ui.Label("axis", width=100, style=header_style)
+                ui.Label("mode", width=90, style=header_style)
+            for joint_name in names:
+                current_axis = str(axis_map.get(joint_name, "Y"))
+                current_mode = str(rows.get(joint_name, {}).get("mode") or "solve")
+                with ui.HStack(height=24, spacing=8):
+                    ui.Label(joint_name, width=170, style={"color": self._TEXT_NEUTRAL, "font_size": 12})
+                    axis_index = self._joint_axis_options.index(current_axis) if current_axis in self._joint_axis_options else 0
+                    axis_combo = ui.ComboBox(axis_index, *self._joint_axis_options, width=100)
+                    axis_model = axis_combo.model
+                    axis_item_model = axis_model.get_item_value_model()
+                    axis_item_model.add_value_changed_fn(
+                        lambda model, joint_name=joint_name: self._save_joint_mode_axis(
+                            joint_name,
+                            axis=self._joint_axis_options[int(model.as_int)],
+                        )
+                    )
+                    mode_options = ["solve", "hold"]
+                    mode_index = mode_options.index(current_mode) if current_mode in mode_options else 0
+                    mode_combo = ui.ComboBox(mode_index, *mode_options, width=90)
+                    mode_model = mode_combo.model
+                    mode_item_model = mode_model.get_item_value_model()
+                    mode_item_model.add_value_changed_fn(
+                        lambda model, joint_name=joint_name: self._save_joint_mode_axis(
+                            joint_name,
+                            mode=["solve", "hold"][int(model.as_int)],
+                        )
+                    )
 
     def _save_ik_tuning(self) -> None:
         try:
             config = self._read_vivy_config()
             controller_defaults = dict(config.get("controller_defaults") or {})
+            controller_defaults["ik_rate_hz"] = float(self._labels["ik_rate_hz_model"].get_value_as_string())
+            jacobian_mode = self._selected_ik_jacobian_mode()
+            controller_defaults["ik_jacobian_mode"] = jacobian_mode
+            controller_defaults["ik_max_iteration"] = int(self._labels["ik_max_iteration_model"].get_value_as_string())
             controller_defaults["ik_damping"] = float(self._labels["ik_damping_model"].get_value_as_string())
             controller_defaults["ik_max_step_deg"] = float(self._labels["ik_max_step_model"].get_value_as_string())
             controller_defaults["output_max_delta_deg_per_tick"] = float(
@@ -444,6 +503,6 @@ class VivyFlowDetailPanel:
                     pass
             elif selected == "ik":
                 try:
-                    self._ik_section.update(dict(self._last_payload_rows))
+                    self._ik_section.update(dict(self._last_payload_rows), dict(payload))
                 except Exception:
                     pass

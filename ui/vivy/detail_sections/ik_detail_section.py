@@ -11,17 +11,55 @@ class IkDetailSection:
         helper_style = {**value_style, "font_size": 12}
         with ui.VStack(spacing=4) as ik_editor:
             self.panel._labels["ik_editor"] = ik_editor
-            ui.Label("IK Hold Control", style=header_style)
-            with ui.HStack(height=26, spacing=6) as ik_joint_container:
-                self.panel._ik_joint_container = ik_joint_container
-                self.panel._refresh_hold_dropdown()
-            self.panel._labels["ik_toggle_button"] = ui.Button(
-                "Set Hold",
-                height=28,
-                clicked_fn=lambda: self.panel._toggle_hold_selected_joint(),
-            )
+            ui.Label("IK Joint Table", style=header_style)
+            with ui.VStack(spacing=4) as ik_joint_table_container:
+                self.panel._labels["ik_joint_table_container"] = ik_joint_table_container
             ui.Spacer(height=6)
             ui.Label("IK Tuning", style=header_style)
+
+            with ui.VStack(spacing=2):
+                with ui.HStack(height=26, spacing=6):
+                    ui.Label("ik_rate_hz", width=120, style=value_style)
+                    ik_rate_hz = ui.StringField(width=100)
+                    self.panel._labels["ik_rate_hz_model"] = ik_rate_hz.model
+                ui.Label(
+                    "Fixed IK control-loop rate in Hz. Quest input updates asynchronously and IK solves at this rate.",
+                    style=helper_style,
+                    word_wrap=True,
+                )
+
+            with ui.VStack(spacing=2):
+                with ui.HStack(height=26, spacing=6):
+                    ui.Label("ik_actual_hz", width=120, style=value_style)
+                    self.panel._labels["ik_actual_hz_value"] = ui.Label("-", style=value_style)
+                ui.Label(
+                    "Measured IK loop rate from the current run. This is runtime status only.",
+                    style=helper_style,
+                    word_wrap=True,
+                )
+
+            with ui.VStack(spacing=2):
+                with ui.HStack(height=26, spacing=6):
+                    ui.Label("ik_jacobian_mode", width=120, style=value_style)
+                    jacobian_mode_container = ui.HStack(width=160, spacing=0)
+                    self.panel._labels["ik_jacobian_mode_container"] = jacobian_mode_container
+                    self.panel._refresh_ik_jacobian_mode_dropdown()
+                ui.Label(
+                    "Jacobian implementation used by IK. Use finite_difference for reference and analytic for speed.",
+                    style=helper_style,
+                    word_wrap=True,
+                )
+
+            with ui.VStack(spacing=2):
+                with ui.HStack(height=26, spacing=6):
+                    ui.Label("ik_max_iteration", width=120, style=value_style)
+                    ik_max_iteration = ui.StringField(width=100)
+                    self.panel._labels["ik_max_iteration_model"] = ik_max_iteration.model
+                ui.Label(
+                    "Maximum number of IK iterations per control tick. Lower values trade accuracy for loop rate.",
+                    style=helper_style,
+                    word_wrap=True,
+                )
 
             with ui.VStack(spacing=2):
                 with ui.HStack(height=26, spacing=6):
@@ -66,22 +104,23 @@ class IkDetailSection:
     def load_from_config(self) -> None:
         config = self.panel._read_vivy_config()
         controller_defaults = dict(config.get("controller_defaults") or {})
+        self.panel._labels["ik_rate_hz_model"].set_value(str(controller_defaults.get("ik_rate_hz", 30.0)))
+        self.panel._refresh_ik_jacobian_mode_dropdown(
+            str(controller_defaults.get("ik_jacobian_mode", "finite_difference"))
+        )
+        self.panel._labels["ik_max_iteration_model"].set_value(str(controller_defaults.get("ik_max_iteration", 80)))
         self.panel._labels["ik_damping_model"].set_value(str(controller_defaults.get("ik_damping", 0.01)))
         self.panel._labels["ik_max_step_model"].set_value(str(controller_defaults.get("ik_max_step_deg", 8.0)))
         self.panel._labels["output_max_delta_model"].set_value(
             str(controller_defaults.get("output_max_delta_deg_per_tick", 2.0))
         )
 
-    def update(self, rows: dict[str, dict[str, Any]]) -> None:
+    def update(self, rows: dict[str, dict[str, Any]], payload: dict[str, Any]) -> None:
         names = self.panel._list_joint_names()
-        current_joint = self.panel._selected_hold_joint()
-        if names != self.panel._ik_joint_names:
-            self.panel._refresh_hold_dropdown(current_joint)
-            current_joint = self.panel._selected_hold_joint()
-        row = rows.get(str(current_joint or ""), {})
-        current_mode = str(row.get("mode") or "solve")
-        self.panel._labels["ik_toggle_button"].text = "Set Solve" if current_mode == "hold" else "Set Hold"
+        self.panel._refresh_ik_joint_table(rows)
+        ik_actual_hz = float(payload.get("ik_actual_hz") or 0.0)
+        self.panel._labels["ik_actual_hz_value"].text = f"{ik_actual_hz:.1f}"
+        jacobian_mode = str(payload.get("ik_jacobian_mode") or self.panel._selected_ik_jacobian_mode() or "-")
         self.panel._labels["ik_status"].text = (
-            f"Selected joint={current_joint or '-'} current_mode={current_mode}. "
-            "Saves to main config and applies live."
+            f"joints={len(names)} jacobian={jacobian_mode}. Axis and mode changes save to main config and apply live."
         )
