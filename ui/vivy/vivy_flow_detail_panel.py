@@ -54,6 +54,7 @@ class VivyFlowDetailPanel:
         self._ik_jacobian_mode_container = None
         self._joint_axis_options = ["X", "Y", "Z", "-X", "-Y", "-Z"]
         self._last_payload_rows: dict[str, dict[str, Any]] = {}
+        self._last_ik_table_signature: tuple | None = None
         self._quest_section = QuestDetailSection(self)
         self._mapping_section = MappingDetailSection(self)
         self._ik_section = IkDetailSection(self)
@@ -118,7 +119,8 @@ class VivyFlowDetailPanel:
             self._labels["axis_sign_x_model"].set_value(str(signs[0]))
             self._labels["axis_sign_y_model"].set_value(str(signs[1]))
             self._labels["axis_sign_z_model"].set_value(str(signs[2]))
-            self._labels["axis_status"].text = "Edit and save. Restart the teleop run to apply."
+            self._labels["target_max_delta_model"].set_value(str(controller_defaults.get("target_max_delta_m_per_tick", 0.0)))
+            self._labels["axis_status"].text = "Edit and save. Applies live."
         except Exception:
             pass
 
@@ -133,14 +135,16 @@ class VivyFlowDetailPanel:
             config = self._read_vivy_config()
             controller_defaults = dict(config.get("controller_defaults") or {})
             script_defaults = dict(config.get("script_editor_test_defaults") or {})
+            target_max_delta = float(self._labels["target_max_delta_model"].get_value_as_string())
             controller_defaults["quest_position_axes"] = axes
             controller_defaults["quest_position_signs"] = list(signs)
+            controller_defaults["target_max_delta_m_per_tick"] = target_max_delta
             script_defaults["quest_position_axes"] = axes
             script_defaults["quest_position_signs"] = list(signs)
             config["controller_defaults"] = controller_defaults
             config["script_editor_test_defaults"] = script_defaults
             self._write_vivy_config(config)
-            self._labels["axis_status"].text = f"Saved axes={axes} signs={signs}. Restart the teleop run to apply."
+            self._labels["axis_status"].text = f"Saved axes={axes} signs={signs} target_max_delta={target_max_delta}. Applies live."
         except Exception as exc:
             self._labels["axis_status"].text = f"Save failed: {exc}"
 
@@ -320,6 +324,10 @@ class VivyFlowDetailPanel:
         names = self._list_joint_names()
         self._ik_joint_names = names
         axis_map = self._joint_axis_map()
+        signature = tuple((joint_name, str(axis_map.get(joint_name, "Y")), str(rows.get(joint_name, {}).get("mode") or "solve")) for joint_name in names)
+        if signature == self._last_ik_table_signature:
+            return
+        self._last_ik_table_signature = signature
         try:
             container.clear()
         except Exception:
@@ -434,11 +442,13 @@ class VivyFlowDetailPanel:
         selected = str(flow_state.get("selected_node") or "sim")
         self._labels["selected"].text = selected
         if selected != self._last_selected:
-            if selected == "axis_remap":
-                self._mapping_section.load_from_config()
-            elif selected == "ik":
+            if selected == "ik":
+                self._last_ik_table_signature = None
                 self._ik_section.load_from_config()
             self._last_selected = selected
+
+        if selected in {"axis_remap", "target_conditioning"}:
+            self._mapping_section.load_from_config()
 
         waiting_for_anchor = bool(payload.get("waiting_for_anchor", True))
         freeze_active = bool(payload.get("freeze_active", False))
@@ -476,6 +486,7 @@ class VivyFlowDetailPanel:
                 "deadband": "Suppresses small motion below the configured threshold.",
                 "axis_remap": "Applies axis reorder and sign flips to Quest deltas.",
                 "world_transform": "Applies scale and world-frame rotation.",
+                "target_conditioning": "Clamps target-position change per control tick before IK.",
                 "target_pose": "Builds the target pose used for downstream consumers.",
                 "fanout": "Consumes teleop state for real/log sinks",
                 "real": "Hardware sink branch",
@@ -486,7 +497,7 @@ class VivyFlowDetailPanel:
             try:
                 self._labels["sim_toggle_button"].visible = False
                 self._labels["quest_editor"].visible = selected == "quest"
-                self._labels["axis_editor"].visible = selected == "axis_remap"
+                self._labels["axis_editor"].visible = selected in {"axis_remap", "target_conditioning"}
                 self._labels["ik_editor"].visible = selected == "ik"
             except Exception:
                 pass

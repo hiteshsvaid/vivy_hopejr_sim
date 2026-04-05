@@ -28,7 +28,8 @@ class VivyFlowPanel:
         "anchor_delta": ["deadband"],
         "deadband": ["axis_remap"],
         "axis_remap": ["world_transform"],
-        "world_transform": ["target_pose"],
+        "world_transform": ["target_conditioning"],
+        "target_conditioning": ["target_pose"],
         "target_pose": ["fanout"],
         "fanout": ["real", "log"],
         "sim": [],
@@ -47,7 +48,8 @@ class VivyFlowPanel:
         "deadband": "anchor_delta",
         "axis_remap": "deadband",
         "world_transform": "axis_remap",
-        "target_pose": "world_transform",
+        "target_conditioning": "world_transform",
+        "target_pose": "target_conditioning",
         "fanout": "target_pose",
         "real": "fanout",
         "log": "fanout",
@@ -65,10 +67,11 @@ class VivyFlowPanel:
         "deadband": 7,
         "axis_remap": 8,
         "world_transform": 9,
-        "target_pose": 10,
-        "fanout": 11,
-        "real": 12,
-        "log": 12,
+        "target_conditioning": 10,
+        "target_pose": 11,
+        "fanout": 12,
+        "real": 13,
+        "log": 13,
     }
 
     def __init__(self, *, width: int = 420, height: int = 320):
@@ -191,6 +194,7 @@ class VivyFlowPanel:
                         "deadband",
                         "axis_remap",
                         "world_transform",
+                        "target_conditioning",
                         "target_pose",
                         "fanout",
                         "real",
@@ -273,6 +277,7 @@ class VivyFlowPanel:
         self._set_row("deadband", "deadband", "active" if target == "real" else "inactive", selected == "deadband", flow_state)
         self._set_row("axis_remap", "axis/sign remap", "active" if target == "real" else "inactive", selected == "axis_remap", flow_state)
         self._set_row("world_transform", "world transform", "active" if target == "real" else "inactive", selected == "world_transform", flow_state)
+        self._set_row("target_conditioning", "target conditioning", "active" if target == "real" else "inactive", selected == "target_conditioning", flow_state)
         self._set_row("target_pose", "target pose", "active" if state_active or target == "real" else "inactive", selected == "target_pose", flow_state)
         self._set_row("fanout", "fanout_target_arm", "warn" if freeze_active else ("active" if target == "real" else "inactive"), selected == "fanout", flow_state)
         self._set_row("real", "Real Arm", "warn" if freeze_active else ("active" if robot_branch_active else "inactive"), selected == "real", flow_state)

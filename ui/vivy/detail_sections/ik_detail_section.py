@@ -14,6 +14,10 @@ class IkDetailSection:
             ui.Label("IK Joint Table", style=header_style)
             with ui.VStack(spacing=4) as ik_joint_table_container:
                 self.panel._labels["ik_joint_table_container"] = ik_joint_table_container
+                with ui.HStack(height=22, spacing=8):
+                    ui.Label("joint", width=170, style={**value_style, "font_size": 12})
+                    ui.Label("axis", width=110, style={**value_style, "font_size": 12})
+                    ui.Label("mode", width=90, style={**value_style, "font_size": 12})
             ui.Spacer(height=6)
             ui.Label("IK Tuning", style=header_style)
 
