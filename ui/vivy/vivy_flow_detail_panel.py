@@ -27,6 +27,9 @@ class VivyFlowDetailPanel:
         self._last_saved_record_name: str | None = None
         self._quest_recording_names: list[str] = []
         self._quest_replay_container = None
+        self._ik_joint_names: list[str] = []
+        self._ik_joint_container = None
+        self._last_payload_rows: dict[str, dict[str, Any]] = {}
 
     def _dock_window(self, ui_module: Any) -> None:
         if self._window is None or self._docked:
@@ -211,6 +214,75 @@ class VivyFlowDetailPanel:
         except Exception as exc:
             self._labels["quest_status"].text = f"Delete failed: {exc}"
 
+    def _list_joint_names(self) -> list[str]:
+        config = self._read_vivy_config()
+        names = config.get("joint_names")
+        if isinstance(names, list):
+            return [str(name) for name in names]
+        return []
+
+    def _refresh_hold_dropdown(self, selected_name: str | None = None) -> None:
+        try:
+            import omni.ui as ui
+        except ImportError:
+            return
+        container = self._ik_joint_container
+        if container is None:
+            return
+        names = self._list_joint_names()
+        self._ik_joint_names = names
+        display_names = names or ["(none)"]
+        try:
+            container.clear()
+        except Exception:
+            pass
+        with container:
+            ui.Label("joint", width=48, style={"color": self._TEXT_NEUTRAL, "font_size": 13})
+            combo = ui.ComboBox(0, *display_names, width=220)
+            self._labels["ik_joint_combo"] = combo
+            self._labels["ik_joint_combo_model"] = combo.model
+        if names:
+            if selected_name in names:
+                selected_index = names.index(selected_name)
+            else:
+                selected_index = 0
+            self._labels["ik_joint_combo_model"].get_item_value_model().set_value(selected_index)
+
+    def _selected_hold_joint(self) -> str | None:
+        combo_model = self._labels.get("ik_joint_combo_model")
+        if combo_model is None:
+            return None
+        selected_index = int(combo_model.get_item_value_model().as_int)
+        if 0 <= selected_index < len(self._ik_joint_names):
+            return self._ik_joint_names[selected_index]
+        return None
+
+    def _toggle_hold_selected_joint(self) -> None:
+        try:
+            joint_name = self._selected_hold_joint()
+            if not joint_name:
+                raise ValueError("select a joint")
+            config = self._read_vivy_config()
+            joints = dict(config.get("joints") or {})
+            joint_entry = dict(joints.get(joint_name) or {})
+            current_hold = bool(joint_entry.get("hold_start", False))
+            next_hold = not current_hold
+            joint_entry["hold_start"] = next_hold
+            joints[joint_name] = joint_entry
+            config["joints"] = joints
+            self._write_vivy_config(config)
+            self._labels["ik_status"].text = (
+                f"Saved {joint_name} -> {'hold' if next_hold else 'solve'}. Applies live and persists for next run."
+            )
+        except Exception as exc:
+            self._labels["ik_status"].text = f"Toggle failed: {exc}"
+
+    @staticmethod
+    def _current_payload_rows(payload: dict[str, Any] | None = None) -> dict[str, dict[str, Any]]:
+        payload = payload or {}
+        rows = payload.get("joint_display_rows") or []
+        return {str(row.get("joint")): row for row in rows if isinstance(row, dict)}
+
     def _ensure_window(self) -> None:
         if self._window is not None:
             return
@@ -283,9 +355,22 @@ class VivyFlowDetailPanel:
                             clicked_fn=lambda: self._save_axis_remap(),
                         )
                         self._labels["axis_status"] = ui.Label("", style=value_style, word_wrap=True)
+                    with ui.VStack(spacing=4) as ik_editor:
+                        self._labels["ik_editor"] = ik_editor
+                        ui.Label("IK Hold Control", style=header_style)
+                        with ui.HStack(height=26, spacing=6) as ik_joint_container:
+                            self._ik_joint_container = ik_joint_container
+                            self._refresh_hold_dropdown()
+                        self._labels["ik_toggle_button"] = ui.Button(
+                            "Set Hold",
+                            height=28,
+                            clicked_fn=lambda: self._toggle_hold_selected_joint(),
+                        )
+                        self._labels["ik_status"] = ui.Label("", style=value_style, word_wrap=True)
                     try:
                         quest_editor.visible = False
                         axis_editor.visible = False
+                        ik_editor.visible = False
                     except Exception:
                         pass
         self._dock_window(ui)
@@ -302,6 +387,7 @@ class VivyFlowDetailPanel:
 
         payload = payload or {}
         flow_state = flow_state or {}
+        self._last_payload_rows = self._current_payload_rows(payload)
         selected = str(flow_state.get("selected_node") or "sim")
         self._labels["selected"].text = selected
         if selected != self._last_selected:
@@ -331,6 +417,7 @@ class VivyFlowDetailPanel:
                 self._labels["sim_toggle_button"].text = "Turn Sim View Off" if sim_view_enabled else "Turn Sim View On"
                 self._labels["quest_editor"].visible = False
                 self._labels["axis_editor"].visible = False
+                self._labels["ik_editor"].visible = False
             except Exception:
                 pass
         else:
@@ -355,6 +442,7 @@ class VivyFlowDetailPanel:
                 self._labels["sim_toggle_button"].visible = False
                 self._labels["quest_editor"].visible = selected == "quest"
                 self._labels["axis_editor"].visible = selected == "axis_remap"
+                self._labels["ik_editor"].visible = selected == "ik"
             except Exception:
                 pass
             if selected == "quest":
@@ -370,7 +458,6 @@ class VivyFlowDetailPanel:
                         self._labels["quest_record_model"].set_value(record_name if record_name != "-" else "")
                     self._last_saved_replay_name = replay_name
                     self._last_saved_record_name = record_name
-                    pass
                     if recording_status == "waiting_for_a":
                         status_text = f"Recording armed for {recording_name}. Waiting for A."
                     elif recording_status == "recording":
@@ -380,5 +467,21 @@ class VivyFlowDetailPanel:
                     else:
                         status_text = "Set replay or record names here."
                     self._labels["quest_status"].text = status_text
+                except Exception:
+                    pass
+            elif selected == "ik":
+                try:
+                    rows = dict(self._last_payload_rows)
+                    names = self._list_joint_names()
+                    current_joint = self._selected_hold_joint()
+                    if names != self._ik_joint_names:
+                        self._refresh_hold_dropdown(current_joint)
+                        current_joint = self._selected_hold_joint()
+                    row = rows.get(str(current_joint or ""), {})
+                    current_mode = str(row.get("mode") or "solve")
+                    self._labels["ik_toggle_button"].text = "Set Solve" if current_mode == "hold" else "Set Hold"
+                    self._labels["ik_status"].text = (
+                        f"Selected joint={current_joint or '-'} current_mode={current_mode}. Saves to main config and applies live."
+                    )
                 except Exception:
                     pass
