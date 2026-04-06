@@ -485,10 +485,9 @@ class VivyFlowDetailPanel:
             if selected == "ik":
                 self._last_ik_table_signature = None
                 self._ik_section.load_from_config()
+            elif selected == "processor":
+                self._mapping_section.load_from_config()
             self._last_selected = selected
-
-        if selected == "processor":
-            self._mapping_section.load_from_config()
 
         waiting_for_anchor = bool(payload.get("waiting_for_anchor", True))
         freeze_active = bool(payload.get("freeze_active", False))

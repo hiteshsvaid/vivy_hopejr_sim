@@ -26,7 +26,7 @@ class MappingDetailSection:
                 sign_z = ui.StringField(width=60)
                 self.panel._labels["axis_sign_z_model"] = sign_z.model
             with ui.HStack(height=26, spacing=6):
-                ui.Label("target max", width=74, style=value_style)
+                ui.Label("target_max_delta", width=120, style=value_style)
                 target_delta_field = ui.StringField(width=80)
                 self.panel._labels["target_max_delta_model"] = target_delta_field.model
                 ui.Label("m/tick", width=48, style=value_style)
