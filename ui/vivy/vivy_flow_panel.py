@@ -8,6 +8,14 @@ from typing import Any
 
 
 FLOW_CONTROL_PATH = Path("/tmp/vivy_flow_control.json")
+KIT_INPUT_ICON_PATH = Path(
+    "/home/viaan/issacsim/extscache/omni.kit.window.material_graph-1.8.23/icons/InputNode.svg"
+)
+KIT_OUTPUT_ICON_PATH = Path(
+    "/home/viaan/issacsim/extscache/omni.kit.window.material_graph-1.8.23/icons/OutputNode.svg"
+)
+GRAPH_ICON_DIR = Path("/home/viaan/issacsim/extscache/omni.graph.window.core-2.0.0+107.3.0/icons/node")
+CONTENT_ICON_DIR = Path("/home/viaan/issacsim/extscache/omni.kit.window.content_browser-3.1.1+8131b85d/icons/NvidiaDark")
 
 
 class VivyFlowPanel:
@@ -95,6 +103,25 @@ class VivyFlowPanel:
         "sim": False,
     }
 
+    _INPUT_NODES = {"sim_input", "sim_joint_targets"}
+    _OUTPUT_NODES = {"teleop_state", "target_pose", "joint_targets"}
+    _NODE_ICON_FILES = {
+        "root": CONTENT_ICON_DIR / "usd_stage_256.png",
+        "quest": GRAPH_ICON_DIR / "type_input_noBorder_dark.svg",
+        "processor": GRAPH_ICON_DIR / "type_script_noBorder_dark.svg",
+        "ik": GRAPH_ICON_DIR / "type_function_noBorder_dark.svg",
+        "ik_subprocess": GRAPH_ICON_DIR / "type_compound_noBorder_dark.svg",
+        "quest_anchor_capture": GRAPH_ICON_DIR / "type_event_noBorder_dark.svg",
+        "anchor_delta": GRAPH_ICON_DIR / "type_math_noBorder_dark.svg",
+        "deadband": GRAPH_ICON_DIR / "type_math_noBorder_dark.svg",
+        "axis_remap": GRAPH_ICON_DIR / "type_math_noBorder_dark.svg",
+        "world_transform": GRAPH_ICON_DIR / "type_scene_graph_noBorder_dark.svg",
+        "fanout": GRAPH_ICON_DIR / "type_io_noBorder_dark.svg",
+        "real": GRAPH_ICON_DIR / "type_io_noBorder_dark.svg",
+        "log": GRAPH_ICON_DIR / "type_debug_noBorder_dark.svg",
+        "sim": GRAPH_ICON_DIR / "type_rendering_noBorder_dark.svg",
+    }
+
     def __init__(self, *, width: int = 420, height: int = 320):
         self.width = width
         self.height = height
@@ -103,6 +130,7 @@ class VivyFlowPanel:
         self._row_frames: dict[str, Any] = {}
         self._toggle_buttons: dict[str, Any] = {}
         self._label_buttons: dict[str, Any] = {}
+        self._icon_widgets: dict[str, Any] = {}
 
     def _dock_window(self, ui_module: Any) -> None:
         if self._window is None or self._docked:
@@ -159,6 +187,28 @@ class VivyFlowPanel:
             parent = self._PARENTS.get(parent)
         return True
 
+    def _leaf_icon_path(self, key: str) -> str | None:
+        if key in self._INPUT_NODES and KIT_INPUT_ICON_PATH.exists():
+            return str(KIT_INPUT_ICON_PATH)
+        if key in self._OUTPUT_NODES and KIT_OUTPUT_ICON_PATH.exists():
+            return str(KIT_OUTPUT_ICON_PATH)
+        return None
+
+    def _leaf_icon_text(self, key: str) -> str:
+        if key in self._INPUT_NODES:
+            return "<"
+        if key in self._OUTPUT_NODES:
+            return ">"
+        return "o"
+
+    def _node_icon_path(self, key: str) -> str | None:
+        if key in self._INPUT_NODES or key in self._OUTPUT_NODES:
+            return None
+        path = self._NODE_ICON_FILES.get(key)
+        if path is not None and path.exists():
+            return str(path)
+        return None
+
     def _row(self, ui: Any, key: str) -> None:
         indent = self._INDENT[key]
         with ui.HStack(height=22, spacing=4) as row:
@@ -177,7 +227,20 @@ class VivyFlowPanel:
                     },
                 )
             else:
-                self._toggle_buttons[key] = ui.Label("o", width=18, style={"color": self._TEXT_INACTIVE, "font_size": 12})
+                icon_path = self._leaf_icon_path(key)
+                if icon_path is not None:
+                    self._toggle_buttons[key] = ui.Image(icon_path, width=16, height=16)
+                else:
+                    self._toggle_buttons[key] = ui.Label(
+                        self._leaf_icon_text(key),
+                        width=18,
+                        style={"color": self._TEXT_INACTIVE, "font_size": 12},
+                    )
+            node_icon_path = self._node_icon_path(key)
+            if node_icon_path is not None:
+                self._icon_widgets[key] = ui.Image(node_icon_path, width=16, height=16)
+            else:
+                self._icon_widgets[key] = ui.Spacer(width=16)
             self._label_buttons[key] = ui.Button(
                 "-",
                 width=0,

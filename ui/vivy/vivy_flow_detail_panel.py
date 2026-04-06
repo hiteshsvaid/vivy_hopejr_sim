@@ -37,6 +37,14 @@ RECORDINGS_DIR = Path("/tmp/hope_jr_quest_recordings")
 class VivyFlowDetailPanel:
     _TEXT_HEADER = 0xFFE6EDF3
     _TEXT_NEUTRAL = 0xFFB8B8B8
+    _INPUT_SOURCE_NODE = {
+        "sim_input": "teleop_state",
+        "sim_joint_targets": "joint_targets",
+    }
+    _INPUT_SOURCE_LABEL = {
+        "sim_input": "Out: Teleop State",
+        "sim_joint_targets": "Out: Joint Targets",
+    }
 
     def __init__(self, *, width: int = 420, height: int = 180):
         self.width = width
@@ -151,6 +159,15 @@ class VivyFlowDetailPanel:
     def _toggle_sim_view(self) -> None:
         control = self._read_flow_control()
         control["sim_view_enabled"] = not bool(control.get("sim_view_enabled", True))
+        self._write_flow_control(control)
+
+    def _jump_to_source_output(self) -> None:
+        selected = str(self._read_flow_control().get("selected_node") or "")
+        target = self._INPUT_SOURCE_NODE.get(selected)
+        if not target:
+            return
+        control = self._read_flow_control()
+        control["selected_node"] = target
         self._write_flow_control(control)
 
     @staticmethod
@@ -427,6 +444,11 @@ class VivyFlowDetailPanel:
                     self._labels["selected"] = ui.Label("-", style=value_style, word_wrap=True)
                     self._labels["detail"] = ui.Label("-", style=value_style, word_wrap=True)
                     self._labels["action_hint"] = ui.Label("", style=value_style, word_wrap=True)
+                    self._labels["jump_to_source_button"] = ui.Button(
+                        "Go to source output",
+                        height=28,
+                        clicked_fn=lambda: self._jump_to_source_output(),
+                    )
                     self._labels["sim_toggle_button"] = ui.Button(
                         "Toggle Sim View",
                         height=28,
@@ -439,6 +461,7 @@ class VivyFlowDetailPanel:
                         self._labels["quest_editor"].visible = False
                         self._labels["axis_editor"].visible = False
                         self._labels["ik_editor"].visible = False
+                        self._labels["jump_to_source_button"].visible = False
                     except Exception:
                         pass
         self._dock_window(ui)
@@ -487,6 +510,7 @@ class VivyFlowDetailPanel:
             try:
                 self._labels["sim_toggle_button"].visible = True
                 self._labels["sim_toggle_button"].text = "Turn Sim View Off" if sim_view_enabled else "Turn Sim View On"
+                self._labels["jump_to_source_button"].visible = False
                 self._labels["quest_editor"].visible = False
                 self._labels["axis_editor"].visible = False
                 self._labels["ik_editor"].visible = False
@@ -513,9 +537,13 @@ class VivyFlowDetailPanel:
                 "sim_joint_targets": "Arm motion from IK joint targets.",
             }.get(selected, "Select a node from the flow tree.")
             self._labels["detail"].text = detail
-            self._labels["action_hint"].text = ""
+            source_label = self._INPUT_SOURCE_LABEL.get(selected)
+            self._labels["action_hint"].text = f"Jump to {source_label}." if source_label else ""
             try:
                 self._labels["sim_toggle_button"].visible = False
+                self._labels["jump_to_source_button"].visible = source_label is not None
+                if source_label is not None:
+                    self._labels["jump_to_source_button"].text = f"Go to {source_label}"
                 self._labels["quest_editor"].visible = selected == "quest"
                 self._labels["axis_editor"].visible = selected == "processor"
                 self._labels["ik_editor"].visible = selected == "ik"
