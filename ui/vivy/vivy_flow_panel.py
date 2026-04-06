@@ -20,19 +20,29 @@ class VivyFlowPanel:
 
     _TREE = {
         "root": ["quest"],
-        "quest": ["processor"],
+        "quest": ["processor", "ik", "sim"],
         "processor": ["teleop_state"],
-        "teleop_state": ["ik", "sim"],
-        "ik": ["quest_anchor_capture"],
-        "quest_anchor_capture": ["anchor_delta"],
-        "anchor_delta": ["deadband"],
-        "deadband": ["axis_remap"],
-        "axis_remap": ["world_transform"],
-        "world_transform": ["target_conditioning"],
-        "target_conditioning": ["target_pose"],
-        "target_pose": ["fanout"],
+        "teleop_state": [],
+        "ik": ["ik_subprocess", "joint_targets", "fanout"],
+        "ik_subprocess": [
+            "quest_anchor_capture",
+            "anchor_delta",
+            "deadband",
+            "axis_remap",
+            "world_transform",
+            "target_pose",
+        ],
+        "quest_anchor_capture": [],
+        "anchor_delta": [],
+        "deadband": [],
+        "axis_remap": [],
+        "world_transform": [],
+        "target_pose": [],
+        "joint_targets": [],
         "fanout": ["real", "log"],
-        "sim": [],
+        "sim": ["sim_input", "sim_joint_targets"],
+        "sim_input": [],
+        "sim_joint_targets": [],
         "real": [],
         "log": [],
     }
@@ -41,18 +51,21 @@ class VivyFlowPanel:
         "quest": "root",
         "processor": "quest",
         "teleop_state": "processor",
-        "ik": "teleop_state",
-        "sim": "teleop_state",
-        "quest_anchor_capture": "ik",
-        "anchor_delta": "quest_anchor_capture",
-        "deadband": "anchor_delta",
-        "axis_remap": "deadband",
-        "world_transform": "axis_remap",
-        "target_conditioning": "world_transform",
-        "target_pose": "target_conditioning",
-        "fanout": "target_pose",
+        "ik": "quest",
+        "sim": "quest",
+        "ik_subprocess": "ik",
+        "quest_anchor_capture": "ik_subprocess",
+        "anchor_delta": "ik_subprocess",
+        "deadband": "ik_subprocess",
+        "axis_remap": "ik_subprocess",
+        "world_transform": "ik_subprocess",
+        "target_pose": "ik_subprocess",
+        "joint_targets": "ik",
+        "fanout": "ik",
         "real": "fanout",
         "log": "fanout",
+        "sim_input": "sim",
+        "sim_joint_targets": "sim",
     }
 
     _INDENT = {
@@ -60,18 +73,26 @@ class VivyFlowPanel:
         "quest": 1,
         "processor": 2,
         "teleop_state": 3,
-        "ik": 4,
-        "sim": 4,
-        "quest_anchor_capture": 5,
-        "anchor_delta": 6,
-        "deadband": 7,
-        "axis_remap": 8,
-        "world_transform": 9,
-        "target_conditioning": 10,
-        "target_pose": 11,
-        "fanout": 12,
-        "real": 13,
-        "log": 13,
+        "ik": 2,
+        "sim": 2,
+        "ik_subprocess": 3,
+        "quest_anchor_capture": 4,
+        "anchor_delta": 4,
+        "deadband": 4,
+        "axis_remap": 4,
+        "world_transform": 4,
+        "target_pose": 4,
+        "joint_targets": 3,
+        "fanout": 3,
+        "real": 4,
+        "log": 4,
+        "sim_input": 3,
+        "sim_joint_targets": 3,
+    }
+
+    _DEFAULT_EXPANDED = {
+        "processor": False,
+        "sim": False,
     }
 
     def __init__(self, *, width: int = 420, height: int = 320):
@@ -121,13 +142,14 @@ class VivyFlowPanel:
     def _toggle_node(self, node_name: str) -> None:
         control = self._read_flow_control()
         expanded = dict(control.get("expanded") or {})
-        expanded[node_name] = not bool(expanded.get(node_name, True))
+        default_value = bool(self._DEFAULT_EXPANDED.get(node_name, True))
+        expanded[node_name] = not bool(expanded.get(node_name, default_value))
         control["expanded"] = expanded
         self._write_flow_control(control)
 
     def _is_expanded(self, node_name: str, flow_state: dict[str, Any]) -> bool:
         expanded = dict(flow_state.get("expanded") or {})
-        return bool(expanded.get(node_name, True))
+        return bool(expanded.get(node_name, self._DEFAULT_EXPANDED.get(node_name, True)))
 
     def _is_visible(self, node_name: str, flow_state: dict[str, Any]) -> bool:
         parent = self._PARENTS.get(node_name)
@@ -189,17 +211,20 @@ class VivyFlowPanel:
                         "processor",
                         "teleop_state",
                         "ik",
+                        "ik_subprocess",
                         "quest_anchor_capture",
                         "anchor_delta",
                         "deadband",
                         "axis_remap",
                         "world_transform",
-                        "target_conditioning",
                         "target_pose",
+                        "joint_targets",
                         "fanout",
                         "real",
                         "log",
                         "sim",
+                        "sim_input",
+                        "sim_joint_targets",
                     ]:
                         self._row(ui, key)
         self._dock_window(ui)
@@ -270,16 +295,19 @@ class VivyFlowPanel:
             flow_state,
         )
         self._set_row("processor", "quest_signal_processor", "active" if source_active else "inactive", selected == "processor", flow_state)
-        self._set_row("teleop_state", "Teleop State", "active" if state_active or source_active else "inactive", selected == "teleop_state", flow_state)
+        self._set_row("teleop_state", "Out: Teleop State", "active" if state_active or source_active else "inactive", selected == "teleop_state", flow_state)
         self._set_row("ik", "IK  (quest_ik_arm)", "warn" if freeze_active else ("active" if target == "real" else "inactive"), selected == "ik", flow_state)
+        self._set_row("sim", f"Sim View  {'ON' if sim_view_enabled else 'OFF'}", "active" if sim_branch_active and sim_view_enabled else "inactive", selected == "sim", flow_state)
+        self._set_row("ik_subprocess", "subprocess", "active" if target == "real" else "inactive", selected == "ik_subprocess", flow_state)
         self._set_row("quest_anchor_capture", "anchor capture", "active" if target == "real" else "inactive", selected == "quest_anchor_capture", flow_state)
         self._set_row("anchor_delta", "anchor-relative delta", "active" if target == "real" else "inactive", selected == "anchor_delta", flow_state)
         self._set_row("deadband", "deadband", "active" if target == "real" else "inactive", selected == "deadband", flow_state)
         self._set_row("axis_remap", "axis/sign remap", "active" if target == "real" else "inactive", selected == "axis_remap", flow_state)
         self._set_row("world_transform", "world transform", "active" if target == "real" else "inactive", selected == "world_transform", flow_state)
-        self._set_row("target_conditioning", "target conditioning", "active" if target == "real" else "inactive", selected == "target_conditioning", flow_state)
-        self._set_row("target_pose", "target pose", "active" if state_active or target == "real" else "inactive", selected == "target_pose", flow_state)
+        self._set_row("target_pose", "Out: Target Pose", "active" if state_active or target == "real" else "inactive", selected == "target_pose", flow_state)
+        self._set_row("joint_targets", "Out: Joint Targets", "warn" if freeze_active else ("active" if target == "real" else "inactive"), selected == "joint_targets", flow_state)
         self._set_row("fanout", "fanout_target_arm", "warn" if freeze_active else ("active" if target == "real" else "inactive"), selected == "fanout", flow_state)
         self._set_row("real", "Real Arm", "warn" if freeze_active else ("active" if robot_branch_active else "inactive"), selected == "real", flow_state)
         self._set_row("log", "Log Sink", "active" if log_branch_active else "inactive", selected == "log", flow_state)
-        self._set_row("sim", f"Sim View  {'ON' if sim_view_enabled else 'OFF'}", "active" if sim_branch_active and sim_view_enabled else "inactive", selected == "sim", flow_state)
+        self._set_row("sim_input", "In: Teleop State", "active" if state_active or source_active else "inactive", selected == "sim_input", flow_state)
+        self._set_row("sim_joint_targets", "In: Joint Targets", "warn" if freeze_active else ("active" if target == "real" else "inactive"), selected == "sim_joint_targets", flow_state)

@@ -291,7 +291,7 @@ class VivyFlowDetailPanel:
             return self._ik_jacobian_modes[selected_index]
         return "finite_difference"
 
-    def _save_joint_mode_axis(self, joint_name: str, *, mode: str | None = None, axis: str | None = None) -> None:
+    def _save_joint_mode_axis(self, joint_name: str, *, mode: str | None = None, axis: str | None = None, weight: float | None = None) -> None:
         try:
             config = self._read_vivy_config()
             joints = dict(config.get("joints") or {})
@@ -304,12 +304,17 @@ class VivyFlowDetailPanel:
                 if axis not in self._joint_axis_options:
                     raise ValueError("invalid axis")
                 joint_entry["axis"] = axis
+            if weight is not None:
+                if weight < 0.0:
+                    raise ValueError("weight must be >= 0")
+                joint_entry["weight"] = float(weight)
             joints[joint_name] = joint_entry
             config["joints"] = joints
             self._write_vivy_config(config)
             mode_text = "hold" if bool(joint_entry.get("hold_start", False)) else "solve"
             axis_text = str(joint_entry.get("axis") or "-")
-            self._labels["ik_status"].text = f"Saved {joint_name}: axis={axis_text} mode={mode_text}. Applies live."
+            weight_text = float(joint_entry.get("weight", 1.0))
+            self._labels["ik_status"].text = f"Saved {joint_name}: axis={axis_text} mode={mode_text} weight={weight_text:.2f}. Applies live."
         except Exception as exc:
             self._labels["ik_status"].text = f"Save failed: {exc}"
 
@@ -324,7 +329,9 @@ class VivyFlowDetailPanel:
         names = self._list_joint_names()
         self._ik_joint_names = names
         axis_map = self._joint_axis_map()
-        signature = tuple((joint_name, str(axis_map.get(joint_name, "Y")), str(rows.get(joint_name, {}).get("mode") or "solve")) for joint_name in names)
+        config = self._read_vivy_config()
+        joints = dict(config.get("joints") or {})
+        signature = tuple((joint_name, str(axis_map.get(joint_name, "Y")), str(rows.get(joint_name, {}).get("mode") or "solve"), float(dict(joints.get(joint_name) or {}).get("weight", 1.0))) for joint_name in names)
         if signature == self._last_ik_table_signature:
             return
         self._last_ik_table_signature = signature
@@ -336,21 +343,31 @@ class VivyFlowDetailPanel:
         with container:
             with ui.HStack(height=22, spacing=8):
                 ui.Label("joint", width=170, style=header_style)
-                ui.Label("axis", width=100, style=header_style)
+                ui.Label("axis", width=90, style=header_style)
+                ui.Label("weight", width=70, style=header_style)
                 ui.Label("mode", width=90, style=header_style)
             for joint_name in names:
                 current_axis = str(axis_map.get(joint_name, "Y"))
                 current_mode = str(rows.get(joint_name, {}).get("mode") or "solve")
+                current_weight = float(dict(joints.get(joint_name) or {}).get("weight", 1.0))
                 with ui.HStack(height=24, spacing=8):
                     ui.Label(joint_name, width=170, style={"color": self._TEXT_NEUTRAL, "font_size": 12})
                     axis_index = self._joint_axis_options.index(current_axis) if current_axis in self._joint_axis_options else 0
-                    axis_combo = ui.ComboBox(axis_index, *self._joint_axis_options, width=100)
+                    axis_combo = ui.ComboBox(axis_index, *self._joint_axis_options, width=90)
                     axis_model = axis_combo.model
                     axis_item_model = axis_model.get_item_value_model()
                     axis_item_model.add_value_changed_fn(
                         lambda model, joint_name=joint_name: self._save_joint_mode_axis(
                             joint_name,
                             axis=self._joint_axis_options[int(model.as_int)],
+                        )
+                    )
+                    weight_field = ui.StringField(width=70)
+                    weight_field.model.set_value(f"{current_weight:.2f}")
+                    weight_field.model.add_end_edit_fn(
+                        lambda model, joint_name=joint_name: self._save_joint_mode_axis(
+                            joint_name,
+                            weight=float(model.get_value_as_string()),
                         )
                     )
                     mode_options = ["solve", "hold"]
@@ -447,7 +464,7 @@ class VivyFlowDetailPanel:
                 self._ik_section.load_from_config()
             self._last_selected = selected
 
-        if selected in {"axis_remap", "target_conditioning"}:
+        if selected == "processor":
             self._mapping_section.load_from_config()
 
         waiting_for_anchor = bool(payload.get("waiting_for_anchor", True))
@@ -484,20 +501,23 @@ class VivyFlowDetailPanel:
                 "quest_anchor_capture": "Place the Quest controller where you want, press A, and that current controller position/orientation plus the current robot pose become the new anchor.",
                 "anchor_delta": "Computes current hand position minus anchor position.",
                 "deadband": "Suppresses small motion below the configured threshold.",
+                "processor": "Processes Quest packets and applies axis/sign remap plus target conditioning before IK.",
                 "axis_remap": "Applies axis reorder and sign flips to Quest deltas.",
                 "world_transform": "Applies scale and world-frame rotation.",
-                "target_conditioning": "Clamps target-position change per control tick before IK.",
                 "target_pose": "Builds the target pose used for downstream consumers.",
-                "fanout": "Consumes teleop state for real/log sinks",
+                "joint_targets": "Final IK output: computed joint-angle targets for downstream consumers.",
+                "fanout": "Consumes joint-angle targets for real/log sinks",
                 "real": "Hardware sink branch",
                 "log": f"log sink branch output={robot_output}",
+                "sim_input": "Red-dot / target visualization from teleop state.",
+                "sim_joint_targets": "Arm motion from IK joint targets.",
             }.get(selected, "Select a node from the flow tree.")
             self._labels["detail"].text = detail
             self._labels["action_hint"].text = ""
             try:
                 self._labels["sim_toggle_button"].visible = False
                 self._labels["quest_editor"].visible = selected == "quest"
-                self._labels["axis_editor"].visible = selected in {"axis_remap", "target_conditioning"}
+                self._labels["axis_editor"].visible = selected == "processor"
                 self._labels["ik_editor"].visible = selected == "ik"
             except Exception:
                 pass

@@ -102,6 +102,7 @@ class VivyTargetViewer:
         self.kinematics = VivyArmKinematics.from_json(SIM_CONFIG_PATH)
         self.model_neutral_pose = self.kinematics.forward_kinematics(neutral_deg)
         self.model_to_stage_transform = np.eye(4)
+        self._anchor_model_to_stage_transform = np.eye(4)
         self._stage_anchor_pose = None
         self._last_waiting_for_anchor = True
         HopeJrStageIo = _load_stage_io_class()
@@ -183,6 +184,7 @@ class VivyTargetViewer:
         waiting_for_anchor = bool(payload.get("waiting_for_anchor", True))
         if waiting_for_anchor:
             self._stage_anchor_pose = None
+            self._anchor_model_to_stage_transform = np.eye(4)
         elif self._stage_anchor_pose is None or self._last_waiting_for_anchor:
             self._stage_anchor_pose = stage_pose.copy()
         self._last_waiting_for_anchor = waiting_for_anchor
@@ -202,15 +204,18 @@ class VivyTargetViewer:
         target_pose_model = payload.get("target_pose_model")
         if target_pose_model is None:
             target_pose_stage = stage_pose
-        elif self._stage_anchor_pose is not None and payload.get("position_delta_world") is not None:
-            target_pose_stage = self._stage_anchor_pose.copy()
-            target_pose_stage[:3, 3] = (
-                self._stage_anchor_pose[:3, 3]
-                + np.asarray(payload.get("position_delta_world"), dtype=float)
-                + self.world_offset
-            )
         else:
-            target_pose_stage = self.model_to_stage_transform @ np.asarray(target_pose_model, dtype=float)
+            target_pose_model = np.asarray(target_pose_model, dtype=float)
+            if self._stage_anchor_pose is not None and np.allclose(
+                np.asarray(payload.get("conditioned_position_delta_world") or [0.0, 0.0, 0.0], dtype=float),
+                0.0,
+                atol=1e-6,
+            ):
+                try:
+                    self._anchor_model_to_stage_transform = self._stage_anchor_pose @ np.linalg.inv(target_pose_model)
+                except np.linalg.LinAlgError:
+                    self._anchor_model_to_stage_transform = self.model_to_stage_transform
+            target_pose_stage = self._anchor_model_to_stage_transform @ target_pose_model
 
         sim_target_position = np.asarray(target_pose_stage[:3, 3], dtype=float)
         self.visuals.enabled = bool(flow_control.get("sim_view_enabled", True))
