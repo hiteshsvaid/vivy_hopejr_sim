@@ -73,13 +73,90 @@ class TeleopDebugVisuals:
             self._set_orient(prim, sdf, gf, quat_wxyz)
             self._set_order(prim, ["xformOp:orient"])
 
-    def _ensure_ground_plane(self) -> None:
-        if GroundPlane is None:
+    def _set_shadow_flag(self, prim, sdf) -> None:
+        attr = prim.GetAttribute("primvars:doNotCastShadows")
+        if not attr.IsValid():
+            attr = prim.CreateAttribute("primvars:doNotCastShadows", sdf.ValueTypeNames.Bool)
+        attr.Set(True)
+
+    def _create_checker_mesh(self, stage, usd_geom, sdf, path: str, *, z: float, tile_half: float, xdim: int, ydim: int, checker_mod: int, color) -> None:
+        xdim_half = xdim / 2
+        ydim_half = ydim / 2
+        points = []
+        counts = []
+        indices = []
+        for y in range(ydim):
+            y_offset = (y - ydim_half) * tile_half * 2.0 + tile_half
+            for x in range(xdim):
+                x_offset = (x - xdim_half) * tile_half * 2.0 + tile_half
+                if (x + y) % 2 != checker_mod:
+                    continue
+                base = len(points)
+                points.extend([
+                    (-tile_half + x_offset, -tile_half + y_offset, z),
+                    ( tile_half + x_offset, -tile_half + y_offset, z),
+                    ( tile_half + x_offset,  tile_half + y_offset, z),
+                    (-tile_half + x_offset,  tile_half + y_offset, z),
+                ])
+                counts.append(4)
+                indices.extend([base + 0, base + 1, base + 2, base + 3])
+
+        mesh = usd_geom.Mesh.Define(stage, path)
+        mesh.CreatePointsAttr(points)
+        mesh.CreateFaceVertexCountsAttr(counts)
+        mesh.CreateFaceVertexIndicesAttr(indices)
+        mesh.CreateDisplayColorAttr().Set([color])
+        prim = mesh.GetPrim()
+        prim.CreateAttribute("purpose", sdf.ValueTypeNames.Token).Set("render")
+        self._set_shadow_flag(prim, sdf)
+
+    def _define_visual_wall(self, stage, usd_geom, sdf, gf, path: str, *, position, scale, color) -> None:
+        wall = usd_geom.Cube.Define(stage, path)
+        wall.CreateSizeAttr(1.0)
+        prim = wall.GetPrim()
+        self._set_display_color(prim, sdf, gf, color)
+        self._set_translate(prim, sdf, gf, position)
+        scale_attr = prim.GetAttribute("xformOp:scale")
+        if not scale_attr.IsValid():
+            scale_attr = prim.CreateAttribute("xformOp:scale", sdf.ValueTypeNames.Double3)
+        scale_attr.Set(gf.Vec3d(*[float(v) for v in scale]))
+        self._set_order(prim, ["xformOp:translate", "xformOp:scale"])
+        prim.CreateAttribute("purpose", sdf.ValueTypeNames.Token).Set("render")
+        self._set_shadow_flag(prim, sdf)
+
+    def _ensure_ground_plane(self, stage=None, usd_geom=None, sdf=None, gf=None) -> None:
+        if GroundPlane is not None:
+            try:
+                GroundPlane(prim_path="/World/GroundPlane", z_position=-0.60)
+            except Exception:
+                pass
+        if stage is None or usd_geom is None or sdf is None or gf is None:
             return
-        try:
-            GroundPlane(prim_path="/World/GroundPlane", z_position=-0.65)
-        except Exception:
-            pass
+        root_path = "/World/TeleopGroundVisual"
+        stage.DefinePrim(root_path, "Xform")
+        dark = gf.Vec3f(0.16, 0.18, 0.22)
+        light = gf.Vec3f(0.28, 0.31, 0.36)
+        tile_half = 0.12
+        z = -0.599
+        self._create_checker_mesh(stage, usd_geom, sdf, f"{root_path}/Checker0", z=z, tile_half=tile_half, xdim=40, ydim=40, checker_mod=0, color=dark)
+        self._create_checker_mesh(stage, usd_geom, sdf, f"{root_path}/Checker1", z=z, tile_half=tile_half, xdim=40, ydim=40, checker_mod=1, color=light)
+        wall_color = gf.Vec3f(0.10, 0.12, 0.16)
+        side_color = gf.Vec3f(0.12, 0.14, 0.18)
+        stripe_color = gf.Vec3f(0.22, 0.24, 0.30)
+        self._define_visual_wall(stage, usd_geom, sdf, gf, f"{root_path}/BackWall", position=(0.0, 1.47, 0.1), scale=(4.25, 0.04, 1.4), color=wall_color)
+        self._define_visual_wall(stage, usd_geom, sdf, gf, f"{root_path}/BackWallStripeV0", position=(-1.2, 1.445, 0.1), scale=(0.18, 0.01, 1.4), color=stripe_color)
+        self._define_visual_wall(stage, usd_geom, sdf, gf, f"{root_path}/BackWallStripeV1", position=(0.0, 1.445, 0.1), scale=(0.18, 0.01, 1.4), color=stripe_color)
+        self._define_visual_wall(stage, usd_geom, sdf, gf, f"{root_path}/BackWallStripeV2", position=(1.2, 1.445, 0.1), scale=(0.18, 0.01, 1.4), color=stripe_color)
+        self._define_visual_wall(stage, usd_geom, sdf, gf, f"{root_path}/BackWallStripeH0", position=(0.0, 1.445, -0.25), scale=(4.25, 0.01, 0.04), color=stripe_color)
+        self._define_visual_wall(stage, usd_geom, sdf, gf, f"{root_path}/BackWallStripeH1", position=(0.0, 1.445, 0.10), scale=(4.25, 0.01, 0.04), color=stripe_color)
+        self._define_visual_wall(stage, usd_geom, sdf, gf, f"{root_path}/BackWallStripeH2", position=(0.0, 1.445, 0.45), scale=(4.25, 0.01, 0.04), color=stripe_color)
+        self._define_visual_wall(stage, usd_geom, sdf, gf, f"{root_path}/SideWall", position=(-1.344, 0.0, 0.1), scale=(0.04, 4.25, 1.4), color=side_color)
+        self._define_visual_wall(stage, usd_geom, sdf, gf, f"{root_path}/SideWallStripeV0", position=(-1.319, -1.2, 0.1), scale=(0.01, 0.18, 1.4), color=stripe_color)
+        self._define_visual_wall(stage, usd_geom, sdf, gf, f"{root_path}/SideWallStripeV1", position=(-1.319, 0.0, 0.1), scale=(0.01, 0.18, 1.4), color=stripe_color)
+        self._define_visual_wall(stage, usd_geom, sdf, gf, f"{root_path}/SideWallStripeV2", position=(-1.319, 1.2, 0.1), scale=(0.01, 0.18, 1.4), color=stripe_color)
+        self._define_visual_wall(stage, usd_geom, sdf, gf, f"{root_path}/SideWallStripeH0", position=(-1.319, 0.0, -0.25), scale=(0.01, 4.25, 0.04), color=stripe_color)
+        self._define_visual_wall(stage, usd_geom, sdf, gf, f"{root_path}/SideWallStripeH1", position=(-1.319, 0.0, 0.10), scale=(0.01, 4.25, 0.04), color=stripe_color)
+        self._define_visual_wall(stage, usd_geom, sdf, gf, f"{root_path}/SideWallStripeH2", position=(-1.319, 0.0, 0.45), scale=(0.01, 4.25, 0.04), color=stripe_color)
 
     def _define_scene_backdrop(self, stage, usd_geom, sdf, gf, reference_position) -> None:
         root_path = "/World/TeleopBackdrop"
@@ -107,7 +184,7 @@ class TeleopDebugVisuals:
         except ImportError:
             return
 
-        self._ensure_ground_plane()
+        self._ensure_ground_plane(stage, UsdGeom, Sdf, Gf)
         stage.DefinePrim(self.teleop_debug_root, "Xform")
         sim_target_color = (0.0, 1.0, 0.0) if waiting_for_anchor else (1.0, 0.0, 0.0)
         if reference_position is not None:
