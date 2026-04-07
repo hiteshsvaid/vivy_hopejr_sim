@@ -122,11 +122,13 @@ class VivyFlowDetailPanel:
         controller_defaults = dict(config.get("controller_defaults") or {})
         axes = str(script_defaults.get("quest_position_axes", controller_defaults.get("quest_position_axes", "xyz")))
         signs = list(script_defaults.get("quest_position_signs", controller_defaults.get("quest_position_signs", [1.0, 1.0, 1.0])))
+        position_scale = float(script_defaults.get("position_scale", controller_defaults.get("position_scale", 1.0)))
         try:
             self._labels["axis_axes_model"].set_value(axes)
             self._labels["axis_sign_x_model"].set_value(str(signs[0]))
             self._labels["axis_sign_y_model"].set_value(str(signs[1]))
             self._labels["axis_sign_z_model"].set_value(str(signs[2]))
+            self._labels["position_scale_model"].set_value(str(position_scale))
             self._labels["target_max_delta_model"].set_value(str(controller_defaults.get("target_max_delta_m_per_tick", 0.0)))
             self._labels["axis_status"].text = "Edit and save. Applies live."
         except Exception:
@@ -143,16 +145,22 @@ class VivyFlowDetailPanel:
             config = self._read_vivy_config()
             controller_defaults = dict(config.get("controller_defaults") or {})
             script_defaults = dict(config.get("script_editor_test_defaults") or {})
+            position_scale = float(self._labels["position_scale_model"].get_value_as_string())
             target_max_delta = float(self._labels["target_max_delta_model"].get_value_as_string())
+            controller_defaults["position_scale"] = position_scale
             controller_defaults["quest_position_axes"] = axes
             controller_defaults["quest_position_signs"] = list(signs)
             controller_defaults["target_max_delta_m_per_tick"] = target_max_delta
+            script_defaults["position_scale"] = position_scale
             script_defaults["quest_position_axes"] = axes
             script_defaults["quest_position_signs"] = list(signs)
             config["controller_defaults"] = controller_defaults
             config["script_editor_test_defaults"] = script_defaults
             self._write_vivy_config(config)
-            self._labels["axis_status"].text = f"Saved axes={axes} signs={signs} target_max_delta={target_max_delta}. Applies live."
+            self._labels["axis_status"].text = (
+                f"Saved position_scale={position_scale} axes={axes} signs={signs} "
+                f"target_max_delta={target_max_delta}. Applies live."
+            )
         except Exception as exc:
             self._labels["axis_status"].text = f"Save failed: {exc}"
 

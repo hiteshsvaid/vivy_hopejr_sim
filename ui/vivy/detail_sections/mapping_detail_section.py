@@ -26,6 +26,15 @@ class MappingDetailSection:
                 sign_z = ui.StringField(width=60)
                 self.panel._labels["axis_sign_z_model"] = sign_z.model
             with ui.HStack(height=26, spacing=6):
+                ui.Label("position_scale", width=120, style=value_style)
+                position_scale_field = ui.StringField(width=80)
+                self.panel._labels["position_scale_model"] = position_scale_field.model
+            ui.Label(
+                "Scales Quest translation before IK. Larger values make controller motion move the target more.",
+                style=value_style,
+                word_wrap=True,
+            )
+            with ui.HStack(height=26, spacing=6):
                 ui.Label("target_max_delta", width=120, style=value_style)
                 target_delta_field = ui.StringField(width=80)
                 self.panel._labels["target_max_delta_model"] = target_delta_field.model
