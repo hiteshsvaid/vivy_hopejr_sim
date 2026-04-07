@@ -16,6 +16,13 @@ class TeleopDebugVisuals:
         self.teleop_debug_root = teleop_debug_root.rstrip("/")
         self.enabled = bool(enabled)
 
+    def _set_visibility(self, prim, usd_geom, visible: bool) -> None:
+        imageable = usd_geom.Imageable(prim)
+        if visible:
+            imageable.MakeVisible()
+        else:
+            imageable.MakeInvisible()
+
     def _set_display_color(self, prim, sdf, gf, color: tuple[float, float, float]) -> None:
         display_attr = prim.GetAttribute("primvars:displayColor")
         if not display_attr.IsValid():
@@ -179,14 +186,17 @@ class TeleopDebugVisuals:
 
     def _define_pitch_frames(self, stage, usd_geom, sdf, gf, pitch_visual: dict[str, np.ndarray] | None) -> None:
         root_path = f"{self.teleop_debug_root}/PitchFrames"
-        self._clear_prim(stage, root_path)
         if not isinstance(pitch_visual, dict):
+            root_prim = stage.GetPrimAtPath(root_path)
+            if root_prim.IsValid():
+                self._set_visibility(root_prim, usd_geom, False)
             return
         parent_frame = np.asarray(pitch_visual.get('parent_frame'), dtype=float)
         child_frame = np.asarray(pitch_visual.get('child_frame'), dtype=float)
         child_frame_raw = np.asarray(pitch_visual.get('child_frame_raw'), dtype=float)
         axis_world = np.asarray(pitch_visual.get('axis_world'), dtype=float)
-        stage.DefinePrim(root_path, 'Xform')
+        root_prim = stage.DefinePrim(root_path, 'Xform')
+        self._set_visibility(root_prim, usd_geom, True)
         self._define_frame_axes(stage, usd_geom, sdf, gf, f"{root_path}/Parent", parent_frame, axis_length=0.035, radius=0.0012, colors=((1.0, 0.72, 0.05), (1.0, 0.16, 0.06), (1.0, 0.92, 0.08)))
         self._define_frame_axes(stage, usd_geom, sdf, gf, f"{root_path}/Child", child_frame, axis_length=0.028, radius=0.0009, colors=((0.3, 0.8, 1.0), (0.8, 0.3, 1.0), (0.6, 0.9, 1.0)))
         parent_origin = np.asarray(parent_frame[:3, 3], dtype=float)
@@ -297,7 +307,9 @@ class TeleopDebugVisuals:
         if show_pitch_frames:
             self._define_pitch_frames(stage, UsdGeom, Sdf, Gf, pitch_visual)
         else:
-            self._clear_prim(stage, f"{self.teleop_debug_root}/PitchFrames")
+            pitch_frames_prim = stage.GetPrimAtPath(f"{self.teleop_debug_root}/PitchFrames")
+            if pitch_frames_prim.IsValid():
+                self._set_visibility(pitch_frames_prim, UsdGeom, False)
 
         if actual_end_effector_pose is None:
             return
