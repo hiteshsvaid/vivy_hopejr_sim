@@ -19,6 +19,7 @@ VIVY_SIDE_PANEL_PATH = Path("/home/viaan/vivy_hopejr_sim/ui/vivy/vivy_side_panel
 VIVY_FLOW_PANEL_PATH = Path("/home/viaan/vivy_hopejr_sim/ui/vivy/vivy_flow_panel.py")
 VIVY_FLOW_DETAIL_PANEL_PATH = Path("/home/viaan/vivy_hopejr_sim/ui/vivy/vivy_flow_detail_panel.py")
 FLOW_CONTROL_PATH = Path("/tmp/vivy_flow_control.json")
+STAGE_FEEDBACK_PATH = Path("/tmp/vivy_stage_feedback.json")
 
 _ACTIVE_LOOP = None
 
@@ -78,6 +79,13 @@ def _read_flow_control(path: Path = FLOW_CONTROL_PATH) -> dict:
         return json.loads(path.read_text(encoding="utf-8"))
     except Exception:
         return {}
+
+
+def _write_stage_feedback(path: Path, payload: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = path.with_suffix(".tmp")
+    tmp_path.write_text(json.dumps(payload) + "\n", encoding="utf-8")
+    tmp_path.replace(path)
 
 
 class VivyTargetViewer:
@@ -249,6 +257,23 @@ class VivyTargetViewer:
             self.flow_detail_panel.update(payload, flow_control)
         except Exception:
             pass
+
+        stage_joint_positions_deg = self.stage_io.read_stage_joint_positions_deg(stage)
+        if stage_joint_positions_deg is not None:
+            try:
+                _write_stage_feedback(
+                    STAGE_FEEDBACK_PATH,
+                    {
+                        "timestamp": time.time(),
+                        "joint_names": list(self.joint_names),
+                        **{
+                            f"{joint_name}.pos_deg": float(stage_joint_positions_deg[index])
+                            for index, joint_name in enumerate(self.joint_names)
+                        },
+                    },
+                )
+            except Exception:
+                pass
 
         waiting_for_anchor = bool(payload.get("waiting_for_anchor", True))
         if waiting_for_anchor:
