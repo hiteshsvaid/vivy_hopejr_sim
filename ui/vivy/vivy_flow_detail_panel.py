@@ -313,7 +313,15 @@ class VivyFlowDetailPanel:
             return self._ik_jacobian_modes[selected_index]
         return "finite_difference"
 
-    def _save_joint_mode_axis(self, joint_name: str, *, mode: str | None = None, axis: str | None = None, weight: float | None = None) -> None:
+    def _save_joint_mode_axis(
+        self,
+        joint_name: str,
+        *,
+        mode: str | None = None,
+        axis: str | None = None,
+        weight: float | None = None,
+        neutral_bias_weight: float | None = None,
+    ) -> None:
         try:
             config = self._read_vivy_config()
             joints = dict(config.get("joints") or {})
@@ -330,13 +338,21 @@ class VivyFlowDetailPanel:
                 if weight < 0.0:
                     raise ValueError("weight must be >= 0")
                 joint_entry["weight"] = float(weight)
+            if neutral_bias_weight is not None:
+                if neutral_bias_weight < 0.0:
+                    raise ValueError("neutral_bias_weight must be >= 0")
+                joint_entry["neutral_bias_weight"] = float(neutral_bias_weight)
             joints[joint_name] = joint_entry
             config["joints"] = joints
             self._write_vivy_config(config)
             mode_text = "hold" if bool(joint_entry.get("hold_start", False)) else "solve"
             axis_text = str(joint_entry.get("axis") or "-")
             weight_text = float(joint_entry.get("weight", 1.0))
-            self._labels["ik_status"].text = f"Saved {joint_name}: axis={axis_text} mode={mode_text} weight={weight_text:.2f}. Applies live."
+            neutral_bias_text = float(joint_entry.get("neutral_bias_weight", 0.0))
+            self._labels["ik_status"].text = (
+                f"Saved {joint_name}: axis={axis_text} mode={mode_text} "
+                f"weight={weight_text:.2f} neutral_bias={neutral_bias_text:.2f}. Applies live."
+            )
         except Exception as exc:
             self._labels["ik_status"].text = f"Save failed: {exc}"
 
@@ -353,7 +369,16 @@ class VivyFlowDetailPanel:
         axis_map = self._joint_axis_map()
         config = self._read_vivy_config()
         joints = dict(config.get("joints") or {})
-        signature = tuple((joint_name, str(axis_map.get(joint_name, "Y")), str(rows.get(joint_name, {}).get("mode") or "solve"), float(dict(joints.get(joint_name) or {}).get("weight", 1.0))) for joint_name in names)
+        signature = tuple(
+            (
+                joint_name,
+                str(axis_map.get(joint_name, "Y")),
+                str(rows.get(joint_name, {}).get("mode") or "solve"),
+                float(dict(joints.get(joint_name) or {}).get("weight", 1.0)),
+                float(dict(joints.get(joint_name) or {}).get("neutral_bias_weight", 0.0)),
+            )
+            for joint_name in names
+        )
         if signature == self._last_ik_table_signature:
             return
         self._last_ik_table_signature = signature
@@ -367,11 +392,13 @@ class VivyFlowDetailPanel:
                 ui.Label("joint", width=170, style=header_style)
                 ui.Label("axis", width=90, style=header_style)
                 ui.Label("weight", width=70, style=header_style)
+                ui.Label("neutral", width=70, style=header_style)
                 ui.Label("mode", width=90, style=header_style)
             for joint_name in names:
                 current_axis = str(axis_map.get(joint_name, "Y"))
                 current_mode = str(rows.get(joint_name, {}).get("mode") or "solve")
                 current_weight = float(dict(joints.get(joint_name) or {}).get("weight", 1.0))
+                current_neutral_bias = float(dict(joints.get(joint_name) or {}).get("neutral_bias_weight", 0.0))
                 with ui.HStack(height=24, spacing=8):
                     ui.Label(joint_name, width=170, style={"color": self._TEXT_NEUTRAL, "font_size": 12})
                     axis_index = self._joint_axis_options.index(current_axis) if current_axis in self._joint_axis_options else 0
@@ -390,6 +417,14 @@ class VivyFlowDetailPanel:
                         lambda model, joint_name=joint_name: self._save_joint_mode_axis(
                             joint_name,
                             weight=float(model.get_value_as_string()),
+                        )
+                    )
+                    neutral_bias_field = ui.StringField(width=70)
+                    neutral_bias_field.model.set_value(f"{current_neutral_bias:.2f}")
+                    neutral_bias_field.model.add_end_edit_fn(
+                        lambda model, joint_name=joint_name: self._save_joint_mode_axis(
+                            joint_name,
+                            neutral_bias_weight=float(model.get_value_as_string()),
                         )
                     )
                     mode_options = ["solve", "hold"]
