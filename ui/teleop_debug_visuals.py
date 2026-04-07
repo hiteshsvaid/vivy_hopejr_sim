@@ -124,6 +124,106 @@ class TeleopDebugVisuals:
         prim.CreateAttribute("purpose", sdf.ValueTypeNames.Token).Set("render")
         self._set_shadow_flag(prim, sdf)
 
+    def _clear_prim(self, stage, path: str) -> None:
+        prim = stage.GetPrimAtPath(path)
+        if prim.IsValid():
+            stage.RemovePrim(path)
+
+    def _define_segment(self, stage, usd_geom, sdf, gf, path: str, start, end, color, radius: float) -> None:
+        start = np.asarray(start, dtype=float)
+        end = np.asarray(end, dtype=float)
+        direction = end - start
+        length = float(np.linalg.norm(direction))
+        if length <= 1e-9:
+            return
+        midpoint = 0.5 * (start + end)
+        rotation, _ = Rotation.align_vectors([direction / length], [np.array([0.0, 0.0, 1.0])])
+        quat_xyzw = rotation.as_quat()
+        quat_wxyz = (float(quat_xyzw[3]), float(quat_xyzw[0]), float(quat_xyzw[1]), float(quat_xyzw[2]))
+        cylinder = usd_geom.Cylinder.Define(stage, path)
+        prim = cylinder.GetPrim()
+        cylinder.GetRadiusAttr().Set(radius)
+        cylinder.GetHeightAttr().Set(length)
+        self._set_display_color(prim, sdf, gf, color)
+        self._set_translate(prim, sdf, gf, midpoint)
+        self._set_orient(prim, sdf, gf, quat_wxyz)
+        self._set_order(prim, ["xformOp:translate", "xformOp:orient"])
+
+    def _define_polyline(self, stage, usd_geom, sdf, gf, root_path: str, points: list[np.ndarray], color, radius: float) -> None:
+        for idx in range(len(points) - 1):
+            self._define_segment(
+                stage,
+                usd_geom,
+                sdf,
+                gf,
+                f"{root_path}/Seg{idx}",
+                points[idx],
+                points[idx + 1],
+                color,
+                radius,
+            )
+
+    def _define_frame_axes(self, stage, usd_geom, sdf, gf, root_path: str, transform: np.ndarray, *, axis_length: float, radius: float, colors) -> None:
+        origin = np.asarray(transform[:3, 3], dtype=float)
+        basis = np.asarray(transform[:3, :3], dtype=float)
+        sphere = usd_geom.Sphere.Define(stage, f"{root_path}/Origin")
+        prim = sphere.GetPrim()
+        self._set_display_color(prim, sdf, gf, colors[0])
+        sphere.GetRadiusAttr().Set(radius * 1.8)
+        self._set_translate(prim, sdf, gf, origin)
+        self._set_order(prim, ["xformOp:translate"])
+        labels = ['X', 'Y', 'Z']
+        for idx, label in enumerate(labels):
+            end = origin + basis[:, idx] * axis_length
+            self._define_segment(stage, usd_geom, sdf, gf, f"{root_path}/{label}", origin, end, colors[idx], radius)
+
+    def _define_pitch_frames(self, stage, usd_geom, sdf, gf, pitch_visual: dict[str, np.ndarray] | None) -> None:
+        root_path = f"{self.teleop_debug_root}/PitchFrames"
+        self._clear_prim(stage, root_path)
+        if not isinstance(pitch_visual, dict):
+            return
+        parent_frame = np.asarray(pitch_visual.get('parent_frame'), dtype=float)
+        child_frame = np.asarray(pitch_visual.get('child_frame'), dtype=float)
+        child_frame_raw = np.asarray(pitch_visual.get('child_frame_raw'), dtype=float)
+        axis_world = np.asarray(pitch_visual.get('axis_world'), dtype=float)
+        stage.DefinePrim(root_path, 'Xform')
+        self._define_frame_axes(stage, usd_geom, sdf, gf, f"{root_path}/Parent", parent_frame, axis_length=0.035, radius=0.0012, colors=((1.0, 0.72, 0.05), (1.0, 0.16, 0.06), (1.0, 0.92, 0.08)))
+        self._define_frame_axes(stage, usd_geom, sdf, gf, f"{root_path}/Child", child_frame, axis_length=0.028, radius=0.0009, colors=((0.3, 0.8, 1.0), (0.8, 0.3, 1.0), (0.6, 0.9, 1.0)))
+        parent_origin = np.asarray(parent_frame[:3, 3], dtype=float)
+        child_origin_raw = np.asarray(child_frame_raw[:3, 3], dtype=float)
+        child_origin_preview = np.asarray(child_frame[:3, 3], dtype=float)
+        self._define_marker_sphere(stage, usd_geom, sdf, gf, f"PitchFrames/ParentOrigin", parent_origin, (1.0, 0.8, 0.2), 0.0032)
+        self._define_marker_sphere(stage, usd_geom, sdf, gf, f"PitchFrames/ChildOriginRaw", child_origin_raw, (0.1, 0.9, 1.0), 0.0024)
+        self._define_segment(stage, usd_geom, sdf, gf, f"{root_path}/ChildPreviewLink", child_origin_raw, child_origin_preview, (0.8, 0.95, 1.0), 0.0007)
+        self._define_segment(stage, usd_geom, sdf, gf, f"{root_path}/ParentChildRawLink", parent_origin, child_origin_raw, (1.0, 1.0, 1.0), 0.0005)
+        axis_norm = float(np.linalg.norm(axis_world))
+        if axis_norm > 1e-9:
+            axis_dir = axis_world / axis_norm
+            self._define_segment(stage, usd_geom, sdf, gf, f"{root_path}/PitchAxis", parent_origin - axis_dir * 0.03, parent_origin + axis_dir * 0.03, (1.0, 0.0, 1.0), 0.0018)
+            ref = np.array([0.0, 0.0, 1.0], dtype=float)
+            if abs(float(np.dot(ref, axis_dir))) > 0.9:
+                ref = np.array([1.0, 0.0, 0.0], dtype=float)
+            tangent_a = np.cross(axis_dir, ref)
+            tangent_a = tangent_a / float(np.linalg.norm(tangent_a))
+            tangent_b = np.cross(axis_dir, tangent_a)
+            arc_radius = 0.054
+            arc_center = parent_origin + tangent_b * 0.036
+            angles = np.linspace(-0.25 * np.pi, 0.65 * np.pi, 10)
+            arc_points = [
+                arc_center + tangent_a * (np.cos(theta) * arc_radius) + tangent_b * (np.sin(theta) * arc_radius)
+                for theta in angles
+            ]
+            self._define_polyline(stage, usd_geom, sdf, gf, f"{root_path}/PitchArc", arc_points, (1.0, 0.0, 1.0), 0.001)
+            arrow_tip = arc_points[-1]
+            arrow_back = arc_points[-2]
+            arrow_dir = arrow_tip - arrow_back
+            arrow_dir = arrow_dir / max(float(np.linalg.norm(arrow_dir)), 1e-9)
+            arrow_size = 0.024
+            head_left = arrow_tip - arrow_dir * arrow_size + tangent_b * (arrow_size * 0.45)
+            head_right = arrow_tip - arrow_dir * arrow_size - tangent_b * (arrow_size * 0.45)
+            self._define_segment(stage, usd_geom, sdf, gf, f"{root_path}/PitchArcHeadL", arrow_tip, head_left, (1.0, 0.0, 1.0), 0.0011)
+            self._define_segment(stage, usd_geom, sdf, gf, f"{root_path}/PitchArcHeadR", arrow_tip, head_right, (1.0, 0.0, 1.0), 0.0011)
+
     def _ensure_ground_plane(self, stage=None, usd_geom=None, sdf=None, gf=None) -> None:
         if GroundPlane is not None:
             try:
@@ -176,6 +276,8 @@ class TeleopDebugVisuals:
         actual_end_effector_position: np.ndarray | None = None,
         actual_end_effector_pose: np.ndarray | None = None,
         waiting_for_anchor: bool = False,
+        show_pitch_frames: bool = False,
+        pitch_visual: dict[str, np.ndarray] | None = None,
     ) -> None:
         if not self.enabled or stage is None:
             return
@@ -192,6 +294,10 @@ class TeleopDebugVisuals:
         self._define_marker_sphere(stage, UsdGeom, Sdf, Gf, "QuestMapped", quest_mapped_position, (1.0, 0.5, 0.0), 0.0045)
         self._define_marker_sphere(stage, UsdGeom, Sdf, Gf, "SimTarget", sim_target_position, sim_target_color, 0.0065)
         self._define_target_cross(stage, UsdGeom, Sdf, Gf, sim_target_position, waiting_for_anchor=waiting_for_anchor)
+        if show_pitch_frames:
+            self._define_pitch_frames(stage, UsdGeom, Sdf, Gf, pitch_visual)
+        else:
+            self._clear_prim(stage, f"{self.teleop_debug_root}/PitchFrames")
 
         if actual_end_effector_pose is None:
             return

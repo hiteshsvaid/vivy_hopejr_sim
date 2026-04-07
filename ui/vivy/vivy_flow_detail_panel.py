@@ -161,6 +161,11 @@ class VivyFlowDetailPanel:
         control["sim_view_enabled"] = not bool(control.get("sim_view_enabled", True))
         self._write_flow_control(control)
 
+    def _toggle_pitch_frames(self) -> None:
+        control = self._read_flow_control()
+        control["show_pitch_frames"] = not bool(control.get("show_pitch_frames", False))
+        self._write_flow_control(control)
+
     def _jump_to_source_output(self) -> None:
         selected = str(self._read_flow_control().get("selected_node") or "")
         target = self._INPUT_SOURCE_NODE.get(selected)
@@ -454,6 +459,11 @@ class VivyFlowDetailPanel:
                         height=28,
                         clicked_fn=lambda: self._toggle_sim_view(),
                     )
+                    self._labels["pitch_frames_button"] = ui.Button(
+                        "Toggle Pitch Frames",
+                        height=28,
+                        clicked_fn=lambda: self._toggle_pitch_frames(),
+                    )
                     self._quest_section.build(ui, self._window.frame, header_style, value_style)
                     self._mapping_section.build(ui, self._window.frame, header_style, value_style)
                     self._ik_section.build(ui, self._window.frame, header_style, value_style)
@@ -462,6 +472,7 @@ class VivyFlowDetailPanel:
                         self._labels["axis_editor"].visible = False
                         self._labels["ik_editor"].visible = False
                         self._labels["jump_to_source_button"].visible = False
+                        self._labels["pitch_frames_button"].visible = False
                     except Exception:
                         pass
         self._dock_window(ui)
@@ -495,6 +506,7 @@ class VivyFlowDetailPanel:
         recording_status = str(payload.get("recording_status") or "idle")
         recording_packet_count = int(payload.get("recording_packet_count") or 0)
         sim_view_enabled = bool(flow_state.get("sim_view_enabled", True))
+        show_pitch_frames = bool(flow_state.get("show_pitch_frames", False))
         replay_name = str(flow_state.get("replay_name") or "-")
         record_name = str(flow_state.get("record_name") or "-")
         quest_mode = str(flow_state.get("quest_mode") or "?")
@@ -503,12 +515,14 @@ class VivyFlowDetailPanel:
         if selected == "sim":
             self._labels["detail"].text = (
                 f"Sim target marker branch\n"
-                f"enabled={sim_view_enabled}"
+                f"enabled={sim_view_enabled} pitch_frames={show_pitch_frames}"
             )
-            self._labels["action_hint"].text = "Use the button below to toggle the sim branch."
+            self._labels["action_hint"].text = "Use the buttons below to toggle sim view and pitch-joint frames."
             try:
                 self._labels["sim_toggle_button"].visible = True
                 self._labels["sim_toggle_button"].text = "Turn Sim View Off" if sim_view_enabled else "Turn Sim View On"
+                self._labels["pitch_frames_button"].visible = True
+                self._labels["pitch_frames_button"].text = "Hide Pitch Frames" if show_pitch_frames else "Show Pitch Frames"
                 self._labels["jump_to_source_button"].visible = False
                 self._labels["quest_editor"].visible = False
                 self._labels["axis_editor"].visible = False
@@ -540,6 +554,7 @@ class VivyFlowDetailPanel:
             self._labels["action_hint"].text = f"Jump to {source_label}." if source_label else ""
             try:
                 self._labels["sim_toggle_button"].visible = False
+                self._labels["pitch_frames_button"].visible = False
                 self._labels["jump_to_source_button"].visible = source_label is not None
                 if source_label is not None:
                     self._labels["jump_to_source_button"].text = f"Go to {source_label}"

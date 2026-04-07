@@ -7,6 +7,7 @@ import time
 from pathlib import Path
 
 import numpy as np
+from scipy.spatial.transform import Rotation
 
 
 SIM_CONFIG_PATH = Path("/home/viaan/huggingface/lerobot/src/lerobot/robots/vivy/vivy_global_config.json")
@@ -98,6 +99,7 @@ class VivyTargetViewer:
         self.joint_root_path = controller_defaults.get("joint_root_path", "/World/JointTest/Joints")
         self.world_offset = np.asarray(controller_defaults.get("world_offset", [0.0, 0.0, 0.0]), dtype=float)
         joint_names = list(self.sim_config["joint_names"])
+        self.joint_names = list(joint_names)
         neutral_deg = np.asarray([float(self.sim_config["joints"][name]["neutral_deg"]) for name in joint_names], dtype=float)
         self.kinematics = VivyArmKinematics.from_json(SIM_CONFIG_PATH)
         self.model_neutral_pose = self.kinematics.forward_kinematics(neutral_deg)
@@ -120,6 +122,8 @@ class VivyTargetViewer:
         self.side_panel = VivySidePanel()
         self.flow_panel = VivyFlowPanel()
         self.flow_detail_panel = VivyFlowDetailPanel()
+        self._joint_write_ready = False
+        self._last_joint_write_warn_time = 0.0
 
     def _read_stage(self):
         import omni.usd
@@ -152,6 +156,71 @@ class VivyTargetViewer:
         except np.linalg.LinAlgError:
             self.model_to_stage_transform = np.eye(4)
         return stage_pose
+
+    @staticmethod
+    def _transform_from_rt(position: np.ndarray, rotation_matrix: np.ndarray) -> np.ndarray:
+        transform = np.eye(4)
+        transform[:3, :3] = np.asarray(rotation_matrix, dtype=float)
+        transform[:3, 3] = np.asarray(position, dtype=float)
+        return transform
+
+    @staticmethod
+    def _quat_wxyz_to_matrix(quat_wxyz: np.ndarray) -> np.ndarray:
+        quat_wxyz = np.asarray(quat_wxyz, dtype=float)
+        quat_xyzw = np.array([quat_wxyz[1], quat_wxyz[2], quat_wxyz[3], quat_wxyz[0]], dtype=float)
+        return Rotation.from_quat(quat_xyzw).as_matrix()
+
+    @staticmethod
+    def _axis_vector(axis: str) -> np.ndarray:
+        sign = -1.0 if str(axis).startswith('-') else 1.0
+        basis = str(axis).lstrip('-').upper()
+        vectors = {
+            'X': np.array([1.0, 0.0, 0.0], dtype=float),
+            'Y': np.array([0.0, 1.0, 0.0], dtype=float),
+            'Z': np.array([0.0, 0.0, 1.0], dtype=float),
+        }
+        return sign * vectors.get(basis, vectors['Z'])
+
+    def _build_pitch_visual(self, stage) -> dict[str, np.ndarray] | None:
+        if stage is None:
+            return None
+        try:
+            from pxr import UsdGeom
+            pitch_index = self.joint_names.index('right_shoulder_pitch')
+            joint = self.kinematics.joints[pitch_index]
+            xform_cache = UsdGeom.XformCache()
+            parent_prim = stage.GetPrimAtPath(joint.parent_body)
+            child_prim = stage.GetPrimAtPath(joint.child_body)
+            if not parent_prim.IsValid() or not child_prim.IsValid():
+                return None
+            parent_body_transform = np.array(xform_cache.GetLocalToWorldTransform(parent_prim), dtype=float).T
+            child_body_transform = np.array(xform_cache.GetLocalToWorldTransform(child_prim), dtype=float).T
+            parent_frame = parent_body_transform @ self._transform_from_rt(
+                joint.local_pos0,
+                self._quat_wxyz_to_matrix(joint.local_rot0_quat_wxyz),
+            )
+            child_frame = child_body_transform @ self._transform_from_rt(
+                joint.local_pos1,
+                self._quat_wxyz_to_matrix(joint.local_rot1_quat_wxyz),
+            )
+            preview_offset_dir = parent_frame[:3, 1] + parent_frame[:3, 2]
+            preview_offset_norm = float(np.linalg.norm(preview_offset_dir))
+            if preview_offset_norm <= 1e-9:
+                preview_offset_dir = np.array([0.0, 0.0, 1.0], dtype=float)
+            else:
+                preview_offset_dir = preview_offset_dir / preview_offset_norm
+            child_frame_offset = child_frame.copy()
+            child_frame_offset[:3, 3] = child_frame_offset[:3, 3] + preview_offset_dir * 0.03
+            axis_world = parent_frame[:3, :3] @ self._axis_vector(joint.axis)
+            return {
+                'parent_frame': parent_frame,
+                'child_frame': child_frame_offset,
+                'child_frame_raw': child_frame,
+                'axis_world': axis_world,
+                'preview_offset_dir': preview_offset_dir,
+            }
+        except Exception:
+            return None
 
     def _on_update(self, _event: object) -> None:
         now = time.monotonic()
@@ -198,8 +267,14 @@ class VivyTargetViewer:
         if isinstance(joint_targets_deg, list) and len(joint_targets_deg) == len(self.sim_config["joint_names"]):
             try:
                 self.stage_io.write_joint_targets_deg(stage, np.asarray(joint_targets_deg, dtype=float))
+                self._joint_write_ready = True
             except Exception as exc:
-                print(f"Vivy target viewer joint write failed: {exc}")
+                exc_text = str(exc)
+                if "Articulation unavailable" in exc_text:
+                    self._joint_write_ready = False
+                elif now - self._last_joint_write_warn_time > 2.0:
+                    print(f"Vivy target viewer joint write failed: {exc}")
+                    self._last_joint_write_warn_time = now
 
         target_pose_model = payload.get("target_pose_model")
         if target_pose_model is None:
@@ -218,6 +293,8 @@ class VivyTargetViewer:
             target_pose_stage = self._anchor_model_to_stage_transform @ target_pose_model
 
         sim_target_position = np.asarray(target_pose_stage[:3, 3], dtype=float)
+        show_pitch_frames = bool(flow_control.get("show_pitch_frames", False))
+        pitch_visual = self._build_pitch_visual(stage) if show_pitch_frames else None
         self.visuals.enabled = bool(flow_control.get("sim_view_enabled", True))
         self.visuals.update(
             stage,
@@ -229,6 +306,8 @@ class VivyTargetViewer:
             actual_end_effector_position=stage_pose[:3, 3],
             actual_end_effector_pose=stage_pose,
             waiting_for_anchor=waiting_for_anchor,
+            show_pitch_frames=show_pitch_frames,
+            pitch_visual=pitch_visual,
         )
 
     def start(self):

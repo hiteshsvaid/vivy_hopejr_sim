@@ -73,6 +73,16 @@ class HopeJrStageIo:
         except ImportError:
             self._set_stage_dls_debug(reason="articulation_import_failed")
             return None
+        stage = self.get_stage()
+        if stage is None:
+            self._set_stage_dls_debug(reason="stage_unavailable")
+            return None
+        articulation_prim = stage.GetPrimAtPath(self.articulation_root_path)
+        if not articulation_prim.IsValid():
+            self._articulation = None
+            self._articulation_joint_indices = None
+            self._set_stage_dls_debug(reason="articulation_prim_invalid", articulation_root_path=self.articulation_root_path)
+            return None
         if self._articulation is None:
             self._articulation = Articulation(self.articulation_root_path, reset_xform_properties=False)
             try:
