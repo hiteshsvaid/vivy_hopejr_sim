@@ -77,21 +77,23 @@ class VivySidePanel:
 
                     ui.Spacer(height=4)
                     ui.Label("JOINTS", style=section_style)
-                    with ui.VGrid(column_count=6, column_widths=[45, 45, 45, 50, 45, 20], row_height=20):
+                    with ui.VGrid(column_count=7, column_widths=[45, 45, 55, 65, 45, 45, 20], row_height=20):
                         ui.Label("MIN", style=header_style)
-                        ui.Label("TGT", style=header_style)
+                        ui.Label("D_DEG", style=header_style)
+                        ui.Label("CMD_DEG", style=header_style)
+                        ui.Label("SERVO_CMD", style=header_style)
                         ui.Label("MAX", style=header_style)
-                        ui.Label("NORM", style=header_style)
                         ui.Label("MODE", style=header_style)
                         ui.Label("F", style=header_style)
                     for index in range(7):
                         with ui.VStack(spacing=2):
                             self._labels[f"joint_name_{index}"] = ui.Label("", style=joint_name_style)
-                            with ui.VGrid(column_count=6, column_widths=[45, 45, 45, 50, 45, 20], row_height=20):
+                            with ui.VGrid(column_count=7, column_widths=[45, 45, 55, 65, 45, 45, 20], row_height=20):
                                 self._labels[f"joint_min_deg_{index}"] = ui.Label("", style=joint_value_style)
+                                self._labels[f"joint_delta_deg_{index}"] = ui.Label("", style=joint_value_style)
                                 self._labels[f"joint_target_deg_{index}"] = ui.Label("", style=joint_value_style)
+                                self._labels[f"joint_raw_cmd_{index}"] = ui.Label("", style=joint_value_style)
                                 self._labels[f"joint_max_deg_{index}"] = ui.Label("", style=joint_value_style)
-                                self._labels[f"joint_norm_{index}"] = ui.Label("", style=joint_value_style)
                                 self._labels[f"joint_mode_{index}"] = ui.Label("", style=joint_value_style)
                                 self._labels[f"joint_flag_{index}"] = ui.Label("", style=joint_value_style)
         self._dock_window(ui)
@@ -135,17 +137,19 @@ class VivySidePanel:
         for index in range(7):
             self._labels[f"joint_name_{index}"].text = ""
             self._labels[f"joint_min_deg_{index}"].text = ""
+            self._labels[f"joint_delta_deg_{index}"].text = ""
             self._labels[f"joint_target_deg_{index}"].text = ""
+            self._labels[f"joint_raw_cmd_{index}"].text = ""
             self._labels[f"joint_max_deg_{index}"].text = ""
-            self._labels[f"joint_norm_{index}"].text = ""
             self._labels[f"joint_mode_{index}"].text = ""
             self._labels[f"joint_flag_{index}"].text = ""
             if index < len(rows):
                 row = rows[index]
                 self._labels[f"joint_name_{index}"].text = str(row.get("joint") or "")
                 self._labels[f"joint_min_deg_{index}"].text = str(row.get("min_deg") or "").strip()
+                self._labels[f"joint_delta_deg_{index}"].text = str(row.get("delta_deg") or "").strip()
                 self._labels[f"joint_target_deg_{index}"].text = str(row.get("target_deg") or "").strip()
+                self._labels[f"joint_raw_cmd_{index}"].text = str(row.get("raw_cmd") or "").strip()
                 self._labels[f"joint_max_deg_{index}"].text = str(row.get("max_deg") or "").strip()
-                self._labels[f"joint_norm_{index}"].text = str(row.get("norm") or "").strip()
                 self._labels[f"joint_mode_{index}"].text = str(row.get("mode") or "")
                 self._labels[f"joint_flag_{index}"].text = str(row.get("freeze") or "")
