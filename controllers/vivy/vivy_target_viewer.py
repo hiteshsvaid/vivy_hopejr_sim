@@ -20,6 +20,7 @@ VIVY_FLOW_PANEL_PATH = Path("/home/viaan/vivy_hopejr_sim/ui/vivy/vivy_flow_panel
 VIVY_FLOW_DETAIL_PANEL_PATH = Path("/home/viaan/vivy_hopejr_sim/ui/vivy/vivy_flow_detail_panel.py")
 FLOW_CONTROL_PATH = Path("/tmp/vivy_flow_control.json")
 STAGE_FEEDBACK_PATH = Path("/tmp/vivy_stage_feedback.json")
+REAL_FEEDBACK_PATH = Path("/tmp/vivy_real_feedback.json")
 
 _ACTIVE_LOOP = None
 
@@ -88,6 +89,16 @@ def _write_stage_feedback(path: Path, payload: dict) -> None:
     tmp_path.replace(path)
 
 
+def _load_json_file(path: Path) -> dict | None:
+    if not path.exists():
+        return None
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+    return payload if isinstance(payload, dict) else None
+
+
 class VivyTargetViewer:
     def __init__(self, *, signal_path: str | Path | None = None, interval_s: float = 0.05):
         default_signal_path, read_teleop_state = _load_shared_signal_helpers()
@@ -106,6 +117,7 @@ class VivyTargetViewer:
         self.articulation_root_path = controller_defaults.get("articulation_root_path", "/World/JointTest")
         self.joint_root_path = controller_defaults.get("joint_root_path", "/World/JointTest/Joints")
         self.world_offset = np.asarray(controller_defaults.get("world_offset", [0.0, 0.0, 0.0]), dtype=float)
+        self.real_feedback_max_age_s = float(controller_defaults.get("packet_stale_timeout_s", 0.75))
         joint_names = list(self.sim_config["joint_names"])
         self.joint_names = list(joint_names)
         neutral_deg = np.asarray([float(self.sim_config["joints"][name]["neutral_deg"]) for name in joint_names], dtype=float)
@@ -132,6 +144,59 @@ class VivyTargetViewer:
         self.flow_detail_panel = VivyFlowDetailPanel()
         self._joint_write_ready = False
         self._last_joint_write_warn_time = 0.0
+
+    def _read_real_feedback(self) -> dict[str, object] | None:
+        payload = _load_json_file(REAL_FEEDBACK_PATH)
+        if not isinstance(payload, dict):
+            return None
+        timestamp = payload.get("timestamp")
+        try:
+            feedback_age_s = time.time() - float(timestamp)
+        except (TypeError, ValueError):
+            return None
+        if feedback_age_s < 0.0 or feedback_age_s > self.real_feedback_max_age_s:
+            return None
+        return payload
+
+    def _read_real_feedback_joint_positions_deg(self, payload: dict[str, object] | None) -> np.ndarray | None:
+        if not isinstance(payload, dict):
+            return None
+        joint_positions_deg: list[float] = []
+        for joint_name in self.joint_names:
+            value = payload.get(f"{joint_name}.pos_deg")
+            if value is None:
+                value = payload.get(f"{joint_name}.pos")
+            if value is None:
+                return None
+            try:
+                joint_positions_deg.append(float(value))
+            except (TypeError, ValueError):
+                return None
+        return np.asarray(joint_positions_deg, dtype=float)
+
+    def _inject_real_feedback_rows(
+        self,
+        payload: dict[str, object],
+        real_feedback: dict[str, object] | None,
+    ) -> dict[str, object]:
+        merged_payload = dict(payload)
+        rows = list(payload.get("joint_display_rows") or [])
+        merged_payload["real_feedback_live"] = bool(real_feedback is not None)
+        merged_payload["real_feedback_status"] = "live" if real_feedback is not None else "stale"
+        if not rows:
+            return merged_payload
+
+        merged_rows: list[dict[str, object]] = []
+        for index, row in enumerate(rows):
+            merged_row = dict(row)
+            if real_feedback is not None and index < len(self.joint_names):
+                raw_value = real_feedback.get(f"{self.joint_names[index]}.servo_raw")
+                merged_row["actual_raw"] = "-" if raw_value is None else str(int(raw_value))
+            else:
+                merged_row["actual_raw"] = "-"
+            merged_rows.append(merged_row)
+        merged_payload["joint_display_rows"] = merged_rows
+        return merged_payload
 
     def _read_stage(self):
         import omni.usd
@@ -245,8 +310,11 @@ class VivyTargetViewer:
         if not isinstance(payload, dict):
             return
         flow_control = _read_flow_control()
+        real_feedback = self._read_real_feedback()
+        real_joint_positions_deg = self._read_real_feedback_joint_positions_deg(real_feedback)
+        panel_payload = self._inject_real_feedback_rows(payload, real_feedback)
         try:
-            self.side_panel.update(payload)
+            self.side_panel.update(panel_payload)
         except Exception:
             pass
         try:
@@ -289,9 +357,17 @@ class VivyTargetViewer:
         self._last_signal_timestamp = signal_timestamp
 
         joint_targets_deg = payload.get("current_joint_targets_deg")
-        if isinstance(joint_targets_deg, list) and len(joint_targets_deg) == len(self.sim_config["joint_names"]):
+        sim_joint_write_deg = None
+        if real_joint_positions_deg is not None:
+            sim_joint_write_deg = np.asarray(real_joint_positions_deg, dtype=float)
+        elif isinstance(joint_targets_deg, list) and len(joint_targets_deg) == len(self.sim_config["joint_names"]):
+            sim_joint_write_deg = np.asarray(joint_targets_deg, dtype=float)
+
+        if sim_joint_write_deg is not None:
             try:
-                self.stage_io.write_joint_targets_deg(stage, np.asarray(joint_targets_deg, dtype=float))
+                self.stage_io.write_joint_targets_deg(stage, sim_joint_write_deg)
+                if real_joint_positions_deg is not None:
+                    self.stage_io.write_joint_state_deg(stage, sim_joint_write_deg)
                 self._joint_write_ready = True
             except Exception as exc:
                 exc_text = str(exc)
