@@ -150,6 +150,7 @@ class VivyTargetViewer:
         self._last_panel_signal_arrival_time: float | None = None
         self._last_panel_real_feedback_timestamp: float | None = None
         self._last_panel_real_feedback_arrival_time: float | None = None
+        self._last_bus_hz: float | None = None
 
     def _read_real_feedback(self) -> dict[str, object] | None:
         payload = _load_json_file(REAL_FEEDBACK_PATH)
@@ -235,13 +236,21 @@ class VivyTargetViewer:
         except (TypeError, ValueError):
             return None
         arrival_now = time.monotonic()
-        hz = None
-        if self._last_panel_real_feedback_timestamp is not None and self._last_panel_real_feedback_arrival_time is not None:
+        if timestamp_f == self._last_panel_real_feedback_timestamp:
+            if self._last_panel_real_feedback_arrival_time is None:
+                return self._last_bus_hz
+            age_s = arrival_now - self._last_panel_real_feedback_arrival_time
+            return self._last_bus_hz if age_s <= self.real_feedback_max_age_s else None
+
+        hz = self._last_bus_hz
+        if self._last_panel_real_feedback_timestamp is not None:
             dt = timestamp_f - self._last_panel_real_feedback_timestamp
             if dt > 1e-6:
                 hz = 1.0 / dt
+
         self._last_panel_real_feedback_timestamp = timestamp_f
         self._last_panel_real_feedback_arrival_time = arrival_now
+        self._last_bus_hz = hz
         return hz
 
     @staticmethod
