@@ -71,6 +71,10 @@ class VivySidePanel:
                         self._labels["state_anchor_frozen"] = ui.Label("-", style=value_style)
                         ui.Label("bus", style=value_style)
                         self._labels["state_bus"] = ui.Label("-", style=value_style)
+                        ui.Label("teleop rate", style=value_style)
+                        self._labels["state_teleop_rate"] = ui.Label("-", style=value_style)
+                        ui.Label("bus rate", style=value_style)
+                        self._labels["state_bus_rate"] = ui.Label("-", style=value_style)
 
                     ui.Label("DELTA", style=section_style)
                     with ui.VGrid(column_count=2, column_widths=[110, 0], row_height=22):
@@ -81,27 +85,27 @@ class VivySidePanel:
 
                     ui.Spacer(height=4)
                     ui.Label("JOINTS", style=section_style)
-                    with ui.VGrid(column_count=8, column_widths=[45, 45, 55, 65, 65, 45, 45, 20], row_height=20):
+                    with ui.VGrid(column_count=6, column_widths=[45, 45, 65, 75, 45, 45], row_height=20):
                         ui.Label("MIN", style=header_style)
                         ui.Label("D_DEG", style=header_style)
-                        ui.Label("CMD_DEG", style=header_style)
-                        ui.Label("SERVO_CMD", style=header_style)
-                        ui.Label("ACT_RAW", style=header_style)
+                        ui.Label("CMD / ACT", style=header_style)
+                        ui.Label("SERVO / ACT", style=header_style)
                         ui.Label("MAX", style=header_style)
                         ui.Label("MODE", style=header_style)
-                        ui.Label("F", style=header_style)
                     for index in range(7):
                         with ui.VStack(spacing=2):
                             self._labels[f"joint_name_{index}"] = ui.Label("", style=joint_name_style)
-                            with ui.VGrid(column_count=8, column_widths=[45, 45, 55, 65, 65, 45, 45, 20], row_height=20):
+                            with ui.VGrid(column_count=6, column_widths=[45, 45, 65, 75, 45, 45], row_height=20):
                                 self._labels[f"joint_min_deg_{index}"] = ui.Label("", style=joint_value_style)
                                 self._labels[f"joint_delta_deg_{index}"] = ui.Label("", style=joint_value_style)
-                                self._labels[f"joint_target_deg_{index}"] = ui.Label("", style=joint_value_style)
-                                self._labels[f"joint_raw_cmd_{index}"] = ui.Label("", style=joint_value_style)
-                                self._labels[f"joint_actual_raw_{index}"] = ui.Label("", style=joint_value_style)
+                                with ui.VStack(spacing=0):
+                                    self._labels[f"joint_target_deg_{index}"] = ui.Label("", style=joint_value_style)
+                                    self._labels[f"joint_actual_deg_{index}"] = ui.Label("", style=joint_value_style)
+                                with ui.VStack(spacing=0):
+                                    self._labels[f"joint_raw_cmd_{index}"] = ui.Label("", style=joint_value_style)
+                                    self._labels[f"joint_actual_raw_{index}"] = ui.Label("", style=joint_value_style)
                                 self._labels[f"joint_max_deg_{index}"] = ui.Label("", style=joint_value_style)
                                 self._labels[f"joint_mode_{index}"] = ui.Label("", style=joint_value_style)
-                                self._labels[f"joint_flag_{index}"] = ui.Label("", style=joint_value_style)
         self._dock_window(ui)
 
     @staticmethod
@@ -143,6 +147,10 @@ class VivySidePanel:
             self._labels["state_bus"].style = {"color": self._TEXT_GOOD if bus_live else self._TEXT_BAD, "font_size": 13}
         except Exception:
             pass
+        teleop_hz = payload.get("teleop_hz")
+        bus_hz = payload.get("bus_hz")
+        self._labels["state_teleop_rate"].text = "-" if teleop_hz is None else f"{float(teleop_hz):.1f} Hz"
+        self._labels["state_bus_rate"].text = "-" if bus_hz is None else f"{float(bus_hz):.1f} Hz"
         self._labels["delta_quest"].text = self._fmt_vec3(payload.get("quest_delta"))
         self._labels["delta_world"].text = self._fmt_vec3(payload.get("position_delta_world"))
 
@@ -153,10 +161,10 @@ class VivySidePanel:
             self._labels[f"joint_delta_deg_{index}"].text = ""
             self._labels[f"joint_target_deg_{index}"].text = ""
             self._labels[f"joint_raw_cmd_{index}"].text = ""
+            self._labels[f"joint_actual_deg_{index}"].text = ""
             self._labels[f"joint_actual_raw_{index}"].text = ""
             self._labels[f"joint_max_deg_{index}"].text = ""
             self._labels[f"joint_mode_{index}"].text = ""
-            self._labels[f"joint_flag_{index}"].text = ""
             if index < len(rows):
                 row = rows[index]
                 self._labels[f"joint_name_{index}"].text = str(row.get("joint") or "")
@@ -164,7 +172,7 @@ class VivySidePanel:
                 self._labels[f"joint_delta_deg_{index}"].text = str(row.get("delta_deg") or "").strip()
                 self._labels[f"joint_target_deg_{index}"].text = str(row.get("target_deg") or "").strip()
                 self._labels[f"joint_raw_cmd_{index}"].text = str(row.get("raw_cmd") or "").strip()
+                self._labels[f"joint_actual_deg_{index}"].text = str(row.get("actual_deg") or "").strip()
                 self._labels[f"joint_actual_raw_{index}"].text = str(row.get("actual_raw") or "").strip()
                 self._labels[f"joint_max_deg_{index}"].text = str(row.get("max_deg") or "").strip()
                 self._labels[f"joint_mode_{index}"].text = str(row.get("mode") or "")
-                self._labels[f"joint_flag_{index}"].text = str(row.get("freeze") or "")

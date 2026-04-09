@@ -109,6 +109,8 @@ class VivyTargetViewer:
         self._last_tick_time = 0.0
         self._subscription = None
         self._last_signal_timestamp = None
+        self._last_applied_feedback_timestamp: float | None = None
+        self._last_applied_command_timestamp: float | None = None
 
         self.sim_config = _load_sim_config()
         controller_defaults = dict(self.sim_config.get("controller_defaults") or {})
@@ -144,6 +146,10 @@ class VivyTargetViewer:
         self.flow_detail_panel = VivyFlowDetailPanel()
         self._joint_write_ready = False
         self._last_joint_write_warn_time = 0.0
+        self._last_panel_signal_timestamp: float | None = None
+        self._last_panel_signal_arrival_time: float | None = None
+        self._last_panel_real_feedback_timestamp: float | None = None
+        self._last_panel_real_feedback_arrival_time: float | None = None
 
     def _read_real_feedback(self) -> dict[str, object] | None:
         payload = _load_json_file(REAL_FEEDBACK_PATH)
@@ -180,6 +186,8 @@ class VivyTargetViewer:
         real_feedback: dict[str, object] | None,
     ) -> dict[str, object]:
         merged_payload = dict(payload)
+        merged_payload["teleop_hz"] = self._compute_teleop_hz(payload)
+        merged_payload["bus_hz"] = self._compute_bus_hz(real_feedback)
         rows = list(payload.get("joint_display_rows") or [])
         merged_payload["real_feedback_live"] = bool(real_feedback is not None)
         merged_payload["real_feedback_status"] = "live" if real_feedback is not None else "stale"
@@ -190,13 +198,76 @@ class VivyTargetViewer:
         for index, row in enumerate(rows):
             merged_row = dict(row)
             if real_feedback is not None and index < len(self.joint_names):
-                raw_value = real_feedback.get(f"{self.joint_names[index]}.servo_raw")
+                joint_name = self.joint_names[index]
+                raw_value = real_feedback.get(f"{joint_name}.servo_raw")
+                deg_value = real_feedback.get(f"{joint_name}.pos_deg")
                 merged_row["actual_raw"] = "-" if raw_value is None else str(int(raw_value))
+                merged_row["actual_deg"] = "-" if deg_value is None else f"{float(deg_value):7.2f}"
             else:
                 merged_row["actual_raw"] = "-"
+                merged_row["actual_deg"] = "-"
             merged_rows.append(merged_row)
         merged_payload["joint_display_rows"] = merged_rows
         return merged_payload
+
+    def _compute_teleop_hz(self, payload: dict[str, object]) -> float | None:
+        timestamp = payload.get("timestamp")
+        try:
+            timestamp_f = float(timestamp)
+        except (TypeError, ValueError):
+            return None
+        arrival_now = time.monotonic()
+        hz = None
+        if self._last_panel_signal_timestamp is not None and self._last_panel_signal_arrival_time is not None:
+            dt = timestamp_f - self._last_panel_signal_timestamp
+            if dt > 1e-6:
+                hz = 1.0 / dt
+        self._last_panel_signal_timestamp = timestamp_f
+        self._last_panel_signal_arrival_time = arrival_now
+        return hz
+
+    def _compute_bus_hz(self, real_feedback: dict[str, object] | None) -> float | None:
+        if not isinstance(real_feedback, dict):
+            return None
+        timestamp = real_feedback.get("timestamp")
+        try:
+            timestamp_f = float(timestamp)
+        except (TypeError, ValueError):
+            return None
+        arrival_now = time.monotonic()
+        hz = None
+        if self._last_panel_real_feedback_timestamp is not None and self._last_panel_real_feedback_arrival_time is not None:
+            dt = timestamp_f - self._last_panel_real_feedback_timestamp
+            if dt > 1e-6:
+                hz = 1.0 / dt
+        self._last_panel_real_feedback_timestamp = timestamp_f
+        self._last_panel_real_feedback_arrival_time = arrival_now
+        return hz
+
+    @staticmethod
+    def _coerce_timestamp(payload: dict[str, object] | None) -> float | None:
+        if not isinstance(payload, dict):
+            return None
+        value = payload.get("timestamp")
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return None
+
+    def _write_sim_joint_positions(self, stage, joint_positions_deg: np.ndarray, *, update_state: bool) -> None:
+        try:
+            self.stage_io.write_joint_targets_deg(stage, joint_positions_deg)
+            if update_state:
+                self.stage_io.write_joint_state_deg(stage, joint_positions_deg)
+            self._joint_write_ready = True
+        except Exception as exc:
+            exc_text = str(exc)
+            now = time.monotonic()
+            if "Articulation unavailable" in exc_text:
+                self._joint_write_ready = False
+            elif now - self._last_joint_write_warn_time > 2.0:
+                print(f"Vivy target viewer joint write failed: {exc}")
+                self._last_joint_write_warn_time = now
 
     def _read_stage(self):
         import omni.usd
@@ -351,31 +422,28 @@ class VivyTargetViewer:
             self._stage_anchor_pose = stage_pose.copy()
         self._last_waiting_for_anchor = waiting_for_anchor
 
-        signal_timestamp = payload.get("timestamp")
-        if signal_timestamp == self._last_signal_timestamp:
-            return
-        self._last_signal_timestamp = signal_timestamp
+        signal_timestamp = self._coerce_timestamp(payload)
+        feedback_timestamp = self._coerce_timestamp(real_feedback)
+        teleop_changed = signal_timestamp is not None and signal_timestamp != self._last_signal_timestamp
+        feedback_changed = feedback_timestamp is not None and feedback_timestamp != self._last_applied_feedback_timestamp
 
         joint_targets_deg = payload.get("current_joint_targets_deg")
-        sim_joint_write_deg = None
         if real_joint_positions_deg is not None:
-            sim_joint_write_deg = np.asarray(real_joint_positions_deg, dtype=float)
-        elif isinstance(joint_targets_deg, list) and len(joint_targets_deg) == len(self.sim_config["joint_names"]):
-            sim_joint_write_deg = np.asarray(joint_targets_deg, dtype=float)
+            if feedback_changed:
+                self._write_sim_joint_positions(stage, np.asarray(real_joint_positions_deg, dtype=float), update_state=True)
+                self._last_applied_feedback_timestamp = feedback_timestamp
+        elif (
+            teleop_changed
+            and isinstance(joint_targets_deg, list)
+            and len(joint_targets_deg) == len(self.sim_config["joint_names"])
+        ):
+            self._write_sim_joint_positions(stage, np.asarray(joint_targets_deg, dtype=float), update_state=False)
+            self._last_applied_command_timestamp = signal_timestamp
 
-        if sim_joint_write_deg is not None:
-            try:
-                self.stage_io.write_joint_targets_deg(stage, sim_joint_write_deg)
-                if real_joint_positions_deg is not None:
-                    self.stage_io.write_joint_state_deg(stage, sim_joint_write_deg)
-                self._joint_write_ready = True
-            except Exception as exc:
-                exc_text = str(exc)
-                if "Articulation unavailable" in exc_text:
-                    self._joint_write_ready = False
-                elif now - self._last_joint_write_warn_time > 2.0:
-                    print(f"Vivy target viewer joint write failed: {exc}")
-                    self._last_joint_write_warn_time = now
+        if teleop_changed:
+            self._last_signal_timestamp = signal_timestamp
+        else:
+            return
 
         target_pose_model = payload.get("target_pose_model")
         if target_pose_model is None:
