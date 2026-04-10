@@ -204,9 +204,16 @@ class VivyTargetViewer:
                 deg_value = real_feedback.get(f"{joint_name}.pos_deg")
                 merged_row["actual_raw"] = "-" if raw_value is None else str(int(raw_value))
                 merged_row["actual_deg"] = "-" if deg_value is None else f"{float(deg_value):7.2f}"
+                try:
+                    target_deg = float(row.get("target_deg"))
+                    actual_deg = float(deg_value)
+                    merged_row["error_deg"] = f"{(target_deg - actual_deg):+7.2f}"
+                except (TypeError, ValueError):
+                    merged_row["error_deg"] = "-"
             else:
                 merged_row["actual_raw"] = "-"
                 merged_row["actual_deg"] = "-"
+                merged_row["error_deg"] = "-"
             merged_rows.append(merged_row)
         merged_payload["joint_display_rows"] = merged_rows
         return merged_payload
