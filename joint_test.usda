@@ -838,9 +838,9 @@ def Xform "World"
             )
             {
                 uniform token axis = "Y"
-                float drive:angular:physics:damping = 3
-                float drive:angular:physics:stiffness = 10
-                float drive:angular:physics:targetPosition = 42.8
+                float drive:angular:physics:damping = 12
+                float drive:angular:physics:stiffness = 2
+                float drive:angular:physics:targetPosition = 18
                 rel physics:body0 = </World/JointTest/UpperElbowBody>
                 rel physics:body1 = </World/JointTest/LowerElbowBody>
                 point3f physics:localPos0 = (0.03843, -0.12064, -0.24804)
@@ -855,9 +855,9 @@ def Xform "World"
                 prepend apiSchemas = ["PhysicsDriveAPI:angular"]
             )
             {
-                float drive:angular:physics:damping = 5
-                float drive:angular:physics:stiffness = 8
-                float drive:angular:physics:targetPosition = -30.2
+                float drive:angular:physics:damping = 14
+                float drive:angular:physics:stiffness = 1.5
+                float drive:angular:physics:targetPosition = -10
                 uniform token physics:axis = "Y"
                 rel physics:body0 = </World/JointTest/ForearmBody>
                 rel physics:body1 = </World/JointTest/WristBody>
@@ -875,9 +875,9 @@ def Xform "World"
                 prepend apiSchemas = ["PhysicsDriveAPI:angular"]
             )
             {
-                float drive:angular:physics:damping = 2
-                float drive:angular:physics:stiffness = 6
-                float drive:angular:physics:targetPosition = 0
+                float drive:angular:physics:damping = 10
+                float drive:angular:physics:stiffness = 1
+                float drive:angular:physics:targetPosition = 18
                 uniform token physics:axis = "Y"
                 rel physics:body0 = </World/JointTest/WristBody>
                 rel physics:body1 = </World/JointTest/PalmBody>
@@ -1010,4 +1010,3 @@ def "Render" (
         }
     }
 }
-
