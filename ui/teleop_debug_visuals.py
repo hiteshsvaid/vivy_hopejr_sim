@@ -11,6 +11,10 @@ try:
 except ImportError:
     GroundPlane = None
 try:
+    from isaacsim.core.api.objects import DynamicCuboid
+except ImportError:
+    DynamicCuboid = None
+try:
     from omni.isaac.core.utils.nucleus import get_assets_root_path
 except ImportError:
     try:
@@ -26,6 +30,7 @@ class TeleopDebugVisuals:
         self._table_asset_path: str | None = None
         self._table_asset_resolved = False
         self._table_spawned = False
+        self._cube_spawned = False
 
     def _set_visibility(self, prim, usd_geom, visible: bool) -> None:
         imageable = usd_geom.Imageable(prim)
@@ -182,6 +187,27 @@ class TeleopDebugVisuals:
             scale_attr = table.CreateAttribute("xformOp:scale", sdf.ValueTypeNames.Double3)
         scale_attr.Set(gf.Vec3d(1.0, 1.0, 1.0))
         self._set_order(table, ["xformOp:translate", "xformOp:orient", "xformOp:scale"])
+
+    def _ensure_table_cube(self, stage) -> None:
+        if DynamicCuboid is None:
+            return
+        prim_path = "/World/TableCube"
+        if stage.GetPrimAtPath(prim_path).IsValid():
+            self._cube_spawned = True
+            return
+        if self._cube_spawned:
+            return
+        DynamicCuboid(
+            prim_path=prim_path,
+            name="table_cube",
+            position=np.array([0.20529, 0.14001, -0.32166]),
+            size=1.0,
+            scale=np.array([0.04, 0.04, 0.04]),
+            mass=0.05,
+            density=400.0,
+            color=np.array([0.82, 0.18, 0.18]),
+        )
+        self._cube_spawned = True
 
     def _define_segment(self, stage, usd_geom, sdf, gf, path: str, start, end, color, radius: float) -> None:
         start = np.asarray(start, dtype=float)
@@ -345,6 +371,7 @@ class TeleopDebugVisuals:
 
         self._ensure_ground_plane(stage, UsdGeom, Sdf, Gf)
         self._ensure_table_asset(stage, Sdf, Gf)
+        self._ensure_table_cube(stage)
         stage.DefinePrim(self.teleop_debug_root, "Xform")
         sim_target_color = (0.0, 1.0, 0.0) if waiting_for_anchor else (1.0, 0.0, 0.0)
         if reference_position is not None:
