@@ -200,7 +200,7 @@ class TeleopDebugVisuals:
         DynamicCuboid(
             prim_path=prim_path,
             name="table_cube",
-            position=np.array([0.20529, 0.14001, -0.32166]),
+            position=np.array([0.24971, 0.05408, -0.32166]),
             size=1.0,
             scale=np.array([0.04, 0.04, 0.04]),
             mass=0.05,

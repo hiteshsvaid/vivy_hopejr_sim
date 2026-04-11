@@ -400,7 +400,7 @@ class VivyFlowDetailPanel:
                 ui.Label("joint", width=170, style=header_style)
                 ui.Label("axis", width=90, style=header_style)
                 ui.Label("weight", width=70, style=header_style)
-                ui.Label("neutral", width=70, style=header_style)
+                ui.Label("neutral bias", width=70, style=header_style)
                 ui.Label("mode", width=90, style=header_style)
             for joint_name in names:
                 current_axis = str(axis_map.get(joint_name, "Y"))
