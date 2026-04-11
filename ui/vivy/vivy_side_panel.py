@@ -11,6 +11,7 @@ class VivySidePanel:
     _TEXT_GOOD = 0xFF67C26F
     _TEXT_BAD = 0xFFD96C6C
     _TEXT_WARN = 0xFFE0BF66
+    _BUS_STALE_EVENT_DELAY_S = 2.0
 
     def __init__(self, *, width: int = 460, height: int = 540):
         self.width = width
@@ -22,6 +23,8 @@ class VivySidePanel:
         self._event_history_limit = 80
         self._event_history: list[dict[str, str]] = []
         self._last_event_state: dict[str, Any] | None = None
+        self._bus_stale_since_monotonic: float | None = None
+        self._bus_stale_event_logged = False
 
     def _dock_window(self, ui_module: Any) -> None:
         if self._window is None or self._docked:
@@ -163,10 +166,12 @@ class VivySidePanel:
 
     def _update_event_history(self, payload: dict[str, Any], *, bus_live: bool, bus_status: str) -> None:
         timestamp = payload.get("timestamp")
+        now_monotonic = time.monotonic()
         waiting_for_anchor = bool(payload.get("waiting_for_anchor", True))
         anchor_captured = payload.get("quest_anchor_position") is not None
         freeze_active = bool(payload.get("freeze_active", False))
         freeze_joint_name = str(payload.get("freeze_joint_name") or "").strip() or None
+        follow_target_enabled = bool(payload.get("follow_target_enabled", False))
         hand = payload.get("hand_state") or {}
         grip = float(hand.get("grip", 0.0)) if isinstance(hand, dict) else 0.0
         recording_status = str(payload.get("recording_status") or "").strip() or None
@@ -176,6 +181,7 @@ class VivySidePanel:
             "anchor_captured": anchor_captured,
             "freeze_active": freeze_active,
             "freeze_joint_name": freeze_joint_name,
+            "follow_target_enabled": follow_target_enabled,
             "bus_live": bus_live,
             "bus_status": bus_status,
             "grip_active": grip >= 0.25,
@@ -184,6 +190,12 @@ class VivySidePanel:
         }
         previous = self._last_event_state
         if previous is None:
+            if bus_live:
+                self._bus_stale_since_monotonic = None
+                self._bus_stale_event_logged = False
+            else:
+                self._bus_stale_since_monotonic = now_monotonic
+                self._bus_stale_event_logged = False
             self._push_event(
                 "Startup neutral" if waiting_for_anchor else "Startup live",
                 level="info",
@@ -193,7 +205,7 @@ class VivySidePanel:
             if waiting_for_anchor and not bool(previous.get("waiting_for_anchor", True)):
                 self._push_event("Going to neutral", level="warn", timestamp=timestamp)
             elif not waiting_for_anchor and bool(previous.get("waiting_for_anchor", True)):
-                self._push_event("Anchor engaged", level="good", timestamp=timestamp)
+                self._push_event("Anchor captured", level="good", timestamp=timestamp)
             elif anchor_captured and not bool(previous.get("anchor_captured", False)):
                 self._push_event("Anchor captured", level="good", timestamp=timestamp)
 
@@ -203,10 +215,28 @@ class VivySidePanel:
             elif not freeze_active and bool(previous.get("freeze_active", False)):
                 self._push_event("Limit freeze cleared", level="good", timestamp=timestamp)
 
-            if bus_live and not bool(previous.get("bus_live", False)):
+            if follow_target_enabled and not bool(previous.get("follow_target_enabled", False)):
+                self._push_event("Motion tracking on", level="good", timestamp=timestamp)
+            elif not follow_target_enabled and bool(previous.get("follow_target_enabled", False)):
+                self._push_event("Motion tracking off", level="warn", timestamp=timestamp)
+
+            stale_was_logged = self._bus_stale_event_logged
+            if bus_live:
+                self._bus_stale_since_monotonic = None
+                self._bus_stale_event_logged = False
+            elif bool(previous.get("bus_live", False)) and self._bus_stale_since_monotonic is None:
+                self._bus_stale_since_monotonic = now_monotonic
+
+            if bus_live and not bool(previous.get("bus_live", False)) and stale_was_logged:
                 self._push_event(f"Bus live ({bus_status})", level="good", timestamp=timestamp)
-            elif not bus_live and bool(previous.get("bus_live", False)):
+            elif (
+                not bus_live
+                and self._bus_stale_since_monotonic is not None
+                and not self._bus_stale_event_logged
+                and (now_monotonic - self._bus_stale_since_monotonic) >= self._BUS_STALE_EVENT_DELAY_S
+            ):
                 self._push_event(f"Bus stale ({bus_status})", level="warn", timestamp=timestamp)
+                self._bus_stale_event_logged = True
 
             if recording_status != previous.get("recording_status"):
                 if recording_status == "recording":
