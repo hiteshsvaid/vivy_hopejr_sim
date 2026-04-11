@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from typing import Any
 
 
@@ -9,13 +10,18 @@ class VivySidePanel:
     _TEXT_NEUTRAL = 0xFFB8B8B8
     _TEXT_GOOD = 0xFF67C26F
     _TEXT_BAD = 0xFFD96C6C
+    _TEXT_WARN = 0xFFE0BF66
 
-    def __init__(self, *, width: int = 460, height: int = 380):
+    def __init__(self, *, width: int = 460, height: int = 540):
         self.width = width
         self.height = height
         self._window = None
         self._labels: dict[str, Any] = {}
         self._docked = False
+        self._event_rows = 12
+        self._event_history_limit = 80
+        self._event_history: list[dict[str, str]] = []
+        self._last_event_state: dict[str, Any] | None = None
 
     def _dock_window(self, ui_module: Any) -> None:
         if self._window is None or self._docked:
@@ -67,8 +73,8 @@ class VivySidePanel:
                     with ui.VGrid(column_count=2, column_widths=[110, 0], row_height=22):
                         ui.Label("enabled / clutch", style=value_style)
                         self._labels["state_enabled_clutch"] = ui.Label("-", style=value_style)
-                        ui.Label("anchor / frozen", style=value_style)
-                        self._labels["state_anchor_frozen"] = ui.Label("-", style=value_style)
+                        ui.Label("startup / anchor", style=value_style)
+                        self._labels["state_startup_anchor"] = ui.Label("-", style=value_style)
                         ui.Label("bus", style=value_style)
                         self._labels["state_bus"] = ui.Label("-", style=value_style)
                         ui.Label("teleop rate", style=value_style)
@@ -108,6 +114,18 @@ class VivySidePanel:
                                 self._labels[f"joint_error_deg_{index}"] = ui.Label("", style=joint_value_style)
                                 self._labels[f"joint_max_deg_{index}"] = ui.Label("", style=joint_value_style)
                                 self._labels[f"joint_mode_{index}"] = ui.Label("", style=joint_value_style)
+
+                    ui.Spacer(height=6)
+                    ui.Label("EVENTS", style=section_style)
+                    with ui.VGrid(column_count=2, column_widths=[90, 0], row_height=20):
+                        ui.Label("time", style=header_style)
+                        ui.Label("event", style=header_style)
+                    with ui.ScrollingFrame(height=170):
+                        with ui.VStack(spacing=2, height=0):
+                            for index in range(self._event_rows):
+                                with ui.VGrid(column_count=2, column_widths=[90, 0], row_height=20):
+                                    self._labels[f"event_time_{index}"] = ui.Label("", style=joint_value_style)
+                                    self._labels[f"event_message_{index}"] = ui.Label("", style=joint_value_style)
         self._dock_window(ui)
 
     @staticmethod
@@ -118,6 +136,98 @@ class VivySidePanel:
             return f"({float(value[0]):+.3f}, {float(value[1]):+.3f}, {float(value[2]):+.3f})"
         except Exception:
             return "-"
+
+    @staticmethod
+    def _fmt_event_time(timestamp: float | None) -> str:
+        if timestamp is None:
+            return "-"
+        try:
+            return time.strftime("%H:%M:%S", time.localtime(float(timestamp)))
+        except Exception:
+            return "-"
+
+    def _push_event(self, message: str, *, level: str = "info", timestamp: float | None = None) -> None:
+        cleaned = str(message).strip()
+        if not cleaned:
+            return
+        event = {
+            "time": self._fmt_event_time(timestamp),
+            "message": cleaned,
+            "level": level,
+        }
+        if self._event_history and self._event_history[0]["message"] == event["message"]:
+            self._event_history[0] = event
+        else:
+            self._event_history.insert(0, event)
+        del self._event_history[self._event_history_limit :]
+
+    def _update_event_history(self, payload: dict[str, Any], *, bus_live: bool, bus_status: str) -> None:
+        timestamp = payload.get("timestamp")
+        waiting_for_anchor = bool(payload.get("waiting_for_anchor", True))
+        anchor_captured = payload.get("quest_anchor_position") is not None
+        freeze_active = bool(payload.get("freeze_active", False))
+        freeze_joint_name = str(payload.get("freeze_joint_name") or "").strip() or None
+        hand = payload.get("hand_state") or {}
+        grip = float(hand.get("grip", 0.0)) if isinstance(hand, dict) else 0.0
+        recording_status = str(payload.get("recording_status") or "").strip() or None
+        recording_name = str(payload.get("recording_name") or "").strip() or None
+        state = {
+            "waiting_for_anchor": waiting_for_anchor,
+            "anchor_captured": anchor_captured,
+            "freeze_active": freeze_active,
+            "freeze_joint_name": freeze_joint_name,
+            "bus_live": bus_live,
+            "bus_status": bus_status,
+            "grip_active": grip >= 0.25,
+            "recording_status": recording_status,
+            "recording_name": recording_name,
+        }
+        previous = self._last_event_state
+        if previous is None:
+            self._push_event(
+                "Startup neutral" if waiting_for_anchor else "Startup live",
+                level="info",
+                timestamp=timestamp,
+            )
+        else:
+            if waiting_for_anchor and not bool(previous.get("waiting_for_anchor", True)):
+                self._push_event("Going to neutral", level="warn", timestamp=timestamp)
+            elif not waiting_for_anchor and bool(previous.get("waiting_for_anchor", True)):
+                self._push_event("Anchor engaged", level="good", timestamp=timestamp)
+            elif anchor_captured and not bool(previous.get("anchor_captured", False)):
+                self._push_event("Anchor captured", level="good", timestamp=timestamp)
+
+            if freeze_active and not bool(previous.get("freeze_active", False)):
+                joint_text = "" if freeze_joint_name is None else f" on {freeze_joint_name}"
+                self._push_event(f"Limit freeze engaged{joint_text}", level="bad", timestamp=timestamp)
+            elif not freeze_active and bool(previous.get("freeze_active", False)):
+                self._push_event("Limit freeze cleared", level="good", timestamp=timestamp)
+
+            if bus_live and not bool(previous.get("bus_live", False)):
+                self._push_event(f"Bus live ({bus_status})", level="good", timestamp=timestamp)
+            elif not bus_live and bool(previous.get("bus_live", False)):
+                self._push_event(f"Bus stale ({bus_status})", level="warn", timestamp=timestamp)
+
+            if recording_status != previous.get("recording_status"):
+                if recording_status == "recording":
+                    name_text = "" if not recording_name else f" {recording_name}"
+                    self._push_event(f"Recording started{name_text}", level="good", timestamp=timestamp)
+                elif recording_status == "recording_ended":
+                    name_text = "" if not recording_name else f" {recording_name}"
+                    self._push_event(f"Recording stopped{name_text}", level="warn", timestamp=timestamp)
+                elif recording_status == "waiting_for_a" and recording_name:
+                    self._push_event(f"Recording armed {recording_name}", level="info", timestamp=timestamp)
+        self._last_event_state = state
+
+    def _event_style(self, level: str) -> dict[str, int]:
+        color = self._TEXT_NEUTRAL
+        if level == "good":
+            color = self._TEXT_GOOD
+        elif level == "warn":
+            color = self._TEXT_WARN
+        elif level == "bad":
+            color = self._TEXT_BAD
+        return {"color": color, "font_size": 12}
 
     def update(self, payload: dict[str, Any] | None = None) -> None:
         self._ensure_window()
@@ -135,15 +245,18 @@ class VivySidePanel:
         trigger = float(hand.get("trigger", 0.0)) if isinstance(hand, dict) else 0.0
         enabled = bool(hand.get("enabled", True)) if isinstance(hand, dict) else False
         clutch = bool(hand.get("clutch", False)) if isinstance(hand, dict) else False
+        waiting_for_anchor = bool(payload.get("waiting_for_anchor", True))
+        startup = "neutral" if waiting_for_anchor else "live"
         anchor = "captured" if payload.get("quest_anchor_position") is not None else "pending"
         frozen = "yes" if payload.get("freeze_active") else "no"
 
         self._labels["quest_pos"].text = self._fmt_vec3(hand.get("position"))
         self._labels["quest_grip_trigger"].text = f"grip={grip:.2f}  trigger={trigger:.2f}"
         self._labels["state_enabled_clutch"].text = f"enabled={enabled}  clutch={clutch}"
-        self._labels["state_anchor_frozen"].text = f"anchor={anchor}  frozen={frozen}"
+        self._labels["state_startup_anchor"].text = f"startup={startup}  anchor={anchor}  frozen={frozen}"
         bus_live = bool(payload.get("real_feedback_live", False))
         bus_status = str(payload.get("real_feedback_status") or ("live" if bus_live else "stale"))
+        self._update_event_history(payload, bus_live=bus_live, bus_status=bus_status)
         self._labels["state_bus"].text = bus_status
         try:
             self._labels["state_bus"].style = {"color": self._TEXT_GOOD if bus_live else self._TEXT_BAD, "font_size": 13}
@@ -180,3 +293,23 @@ class VivySidePanel:
                 self._labels[f"joint_error_deg_{index}"].text = str(row.get("error_deg") or "").strip()
                 self._labels[f"joint_max_deg_{index}"].text = str(row.get("max_deg") or "").strip()
                 self._labels[f"joint_mode_{index}"].text = str(row.get("mode") or "")
+
+        for index in range(self._event_rows):
+            self._labels[f"event_time_{index}"].text = ""
+            self._labels[f"event_message_{index}"].text = ""
+            try:
+                neutral_style = self._event_style("info")
+                self._labels[f"event_time_{index}"].style = neutral_style
+                self._labels[f"event_message_{index}"].style = neutral_style
+            except Exception:
+                pass
+            if index < len(self._event_history):
+                event = self._event_history[index]
+                self._labels[f"event_time_{index}"].text = event["time"]
+                self._labels[f"event_message_{index}"].text = event["message"]
+                try:
+                    style = self._event_style(event["level"])
+                    self._labels[f"event_time_{index}"].style = style
+                    self._labels[f"event_message_{index}"].style = style
+                except Exception:
+                    pass
