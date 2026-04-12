@@ -321,6 +321,15 @@ class VivyFlowDetailPanel:
             return self._ik_jacobian_modes[selected_index]
         return "finite_difference"
 
+    @staticmethod
+    def _parse_bool_text(value: str) -> bool:
+        cleaned = str(value).strip().lower()
+        if cleaned in {"1", "true", "yes", "on"}:
+            return True
+        if cleaned in {"0", "false", "no", "off"}:
+            return False
+        raise ValueError("expected true/false")
+
     def _save_joint_mode_axis(
         self,
         joint_name: str,
@@ -460,6 +469,20 @@ class VivyFlowDetailPanel:
             controller_defaults["output_max_delta_deg_per_tick"] = float(
                 self._labels["output_max_delta_model"].get_value_as_string()
             )
+            controller_defaults["forearm_twist_from_controller_rotation"] = self._parse_bool_text(
+                self._labels["forearm_twist_enable_model"].get_value_as_string()
+            )
+            controller_defaults["forearm_twist_controller_axis"] = str(
+                self._labels["forearm_twist_axis_model"].get_value_as_string()
+            ).strip().lower()
+            controller_defaults["forearm_twist_controller_sign"] = float(
+                self._labels["forearm_twist_sign_model"].get_value_as_string()
+            )
+            controller_defaults["forearm_twist_controller_scale"] = float(
+                self._labels["forearm_twist_scale_model"].get_value_as_string()
+            )
+            if controller_defaults["forearm_twist_controller_axis"] not in {"x", "y", "z"}:
+                raise ValueError("forearm_twist_controller_axis must be x, y, or z")
             config["controller_defaults"] = controller_defaults
             self._write_vivy_config(config)
             self._labels["ik_status"].text = (

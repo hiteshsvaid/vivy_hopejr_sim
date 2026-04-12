@@ -98,6 +98,50 @@ class IkDetailSection:
                     word_wrap=True,
                 )
 
+            with ui.VStack(spacing=2):
+                with ui.HStack(height=26, spacing=6):
+                    ui.Label("forearm_twist_rotation", width=170, style=value_style)
+                    forearm_enable = ui.StringField(width=100)
+                    self.panel._labels["forearm_twist_enable_model"] = forearm_enable.model
+                ui.Label(
+                    "Enable controller-rotation-driven forearm twist. Use true or false.",
+                    style=helper_style,
+                    word_wrap=True,
+                )
+
+            with ui.VStack(spacing=2):
+                with ui.HStack(height=26, spacing=6):
+                    ui.Label("forearm_twist_axis", width=170, style=value_style)
+                    forearm_axis = ui.StringField(width=100)
+                    self.panel._labels["forearm_twist_axis_model"] = forearm_axis.model
+                ui.Label(
+                    "Controller rotation axis used for forearm twist. Use x, y, or z.",
+                    style=helper_style,
+                    word_wrap=True,
+                )
+
+            with ui.VStack(spacing=2):
+                with ui.HStack(height=26, spacing=6):
+                    ui.Label("forearm_twist_sign", width=170, style=value_style)
+                    forearm_sign = ui.StringField(width=100)
+                    self.panel._labels["forearm_twist_sign_model"] = forearm_sign.model
+                ui.Label(
+                    "Sign applied to the controller rotation axis for forearm twist. Usually 1 or -1.",
+                    style=helper_style,
+                    word_wrap=True,
+                )
+
+            with ui.VStack(spacing=2):
+                with ui.HStack(height=26, spacing=6):
+                    ui.Label("forearm_twist_scale", width=170, style=value_style)
+                    forearm_scale = ui.StringField(width=100)
+                    self.panel._labels["forearm_twist_scale_model"] = forearm_scale.model
+                ui.Label(
+                    "Scale multiplier from controller rotation to forearm twist degrees.",
+                    style=helper_style,
+                    word_wrap=True,
+                )
+
             self.panel._labels["ik_tuning_button"] = ui.Button(
                 "Save IK Tuning",
                 height=28,
@@ -117,6 +161,18 @@ class IkDetailSection:
         self.panel._labels["ik_max_step_model"].set_value(str(controller_defaults.get("ik_max_step_deg", 8.0)))
         self.panel._labels["output_max_delta_model"].set_value(
             str(controller_defaults.get("output_max_delta_deg_per_tick", 2.0))
+        )
+        self.panel._labels["forearm_twist_enable_model"].set_value(
+            str(bool(controller_defaults.get("forearm_twist_from_controller_rotation", False))).lower()
+        )
+        self.panel._labels["forearm_twist_axis_model"].set_value(
+            str(controller_defaults.get("forearm_twist_controller_axis", "z"))
+        )
+        self.panel._labels["forearm_twist_sign_model"].set_value(
+            str(controller_defaults.get("forearm_twist_controller_sign", 1.0))
+        )
+        self.panel._labels["forearm_twist_scale_model"].set_value(
+            str(controller_defaults.get("forearm_twist_controller_scale", 1.0))
         )
 
     def update(self, rows: dict[str, dict[str, Any]], payload: dict[str, Any]) -> None:
