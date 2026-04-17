@@ -463,14 +463,14 @@ def Xform "World"
                 float3 xformOp:scale = (0.001, 0.001, 0.001)
                 uniform token[] xformOpOrder = ["xformOp:rotateXYZ", "xformOp:scale"]
 
-                def Xform "forearm_front" (
-                    references = @./assets/usd/forearm_front_visual.usd@
+                def Xform "arm_v2_forearm_l_clone" (
+                    references = @./assets/usd/arm_v2-forearm_l_clone_visual.usd@
                 )
                 {
                 }
 
-                def Xform "forearm_back" (
-                    references = @./assets/usd/forearm_back_visual.usd@
+                def Xform "arm_v2_forearm_r_clone" (
+                    references = @./assets/usd/arm_v2-forearm_r_clone_visual.usd@
                 )
                 {
                 }
