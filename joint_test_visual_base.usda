@@ -7,8 +7,8 @@
                 double radius = 5
             }
             dictionary Perspective = {
-                double3 position = (0.1654222695700187, -0.2575291054217793, -0.20927786234980225)
-                double3 target = (0.14196633985668577, -0.15935670346357472, -0.2912881327125389)
+                double3 position = (0.38341154111200176, -0.11719483451619916, -0.06302469377078425)
+                double3 target = (-0.0007845348451619438, -0.11867727047933908, -0.17402680756471958)
             }
             dictionary Right = {
                 double3 position = (0, -500, 0)
@@ -439,6 +439,7 @@ def Xform "World"
             vector3f physics:angularVelocity = (0, 0, 0)
             float physics:mass = 0.25
             vector3f physics:velocity = (0, 0, 0)
+
             def Xform "Visuals"
             {
                 float3 xformOp:rotateXYZ = (180, 0, 0)
@@ -661,6 +662,7 @@ def Xform "World"
                 float physics:lowerLimit = -65.67476
                 float physics:upperLimit = 1.0497397
             }
+
         }
     }
 }
