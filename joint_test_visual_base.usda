@@ -7,8 +7,8 @@
                 double radius = 5
             }
             dictionary Perspective = {
-                double3 position = (0.07664406162069605, -0.3922437566784538, -0.5004448417777955)
-                double3 target = (0.2114787872909979, -0.1262172543451921, -0.4109015752976981)
+                double3 position = (0.4625817051688109, -0.11108403978517555, -0.7014069121516554)
+                double3 target = (0.272891756467348, -0.11436520003900309, -0.4512709709656854)
             }
             dictionary Right = {
                 double3 position = (0, -500, 0)
@@ -323,7 +323,7 @@ def Xform "World"
 
         def Xform "Wrist"
         {
-            token visibility = "invisible"
+            token visibility = "inherited"
 
             def Xform "Visuals"
             {
@@ -368,6 +368,7 @@ def Xform "World"
                     references = @./assets/usd/arm_v2-palm_base_clone_visual.usd@
                 )
                 {
+                    token visibility = "inherited"
                 }
 
                 def Xform "arm_v2_wrist_servo_sts3215" (
@@ -380,12 +381,14 @@ def Xform "World"
                     references = @./assets/usd/arm_v2-thumb_servo_sts3215_visual.usd@
                 )
                 {
+                    token visibility = "inherited"
                 }
 
                 def Xform "arm_v2_index_servo_sts3215" (
                     references = @./assets/usd/arm_v2-index_servo_sts3215_visual.usd@
                 )
                 {
+                    token visibility = "inherited"
                 }
             }
 
@@ -416,6 +419,32 @@ def Xform "World"
                     float3 xformOp:translate = (0.18483363, -0.11885001, -0.39920864)
                     uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
                 }
+
+                def Cube "ThumbServo" (
+                    prepend apiSchemas = ["PhysicsCollisionAPI"]
+                )
+                {
+                    float3[] extent = [(-0.5, -0.5, -0.5), (0.5, 0.5, 0.5)]
+                    double size = 1
+                    token visibility = "invisible"
+                    quatf xformOp:orient = (0.93635887, -0.0158533, 0.3503166, 0.016094105)
+                    float3 xformOp:scale = (0.042448, 0.03, 0.019608686)
+                    float3 xformOp:translate = (0.22470315, -0.11906294, -0.44352803)
+                    uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+                }
+
+                def Cube "IndexServo" (
+                    prepend apiSchemas = ["PhysicsCollisionAPI"]
+                )
+                {
+                    float3[] extent = [(-0.5, -0.5, -0.5), (0.5, 0.5, 0.5)]
+                    double size = 1
+                    token visibility = "invisible"
+                    quatf xformOp:orient = (0.9267341, 0.010910169, -0.37552646, -0.0049783057)
+                    float3 xformOp:scale = (0.020972595, 0.03, 0.039433338)
+                    float3 xformOp:translate = (0.26995528, -0.11892712, -0.4002677)
+                    uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+                }
             }
         }
 
@@ -443,9 +472,9 @@ def Xform "World"
                     float3[] extent = [(-0.5, -0.5, -0.5), (0.5, 0.5, 0.5)]
                     double size = 1
                     token visibility = "invisible"
-                    quatf xformOp:orient = (0.64069605, 0.0014212644, -0.6505231, -0.40783113)
+                    quatf xformOp:orient = (0.93126047, 0.00015011054, -0.36431745, 0.0051687644)
                     float3 xformOp:scale = (0.02122515, 0.04314559, 0.06779554)
-                    float3 xformOp:translate = (0.24048151, -0.1326019, -0.43924123)
+                    float3 xformOp:translate = (0.24836016, -0.11716342, -0.46829927)
                     uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
                 }
             }
