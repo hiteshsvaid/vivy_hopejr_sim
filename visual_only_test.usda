@@ -200,6 +200,33 @@ def Xform "World"
         {
             def Xform "Visuals"
             {
+                float3 xformOp:rotateXYZ = (180, 0, 0)
+                float3 xformOp:scale = (0.001, 0.001, 0.001)
+                uniform token[] xformOpOrder = ["xformOp:rotateXYZ", "xformOp:scale"]
+
+                def Xform "arm_v2_palm_base_clone" (
+                    references = @./assets/usd/arm_v2-palm_base_clone_visual.usd@
+                )
+                {
+                }
+
+                def Xform "arm_v2_wrist_servo_sts3215" (
+                    references = @./assets/usd/arm_v2-wrist_servo_sts3215_visual.usd@
+                )
+                {
+                }
+
+                def Xform "arm_v2_thumb_servo_sts3215" (
+                    references = @./assets/usd/arm_v2-thumb_servo_sts3215_visual.usd@
+                )
+                {
+                }
+
+                def Xform "arm_v2_index_servo_sts3215" (
+                    references = @./assets/usd/arm_v2-index_servo_sts3215_visual.usd@
+                )
+                {
+                }
             }
         }
 
@@ -207,6 +234,15 @@ def Xform "World"
         {
             def Xform "Visuals"
             {
+                float3 xformOp:rotateXYZ = (180, 0, 0)
+                float3 xformOp:scale = (0.001, 0.001, 0.001)
+                uniform token[] xformOpOrder = ["xformOp:rotateXYZ", "xformOp:scale"]
+
+                def Xform "arm_v2_thumb_clone" (
+                    references = @./assets/usd/arm_v2-thumb_clone_visual.usd@
+                )
+                {
+                }
             }
         }
 
@@ -214,6 +250,15 @@ def Xform "World"
         {
             def Xform "Visuals"
             {
+                float3 xformOp:rotateXYZ = (180, 0, 0)
+                float3 xformOp:scale = (0.001, 0.001, 0.001)
+                uniform token[] xformOpOrder = ["xformOp:rotateXYZ", "xformOp:scale"]
+
+                def Xform "arm_v2_index_clone" (
+                    references = @./assets/usd/arm_v2-index_clone_visual.usd@
+                )
+                {
+                }
             }
         }
     }
