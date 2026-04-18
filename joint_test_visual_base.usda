@@ -7,8 +7,8 @@
                 double radius = 5
             }
             dictionary Perspective = {
-                double3 position = (0.9480047470840568, -0.03176207898225105, -0.08214011938322903)
-                double3 target = (0.3121194322306682, -0.046177374458978765, -0.14584953388298968)
+                double3 position = (0.1654222695700187, -0.2575291054217793, -0.20927786234980225)
+                double3 target = (0.14196633985668577, -0.15935670346357472, -0.2912881327125389)
             }
             dictionary Right = {
                 double3 position = (0, -500, 0)
@@ -248,8 +248,14 @@ def Xform "World"
             }
         }
 
-        def Xform "UpperElbow"
+        def Xform "UpperElbow" (
+            prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]
+        )
         {
+            vector3f physics:angularVelocity = (0, 0, 0)
+            float physics:mass = 0.3
+            vector3f physics:velocity = (0, 0, 0)
+
             def Xform "Visuals"
             {
                 float3 xformOp:rotateXYZ = (180, 0, 0)
@@ -284,8 +290,14 @@ def Xform "World"
             }
         }
 
-        def Xform "LowerElbow"
+        def Xform "LowerElbow" (
+            prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]
+        )
         {
+            vector3f physics:angularVelocity = (0, 0, 0)
+            float physics:mass = 0.3
+            vector3f physics:velocity = (0, 0, 0)
+
             def Xform "Visuals"
             {
                 float3 xformOp:rotateXYZ = (180, 0, 0)
@@ -366,9 +378,9 @@ def Xform "World"
                     double height = 0.06844307
                     double radius = 0.03499925
                     token visibility = "invisible"
-                    quatf xformOp:orient = (0.38984022, 3.2516963e-17, 0.9208825, 3.736151e-17)
-                    float3 xformOp:scale = (1, 1, 1)
-                    float3 xformOp:translate = (0.10862216, -0.1203424, -0.31940338)
+                    quatf xformOp:orient = (-0.3768363, -0.00949822, -0.92619944, 0.007665665)
+                    float3 xformOp:scale = (1, 1, 0.9144084)
+                    float3 xformOp:translate = (0.10862216, -0.11688313, -0.31940338)
                     uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
                 }
             }
