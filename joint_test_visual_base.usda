@@ -1,0 +1,486 @@
+#usda 1.0
+(
+    defaultPrim = "World"
+    upAxis = "Z"
+)
+
+def Xform "World"
+{
+    def Xform "JointTest"
+    {
+        def Xform "Chest" (
+            prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]
+        )
+        {
+            float physics:mass = 1
+            quatf xformOp:orient = (1, 0, 0, 0)
+            float3 xformOp:scale = (1, 1, 1)
+            float3 xformOp:translate = (0, 0, 0)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+
+            def Xform "Visuals"
+            {
+                float3 xformOp:rotateXYZ = (180, 0, 0)
+                float3 xformOp:scale = (0.001, 0.001, 0.001)
+                uniform token[] xformOpOrder = ["xformOp:rotateXYZ", "xformOp:scale"]
+
+                def Xform "arm_v2_chest_clone" (
+                    references = @./assets/usd/arm_v2-chest_clone_visual.usd@
+                )
+                {
+                }
+            }
+
+            def Xform "Colliders"
+            {
+                def Cube "Chest" (
+                    prepend apiSchemas = ["PhysicsCollisionAPI"]
+                )
+                {
+                    double size = 1
+                    token visibility = "invisible"
+                    float3 xformOp:scale = (0.13014, 0.2, 0.14951)
+                    float3 xformOp:translate = (0, 0.100275, -0.106247)
+                    uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+                }
+            }
+        }
+
+        def Xform "RightShoulderSupport"
+        {
+            def Xform "Visuals"
+            {
+                float3 xformOp:rotateXYZ = (180, 0, 0)
+                float3 xformOp:scale = (0.001, 0.001, 0.001)
+                uniform token[] xformOpOrder = ["xformOp:rotateXYZ", "xformOp:scale"]
+
+                def Xform "arm_v2_shoulder_support_bottom" (
+                    references = @./assets/usd/arm_v2-shoulder_support_bottom_visual.usd@
+                )
+                {
+                }
+
+                def Xform "arm_v2_shoulder_support_top" (
+                    references = @./assets/usd/arm_v2-shoulder_support_top_visual.usd@
+                )
+                {
+                }
+            }
+
+            def Xform "Colliders"
+            {
+                def Cone "RightShoulderSupport" (
+                    prepend apiSchemas = ["PhysicsCollisionAPI"]
+                )
+                {
+                    double height = 0.09135
+                    bool physics:collisionEnabled = 0
+                    double radius = 0.07
+                    token visibility = "invisible"
+                    float3 xformOp:rotateXYZ = (90, 0, 0)
+                    float3 xformOp:scale = (1, 1, 1)
+                    float3 xformOp:translate = (0.0000096, -0.0454, -0.049591437)
+                    uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ", "xformOp:scale"]
+                }
+            }
+        }
+
+        def Xform "ShoulderPitch"
+        {
+            def Xform "Visuals"
+            {
+                float3 xformOp:rotateXYZ = (180, 0, 0)
+                float3 xformOp:scale = (0.001, 0.001, 0.001)
+                uniform token[] xformOpOrder = ["xformOp:rotateXYZ", "xformOp:scale"]
+
+                def Xform "arm_v2_pitch_roller_clip_bottom" (
+                    references = @./assets/usd/arm_v2-pitch_roller_clip_bottom_visual.usd@
+                )
+                {
+                }
+
+                def Xform "arm_v2_pitch_roller_clip_left_side" (
+                    references = @./assets/usd/arm_v2-pitch_roller_clip_left_side_visual.usd@
+                )
+                {
+                }
+
+                def Xform "arm_v2_pitch_roller_clip_right_side" (
+                    references = @./assets/usd/arm_v2-pitch_roller_clip_right_side_visual.usd@
+                )
+                {
+                }
+
+                def Xform "arm_v2_pitch_roller_clip_up" (
+                    references = @./assets/usd/arm_v2-pitch_roller_clip_up_visual.usd@
+                )
+                {
+                }
+            }
+
+            def Xform "Colliders"
+            {
+                def Cube "ShoulderPitchChild" (
+                    prepend apiSchemas = ["PhysicsCollisionAPI"]
+                )
+                {
+                    double size = 1
+                    token visibility = "invisible"
+                    float3 xformOp:scale = (0.042, 0.06, 0.03)
+                    float3 xformOp:translate = (0, -0.0987464, -0.046876)
+                    uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+                }
+            }
+        }
+
+        def Xform "UpperArm"
+        {
+            def Xform "Visuals"
+            {
+                float3 xformOp:rotateXYZ = (180, 0, 0)
+                float3 xformOp:scale = (0.001, 0.001, 0.001)
+                uniform token[] xformOpOrder = ["xformOp:rotateXYZ", "xformOp:scale"]
+
+                def Xform "arm_v2_humreal_up" (
+                    references = @./assets/usd/arm_v2-humreal_up_visual.usd@
+                )
+                {
+                }
+
+                def Xform "arm_v2_humreal_down" (
+                    references = @./assets/usd/arm_v2-humreal_down_visual.usd@
+                )
+                {
+                }
+            }
+
+            def Xform "Colliders"
+            {
+                def Cube "UpperArm" (
+                    prepend apiSchemas = ["PhysicsCollisionAPI"]
+                )
+                {
+                    double size = 1
+                    token visibility = "invisible"
+                    float3 xformOp:scale = (0.0807, 0.069998, 0.1679)
+                    float3 xformOp:translate = (-0.0002205, -0.1222418, -0.117943)
+                    uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+                }
+            }
+        }
+
+        def Xform "UpperElbow"
+        {
+            def Xform "Visuals"
+            {
+                float3 xformOp:rotateXYZ = (180, 0, 0)
+                float3 xformOp:scale = (0.001, 0.001, 0.001)
+                uniform token[] xformOpOrder = ["xformOp:rotateXYZ", "xformOp:scale"]
+
+                def Xform "arm_v2_elbow_up" (
+                    references = @./assets/usd/arm_v2-elbow_up_visual.usd@
+                )
+                {
+                }
+
+                def Xform "arm_v2_elbow_down" (
+                    references = @./assets/usd/arm_v2-elbow_down_visual.usd@
+                )
+                {
+                }
+            }
+
+            def Xform "Colliders"
+            {
+                def Cube "UpperElbow" (
+                    prepend apiSchemas = ["PhysicsCollisionAPI"]
+                )
+                {
+                    double size = 1
+                    token visibility = "invisible"
+                    float3 xformOp:scale = (0.086109, 0.0458899, 0.1322292)
+                    float3 xformOp:translate = (0.015375, -0.1220877, -0.2001075)
+                    uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+                }
+            }
+        }
+
+        def Xform "LowerElbow"
+        {
+            def Xform "Visuals"
+            {
+                float3 xformOp:rotateXYZ = (180, 0, 0)
+                float3 xformOp:scale = (0.001, 0.001, 0.001)
+                uniform token[] xformOpOrder = ["xformOp:rotateXYZ", "xformOp:scale"]
+
+                def Xform "arm_v2_lower_elbow_inner_body" (
+                    references = @./assets/usd/arm_v2-lower_elbow_inner_body_visual.usd@
+                )
+                {
+                }
+
+                def Xform "arm_v2_lower_elbow_outer_body" (
+                    references = @./assets/usd/arm_v2-lower_elbow_outer_body_visual.usd@
+                )
+                {
+                }
+
+                def Xform "arm_v2_lower_elbow_side_l_body" (
+                    references = @./assets/usd/arm_v2-lower_elbow_side_l_body_visual.usd@
+                )
+                {
+                }
+
+                def Xform "arm_v2_lower_elbow_side_r_body" (
+                    references = @./assets/usd/arm_v2-lower_elbow_side_r_body_visual.usd@
+                )
+                {
+                }
+            }
+
+            def Xform "Colliders"
+            {
+                def Cylinder "LowerElbow" (
+                    prepend apiSchemas = ["PhysicsCollisionAPI"]
+                )
+                {
+                    float3[] extent = [(-0.03798464, -0.03798464, -0.03207975), (0.03798464, 0.03798464, 0.03207975)]
+                    double height = 0.0641595
+                    double radius = 0.03798464
+                    token visibility = "invisible"
+                    quatf xformOp:orient = (0.35985795, 3.5095265e-17, 0.9330071, 3.9197396e-17)
+                    float3 xformOp:scale = (1, 1, 0.8733559)
+                    float3 xformOp:translate = (0.06185394, -0.1155546, -0.2731077)
+                    uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+                }
+            }
+        }
+
+        def Xform "Forearm"
+        {
+            def Xform "Visuals"
+            {
+                float3 xformOp:rotateXYZ = (180, 0, 0)
+                float3 xformOp:scale = (0.001, 0.001, 0.001)
+                uniform token[] xformOpOrder = ["xformOp:rotateXYZ", "xformOp:scale"]
+
+                def Xform "arm_v2_forearm_l_clone" (
+                    references = @./assets/usd/arm_v2-forearm_l_clone_visual.usd@
+                )
+                {
+                }
+
+                def Xform "arm_v2_forearm_r_clone" (
+                    references = @./assets/usd/arm_v2-forearm_r_clone_visual.usd@
+                )
+                {
+                }
+            }
+
+            def Xform "Colliders"
+            {
+                def Cylinder "Forearm" (
+                    prepend apiSchemas = ["PhysicsCollisionAPI"]
+                )
+                {
+                    float3[] extent = [(-0.03499925, -0.03499925, -0.03422154), (0.03499925, 0.03499925, 0.03422154)]
+                    double height = 0.06844307
+                    double radius = 0.03499925
+                    token visibility = "invisible"
+                    quatf xformOp:orient = (0.38984022, 3.2516963e-17, 0.9208825, 3.736151e-17)
+                    float3 xformOp:scale = (1, 1, 1)
+                    float3 xformOp:translate = (0.10862216, -0.1203424, -0.31940338)
+                    uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+                }
+            }
+        }
+
+        def Xform "Wrist"
+        {
+            def Xform "Visuals"
+            {
+                float3 xformOp:rotateXYZ = (180, 0, 0)
+                float3 xformOp:scale = (0.001, 0.001, 0.001)
+                uniform token[] xformOpOrder = ["xformOp:rotateXYZ", "xformOp:scale"]
+
+                def Xform "arm_v2_wrist_yaw_pitch" (
+                    references = @./assets/usd/arm_v2-wrist_yaw_pitch_visual.usd@
+                )
+                {
+                }
+            }
+
+            def Xform "Colliders"
+            {
+                def Cylinder "Wrist" (
+                    prepend apiSchemas = ["PhysicsCollisionAPI"]
+                )
+                {
+                    float3[] extent = [(-0.0275, -0.0275, -0.03), (0.0275, 0.0275, 0.03)]
+                    double height = 0.06
+                    double radius = 0.0275
+                    token visibility = "invisible"
+                    quatf xformOp:orient = (0.38984022, 3.2516963e-17, 0.9208825, 3.736151e-17)
+                    float3 xformOp:scale = (1, 1, 1)
+                    float3 xformOp:translate = (0.15843837, -0.12034, -0.37101686)
+                    uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+                }
+            }
+        }
+
+        def Xform "Palm"
+        {
+            def Xform "Visuals"
+            {
+                float3 xformOp:rotateXYZ = (180, 0, 0)
+                float3 xformOp:scale = (0.001, 0.001, 0.001)
+                uniform token[] xformOpOrder = ["xformOp:rotateXYZ", "xformOp:scale"]
+
+                def Xform "arm_v2_palm_base_clone" (
+                    references = @./assets/usd/arm_v2-palm_base_clone_visual.usd@
+                )
+                {
+                }
+
+                def Xform "arm_v2_wrist_servo_sts3215" (
+                    references = @./assets/usd/arm_v2-wrist_servo_sts3215_visual.usd@
+                )
+                {
+                }
+
+                def Xform "arm_v2_thumb_servo_sts3215" (
+                    references = @./assets/usd/arm_v2-thumb_servo_sts3215_visual.usd@
+                )
+                {
+                }
+
+                def Xform "arm_v2_index_servo_sts3215" (
+                    references = @./assets/usd/arm_v2-index_servo_sts3215_visual.usd@
+                )
+                {
+                }
+            }
+
+            def Xform "Colliders"
+            {
+                def Cube "Palm" (
+                    prepend apiSchemas = ["PhysicsCollisionAPI"]
+                )
+                {
+                    float3[] extent = [(-0.5, -0.5, -0.5), (0.5, 0.5, 0.5)]
+                    double size = 1
+                    token visibility = "invisible"
+                    quatf xformOp:orient = (0.81491697, 0.3908839, 0.40514114, -0.13777067)
+                    float3 xformOp:scale = (0.02405179, 0.038801305, 0.09120325)
+                    float3 xformOp:translate = (0.17766373, -0.09644629, -0.4192415)
+                    uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+                }
+
+                def Cube "WristServo" (
+                    prepend apiSchemas = ["PhysicsCollisionAPI"]
+                )
+                {
+                    float3[] extent = [(-0.5, -0.5, -0.5), (0.5, 0.5, 0.5)]
+                    double size = 1
+                    token visibility = "invisible"
+                    quatf xformOp:orient = (0.41784424, -0.14108647, -0.8109464, -0.38453445)
+                    float3 xformOp:scale = (0.044128582, 0.04279055, 0.028039312)
+                    float3 xformOp:translate = (0.17445894, -0.11732295, -0.38868007)
+                    uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+                }
+
+                def Cube "ThumbServo" (
+                    prepend apiSchemas = ["PhysicsCollisionAPI"]
+                )
+                {
+                    float3[] extent = [(-0.5, -0.5, -0.5), (0.5, 0.5, 0.5)]
+                    bool physics:collisionEnabled = 0
+                    double size = 1
+                    token visibility = "invisible"
+                    quatf xformOp:orient = (0.41784424, -0.14108647, -0.8109464, -0.38453445)
+                    float3 xformOp:scale = (0.044128582, 0.04279055, 0.028039312)
+                    float3 xformOp:translate = (0.20823628, -0.11805951, -0.42443326)
+                    uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+                }
+
+                def Cube "IndexServo" (
+                    prepend apiSchemas = ["PhysicsCollisionAPI"]
+                )
+                {
+                    float3[] extent = [(-0.5, -0.5, -0.5), (0.5, 0.5, 0.5)]
+                    bool physics:collisionEnabled = 0
+                    double size = 1
+                    token visibility = "invisible"
+                    quatf xformOp:orient = (0.41784424, -0.14108647, -0.8109464, -0.38453445)
+                    float3 xformOp:scale = (0.044128582, 0.04279055, 0.028039312)
+                    float3 xformOp:translate = (0.16797751, -0.0717221, -0.4437448)
+                    uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+                }
+            }
+        }
+
+        def Xform "Thumb"
+        {
+            def Xform "Visuals"
+            {
+                float3 xformOp:rotateXYZ = (180, 0, 0)
+                float3 xformOp:scale = (0.001, 0.001, 0.001)
+                uniform token[] xformOpOrder = ["xformOp:rotateXYZ", "xformOp:scale"]
+
+                def Xform "arm_v2_thumb_clone" (
+                    references = @./assets/usd/arm_v2-thumb_clone_visual.usd@
+                )
+                {
+                }
+            }
+
+            def Xform "Colliders"
+            {
+                def Cube "Thumb" (
+                    prepend apiSchemas = ["PhysicsCollisionAPI"]
+                )
+                {
+                    float3[] extent = [(-0.5, -0.5, -0.5), (0.5, 0.5, 0.5)]
+                    double size = 1
+                    token visibility = "invisible"
+                    quatf xformOp:orient = (0.64069605, 0.0014212644, -0.6505231, -0.40783113)
+                    float3 xformOp:scale = (0.02122515, 0.04314559, 0.06779554)
+                    float3 xformOp:translate = (0.24048151, -0.1326019, -0.43924123)
+                    uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+                }
+            }
+        }
+
+        def Xform "Index"
+        {
+            def Xform "Visuals"
+            {
+                float3 xformOp:rotateXYZ = (180, 0, 0)
+                float3 xformOp:scale = (0.001, 0.001, 0.001)
+                uniform token[] xformOpOrder = ["xformOp:rotateXYZ", "xformOp:scale"]
+
+                def Xform "arm_v2_index_clone" (
+                    references = @./assets/usd/arm_v2-index_clone_visual.usd@
+                )
+                {
+                }
+            }
+
+            def Xform "Colliders"
+            {
+                def Cube "Index" (
+                    prepend apiSchemas = ["PhysicsCollisionAPI"]
+                )
+                {
+                    float3[] extent = [(-0.5, -0.5, -0.5), (0.5, 0.5, 0.5)]
+                    double size = 1
+                    token visibility = "invisible"
+                    quatf xformOp:orient = (0.64069605, 0.0014212644, -0.6505231, -0.40783113)
+                    float3 xformOp:scale = (0.02122515, 0.04314559, 0.08303055)
+                    float3 xformOp:translate = (0.21151423, -0.096551366, -0.46263072)
+                    uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+                }
+            }
+        }
+    }
+}
