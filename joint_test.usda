@@ -7,8 +7,8 @@
                 double radius = 5
             }
             dictionary Perspective = {
-                double3 position = (0.5262215237887584, 0.11989593493296834, -0.33244313947008697)
-                double3 target = (0.05377538720686914, -0.11931202585333749, -0.377859500631981)
+                double3 position = (1.0830269338662442, -0.8000469510144776, 0.12258364377412319)
+                double3 target = (0.0025256288755184375, -0.5042977463995639, 0.06412788225631655)
             }
             dictionary Right = {
                 double3 position = (0, -5, 0)
@@ -459,26 +459,33 @@ def Xform "World"
             def Xform "Visuals"
             {
                 token visibility = "inherited"
-                float3 xformOp:rotateXYZ = (180, 0, 0)
+                float3 xformOp:rotateXYZ = (0, 0, 0)
                 float3 xformOp:scale = (0.001, 0.001, 0.001)
-                uniform token[] xformOpOrder = ["xformOp:rotateXYZ", "xformOp:scale"]
+                double3 xformOp:translate = (0, 0, 0)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ", "xformOp:scale"]
 
                 def Xform "arm_v2_forearm_l_clone" (
                     references = @./assets/usd/arm_v2-forearm_l_clone_visual.usd@
                 )
                 {
+                    float3 xformOp:translate = (0, 0, 0)
+                    uniform token[] xformOpOrder = ["xformOp:translate"]
                 }
 
                 def Xform "arm_v2_forearm_r_clone" (
                     references = @./assets/usd/arm_v2-forearm_r_clone_visual.usd@
                 )
                 {
+                    float3 xformOp:translate = (0, 0, 0)
+                    uniform token[] xformOpOrder = ["xformOp:translate"]
                 }
 
                 def Xform "forearm_to_wrist_servo_sts3215" (
                     references = @./assets/usd/forearm_to_wrist_servo_sts3215_visual.usd@
                 )
                 {
+                    float3 xformOp:translate = (0, 0, 0)
+                    uniform token[] xformOpOrder = ["xformOp:translate"]
                 }
             }
 
