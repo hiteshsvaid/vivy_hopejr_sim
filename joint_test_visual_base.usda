@@ -7,8 +7,8 @@
                 double radius = 5
             }
             dictionary Perspective = {
-                double3 position = (0.310127063102553, -0.12335914964166128, -0.6485529425977065)
-                double3 target = (0.294313135059158, -0.11870573569249115, -0.4562437204685378)
+                double3 position = (0.9480047470840568, -0.03176207898225105, -0.08214011938322903)
+                double3 target = (0.3121194322306682, -0.046177374458978765, -0.14584953388298968)
             }
             dictionary Right = {
                 double3 position = (0, -500, 0)
@@ -32,7 +32,17 @@
 
 def Xform "World"
 {
-    def Xform "JointTest"
+    def PhysicsScene "PhysicsScene" (
+        prepend apiSchemas = ["PhysxSceneAPI"]
+    )
+    {
+        float3 physics:gravityDirection = (0, 0, -1)
+        float physics:gravityMagnitude = 9.81
+    }
+
+    def Xform "JointTest" (
+        prepend apiSchemas = ["PhysicsArticulationRootAPI"]
+    )
     {
         def Xform "Chest" (
             prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]
@@ -597,3 +607,4 @@ def "Render" (
         }
     }
 }
+
