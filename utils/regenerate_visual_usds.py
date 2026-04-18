@@ -54,6 +54,7 @@ VISUAL_ONLY_PARTS = [
     'forearm_to_wrist_servo_sts3215',
     'wrist_servo_sts3215',
     'wrist_yaw_pitch',
+    'arm_v2-wrist_yaw_pitch',
     'palm_base',
     'thumb_servo_sts3215',
     'thumb',
