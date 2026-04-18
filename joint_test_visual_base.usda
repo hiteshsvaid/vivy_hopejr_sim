@@ -7,8 +7,8 @@
                 double radius = 5
             }
             dictionary Perspective = {
-                double3 position = (0.2974437001316468, -0.3336268844008266, -0.2958203134021009)
-                double3 target = (0.17665628622722712, -0.14966365674805507, -0.37568229001489417)
+                double3 position = (0.07664406162069605, -0.3922437566784538, -0.5004448417777955)
+                double3 target = (0.2114787872909979, -0.1262172543451921, -0.4109015752976981)
             }
             dictionary Right = {
                 double3 position = (0, -500, 0)
@@ -323,6 +323,8 @@ def Xform "World"
 
         def Xform "Wrist"
         {
+            token visibility = "invisible"
+
             def Xform "Visuals"
             {
                 float3 xformOp:rotateXYZ = (180, 0, 0)
@@ -396,9 +398,9 @@ def Xform "World"
                     float3[] extent = [(-0.5, -0.5, -0.5), (0.5, 0.5, 0.5)]
                     double size = 1
                     token visibility = "invisible"
-                    quatf xformOp:orient = (0.81491697, 0.3908839, 0.40514114, -0.13777067)
-                    float3 xformOp:scale = (0.02405179, 0.038801305, 0.09120325)
-                    float3 xformOp:translate = (0.17766373, -0.09644629, -0.4192415)
+                    quatf xformOp:orient = (-0.007238255, 0.9260871, 0.017065201, -0.3768543)
+                    float3 xformOp:scale = (0.018284814, 0.038801305, 0.09120325)
+                    float3 xformOp:translate = (0.23521025, -0.11994455, -0.4106498)
                     uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
                 }
 
@@ -409,37 +411,9 @@ def Xform "World"
                     float3[] extent = [(-0.5, -0.5, -0.5), (0.5, 0.5, 0.5)]
                     double size = 1
                     token visibility = "invisible"
-                    quatf xformOp:orient = (0.41784424, -0.14108647, -0.8109464, -0.38453445)
-                    float3 xformOp:scale = (0.044128582, 0.04279055, 0.028039312)
-                    float3 xformOp:translate = (0.17445894, -0.11732295, -0.38868007)
-                    uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
-                }
-
-                def Cube "ThumbServo" (
-                    prepend apiSchemas = ["PhysicsCollisionAPI"]
-                )
-                {
-                    float3[] extent = [(-0.5, -0.5, -0.5), (0.5, 0.5, 0.5)]
-                    bool physics:collisionEnabled = 0
-                    double size = 1
-                    token visibility = "invisible"
-                    quatf xformOp:orient = (0.41784424, -0.14108647, -0.8109464, -0.38453445)
-                    float3 xformOp:scale = (0.044128582, 0.04279055, 0.028039312)
-                    float3 xformOp:translate = (0.20823628, -0.11805951, -0.42443326)
-                    uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
-                }
-
-                def Cube "IndexServo" (
-                    prepend apiSchemas = ["PhysicsCollisionAPI"]
-                )
-                {
-                    float3[] extent = [(-0.5, -0.5, -0.5), (0.5, 0.5, 0.5)]
-                    bool physics:collisionEnabled = 0
-                    double size = 1
-                    token visibility = "invisible"
-                    quatf xformOp:orient = (0.41784424, -0.14108647, -0.8109464, -0.38453445)
-                    float3 xformOp:scale = (0.044128582, 0.04279055, 0.028039312)
-                    float3 xformOp:translate = (0.16797751, -0.0717221, -0.4437448)
+                    quatf xformOp:orient = (0.27945542, -0.2763446, -0.66441774, -0.6356787)
+                    float3 xformOp:scale = (0.024201743, 0.02631742, 0.028039312)
+                    float3 xformOp:translate = (0.18483363, -0.11885001, -0.39920864)
                     uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
                 }
             }
