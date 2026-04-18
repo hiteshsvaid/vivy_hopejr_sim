@@ -347,8 +347,14 @@ def Xform "World"
             }
         }
 
-        def Xform "Forearm"
+        def Xform "Forearm" (
+            prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]
+        )
         {
+            vector3f physics:angularVelocity = (0, 0, 0)
+            float physics:mass = 0.3
+            vector3f physics:velocity = (0, 0, 0)
+
             def Xform "Visuals"
             {
                 float3 xformOp:rotateXYZ = (180, 0, 0)
@@ -386,8 +392,13 @@ def Xform "World"
             }
         }
 
-        def Xform "Wrist"
+        def Xform "Wrist" (
+            prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]
+        )
         {
+            vector3f physics:angularVelocity = (0, 0, 0)
+            float physics:mass = 0.3
+            vector3f physics:velocity = (0, 0, 0)
             token visibility = "inherited"
 
             def Xform "Visuals"
@@ -421,8 +432,13 @@ def Xform "World"
             }
         }
 
-        def Xform "Palm"
+        def Xform "Palm" (
+            prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]
+        )
         {
+            vector3f physics:angularVelocity = (0, 0, 0)
+            float physics:mass = 0.25
+            vector3f physics:velocity = (0, 0, 0)
             def Xform "Visuals"
             {
                 float3 xformOp:rotateXYZ = (180, 0, 0)
@@ -513,8 +529,14 @@ def Xform "World"
             }
         }
 
-        def Xform "Thumb"
+        def Xform "Thumb" (
+            prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]
+        )
         {
+            vector3f physics:angularVelocity = (0, 0, 0)
+            float physics:mass = 0.15
+            vector3f physics:velocity = (0, 0, 0)
+
             def Xform "Visuals"
             {
                 float3 xformOp:rotateXYZ = (180, 0, 0)
@@ -545,8 +567,14 @@ def Xform "World"
             }
         }
 
-        def Xform "Index"
+        def Xform "Index" (
+            prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]
+        )
         {
+            vector3f physics:angularVelocity = (0, 0, 0)
+            float physics:mass = 0.15
+            vector3f physics:velocity = (0, 0, 0)
+
             def Xform "Visuals"
             {
                 float3 xformOp:rotateXYZ = (180, 0, 0)
