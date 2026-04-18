@@ -7,8 +7,8 @@
                 double radius = 5
             }
             dictionary Perspective = {
-                double3 position = (0.4625817051688109, -0.11108403978517555, -0.7014069121516554)
-                double3 target = (0.272891756467348, -0.11436520003900309, -0.4512709709656854)
+                double3 position = (0.310127063102553, -0.12335914964166128, -0.6485529425977065)
+                double3 target = (0.294313135059158, -0.11870573569249115, -0.4562437204685378)
             }
             dictionary Right = {
                 double3 position = (0, -500, 0)
@@ -504,11 +504,33 @@ def Xform "World"
                     float3[] extent = [(-0.5, -0.5, -0.5), (0.5, 0.5, 0.5)]
                     double size = 1
                     token visibility = "invisible"
-                    quatf xformOp:orient = (0.64069605, 0.0014212644, -0.6505231, -0.40783113)
-                    float3 xformOp:scale = (0.02122515, 0.04314559, 0.08303055)
-                    float3 xformOp:translate = (0.21151423, -0.096551366, -0.46263072)
+                    quatf xformOp:orient = (0.9223157, 0.010331303, -0.38613334, 0.01131466)
+                    float3 xformOp:scale = (0.02122515, 0.038233016, 0.069234304)
+                    float3 xformOp:translate = (0.3124448, -0.11940162, -0.4405463)
                     uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
                 }
+            }
+        }
+
+        def Scope "Joints"
+        {
+            def PhysicsFixedJoint "world_to_chest"
+            {
+                rel physics:body1 = </World/JointTest/Chest>
+                point3f physics:localPos0 = (0, 0.100275, -0.106247)
+                point3f physics:localPos1 = (0, 0.100275, -0.106247)
+                quatf physics:localRot0 = (1, 0, 0, 0)
+                quatf physics:localRot1 = (1, 0, 0, 0)
+            }
+
+            def PhysicsFixedJoint "right_shoulder_support_fixed"
+            {
+                rel physics:body0 = </World/JointTest/Chest>
+                rel physics:body1 = </World/JointTest/RightShoulderSupport>
+                point3f physics:localPos0 = (0, 0, 0)
+                point3f physics:localPos1 = (0, 0, 0)
+                quatf physics:localRot0 = (1, 0, 0, 0)
+                quatf physics:localRot1 = (1, 0, 0, 0)
             }
         }
     }
@@ -575,4 +597,3 @@ def "Render" (
         }
     }
 }
-
