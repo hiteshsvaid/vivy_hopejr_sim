@@ -8,14 +8,26 @@ from typing import Any
 
 
 FLOW_CONTROL_PATH = Path("/tmp/vivy_flow_control.json")
-KIT_INPUT_ICON_PATH = Path(
-    "/home/viaan/issacsim/extscache/omni.kit.window.material_graph-1.8.23/icons/InputNode.svg"
+ISAAC_SIM_EXTSCACHE_DIR = Path("/isaac-sim/extscache")
+
+
+def _resolve_extscache_path(pattern: str, relative_path: str) -> Path:
+    matches = sorted(ISAAC_SIM_EXTSCACHE_DIR.glob(pattern))
+    if not matches:
+        return ISAAC_SIM_EXTSCACHE_DIR / relative_path
+    return matches[-1] / relative_path
+
+
+KIT_INPUT_ICON_PATH = _resolve_extscache_path(
+    "omni.kit.window.material_graph-*", "icons/InputNode.svg"
 )
-KIT_OUTPUT_ICON_PATH = Path(
-    "/home/viaan/issacsim/extscache/omni.kit.window.material_graph-1.8.23/icons/OutputNode.svg"
+KIT_OUTPUT_ICON_PATH = _resolve_extscache_path(
+    "omni.kit.window.material_graph-*", "icons/OutputNode.svg"
 )
-GRAPH_ICON_DIR = Path("/home/viaan/issacsim/extscache/omni.graph.window.core-2.0.0+107.3.0/icons/node")
-CONTENT_ICON_DIR = Path("/home/viaan/issacsim/extscache/omni.kit.window.content_browser-3.1.1+8131b85d/icons/NvidiaDark")
+GRAPH_ICON_DIR = _resolve_extscache_path("omni.graph.window.core-*", "icons/node")
+CONTENT_ICON_DIR = _resolve_extscache_path(
+    "omni.kit.window.content_browser-*", "icons/NvidiaDark"
+)
 
 
 class VivyFlowPanel:
