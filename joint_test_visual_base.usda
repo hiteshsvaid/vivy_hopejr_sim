@@ -7,8 +7,8 @@
                 double radius = 5
             }
             dictionary Perspective = {
-                double3 position = (0.3359200181084553, 0.2217414411121953, -0.3953627039651536)
-                double3 target = (0.2935806659693539, -0.18877997021980109, -0.38348673886238965)
+                double3 position = (0.6770985683701197, -0.3786581589357739, 0.14166022093081615)
+                double3 target = (0.08133045451042986, -0.23283334428617394, -0.3192403152796474)
             }
             dictionary Right = {
                 double3 position = (0, -500, 0)
@@ -705,7 +705,7 @@ def Xform "World"
                 uniform token axis = "Y"
                 float drive:angular:physics:damping = 5
                 float drive:angular:physics:stiffness = 20
-                float drive:angular:physics:targetPosition = -2.1000001
+                float drive:angular:physics:targetPosition = -4.1
                 rel physics:body0 = </World/JointTest/RightShoulderSupport>
                 rel physics:body1 = </World/JointTest/ShoulderPitch>
                 point3f physics:localPos0 = (-0.00046249336, -0.07241509, -0.04704027)
@@ -723,7 +723,7 @@ def Xform "World"
                 uniform token axis = "Y"
                 float drive:angular:physics:damping = 5
                 float drive:angular:physics:stiffness = 20
-                float drive:angular:physics:targetPosition = 1
+                float drive:angular:physics:targetPosition = -9.1
                 rel physics:body0 = </World/JointTest/ShoulderPitch>
                 rel physics:body1 = </World/JointTest/UpperArm>
                 point3f physics:localPos0 = (0, -0.12071, -0.0464)
@@ -741,15 +741,15 @@ def Xform "World"
                 uniform token axis = "Y"
                 float drive:angular:physics:damping = 5
                 float drive:angular:physics:stiffness = 20
-                float drive:angular:physics:targetPosition = -13.7
+                float drive:angular:physics:targetPosition = -11.7
                 rel physics:body0 = </World/JointTest/UpperArm>
                 rel physics:body1 = </World/JointTest/UpperElbow>
                 point3f physics:localPos0 = (-0.00006, -0.11989, -0.14907)
                 point3f physics:localPos1 = (-0.00007, -0.1201, -0.14893)
                 quatf physics:localRot0 = (0.5627204, 0.42650682, 0.5685334, -0.42214617)
                 quatf physics:localRot1 = (0.5627204, 0.42650682, 0.5685334, -0.42214617)
-                float physics:lowerLimit = -90.03456
-                float physics:upperLimit = 92.55347
+                float physics:lowerLimit = -45.17266
+                float physics:upperLimit = 48.960358
             }
 
             def PhysicsRevoluteJoint "right_elbow" (
@@ -759,7 +759,7 @@ def Xform "World"
                 uniform token axis = "Y"
                 float drive:angular:physics:damping = 5
                 float drive:angular:physics:stiffness = 20
-                float drive:angular:physics:targetPosition = -24
+                float drive:angular:physics:targetPosition = -18.9
                 rel physics:body0 = </World/JointTest/UpperElbow>
                 rel physics:body1 = </World/JointTest/LowerElbow>
                 point3f physics:localPos0 = (0.03843, -0.12064, -0.24804)
@@ -776,7 +776,7 @@ def Xform "World"
             {
                 float drive:angular:physics:damping = 5
                 float drive:angular:physics:stiffness = 20
-                float drive:angular:physics:targetPosition = 3.4
+                float drive:angular:physics:targetPosition = 16.300001
                 uniform token physics:axis = "X"
                 rel physics:body0 = </World/JointTest/LowerElbow>
                 rel physics:body1 = </World/JointTest/Forearm>
@@ -796,7 +796,7 @@ def Xform "World"
             {
                 float drive:angular:physics:damping = 5
                 float drive:angular:physics:stiffness = 20
-                float drive:angular:physics:targetPosition = 17
+                float drive:angular:physics:targetPosition = 2.4
                 uniform token physics:axis = "X"
                 rel physics:body0 = </World/JointTest/Forearm>
                 rel physics:body1 = </World/JointTest/Wrist>
@@ -816,7 +816,7 @@ def Xform "World"
             {
                 float drive:angular:physics:damping = 5
                 float drive:angular:physics:stiffness = 20
-                float drive:angular:physics:targetPosition = 12.2
+                float drive:angular:physics:targetPosition = 11.3
                 uniform token physics:axis = "Y"
                 rel physics:body0 = </World/JointTest/Wrist>
                 rel physics:body1 = </World/JointTest/Palm>
@@ -834,7 +834,7 @@ def Xform "World"
             {
                 float drive:angular:physics:damping = 5
                 float drive:angular:physics:stiffness = 20
-                float drive:angular:physics:targetPosition = 10.7
+                float drive:angular:physics:targetPosition = 9.900001
                 uniform token physics:axis = "Y"
                 rel physics:body0 = </World/JointTest/Palm>
                 rel physics:body1 = </World/JointTest/Thumb>
@@ -852,16 +852,16 @@ def Xform "World"
             {
                 float drive:angular:physics:damping = 5
                 float drive:angular:physics:stiffness = 20
-                float drive:angular:physics:targetPosition = 48.9
+                float drive:angular:physics:targetPosition = -24.7
                 uniform token physics:axis = "Y"
                 rel physics:body0 = </World/JointTest/Palm>
                 rel physics:body1 = </World/JointTest/Index>
-                point3f physics:localPos0 = (0.18798552, -0.056437373, -0.44248012)
-                point3f physics:localPos1 = (0.18798552, -0.056437373, -0.44248012)
-                quatf physics:localRot0 = (0.9088809, 0.31569228, 0.075378895, -0.26190057)
-                quatf physics:localRot1 = (0.9088809, 0.31569228, 0.075378895, -0.26190057)
-                float physics:lowerLimit = -27.539473
-                float physics:upperLimit = 147.26332
+                point3f physics:localPos0 = (0.27701327, -0.09952547, -0.40806836)
+                point3f physics:localPos1 = (0.2770133, -0.099525444, -0.40806836)
+                quatf physics:localRot0 = (0.9903057, -0.011475503, 0.13742168, 0.016678296)
+                quatf physics:localRot1 = (0.9903057, -0.011475579, 0.13742182, 0.016678197)
+                float physics:lowerLimit = -108.29361
+                float physics:upperLimit = 72.90791
             }
         }
     }
