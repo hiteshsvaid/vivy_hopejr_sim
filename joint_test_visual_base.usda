@@ -7,8 +7,8 @@
                 double radius = 5
             }
             dictionary Perspective = {
-                double3 position = (0.5362940743854326, -0.7639920156224648, -0.37115747108798114)
-                double3 target = (0.18344112680477487, -0.04321369079371096, -0.2709173106052854)
+                double3 position = (0.3359200181084553, 0.2217414411121953, -0.3953627039651536)
+                double3 target = (0.2935806659693539, -0.18877997021980109, -0.38348673886238965)
             }
             dictionary Right = {
                 double3 position = (0, -500, 0)
@@ -834,15 +834,16 @@ def Xform "World"
             {
                 float drive:angular:physics:damping = 5
                 float drive:angular:physics:stiffness = 20
+                float drive:angular:physics:targetPosition = 10.7
                 uniform token physics:axis = "Y"
                 rel physics:body0 = </World/JointTest/Palm>
                 rel physics:body1 = </World/JointTest/Thumb>
-                point3f physics:localPos0 = (0.22607772, -0.10128983, -0.42174152)
-                point3f physics:localPos1 = (0.22607772, -0.10128983, -0.42174152)
-                quatf physics:localRot0 = (0.90150213, 0.3445212, 0.102842994, -0.24087827)
-                quatf physics:localRot1 = (0.90150213, 0.3445212, 0.102842994, -0.24087827)
-                float physics:lowerLimit = -59.856945
-                float physics:upperLimit = 125.49909
+                point3f physics:localPos0 = (0.23349442, -0.09778478, -0.45210323)
+                point3f physics:localPos1 = (0.23349442, -0.09778475, -0.45210323)
+                quatf physics:localRot0 = (0.9964513, 0.012107542, 0.08327842, 0.0016886563)
+                quatf physics:localRot1 = (0.9964514, 0.012108011, 0.08327804, 0.0016889471)
+                float physics:lowerLimit = -105.4166
+                float physics:upperLimit = 78.799255
             }
 
             def PhysicsRevoluteJoint "right_index" (
@@ -851,6 +852,7 @@ def Xform "World"
             {
                 float drive:angular:physics:damping = 5
                 float drive:angular:physics:stiffness = 20
+                float drive:angular:physics:targetPosition = 48.9
                 uniform token physics:axis = "Y"
                 rel physics:body0 = </World/JointTest/Palm>
                 rel physics:body1 = </World/JointTest/Index>
