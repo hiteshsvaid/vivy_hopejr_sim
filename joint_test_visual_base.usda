@@ -7,8 +7,8 @@
                 double radius = 5
             }
             dictionary Perspective = {
-                double3 position = (0.3492994629555049, -0.2375980799236311, -0.17207772329888482)
-                double3 target = (0.1962469375326149, -0.03455569482522844, -0.39331493597262723)
+                double3 position = (0.5362940743854326, -0.7639920156224648, -0.37115747108798114)
+                double3 target = (0.18344112680477487, -0.04321369079371096, -0.2709173106052854)
             }
             dictionary Right = {
                 double3 position = (0, -500, 0)
@@ -816,15 +816,16 @@ def Xform "World"
             {
                 float drive:angular:physics:damping = 5
                 float drive:angular:physics:stiffness = 20
+                float drive:angular:physics:targetPosition = 12.2
                 uniform token physics:axis = "Y"
                 rel physics:body0 = </World/JointTest/Wrist>
                 rel physics:body1 = </World/JointTest/Palm>
-                point3f physics:localPos0 = (0.17846663, -0.10427633, -0.36706167)
-                point3f physics:localPos1 = (0.17846663, -0.10427633, -0.36706167)
-                quatf physics:localRot0 = (0.9156082, 0.31194434, 0.064322874, -0.24538718)
-                quatf physics:localRot1 = (0.9156082, 0.31194434, 0.064322874, -0.24538718)
-                float physics:lowerLimit = -106.98095
-                float physics:upperLimit = 55.070885
+                point3f physics:localPos0 = (0.18683325, -0.09497089, -0.39638165)
+                point3f physics:localPos1 = (0.1868333, -0.094970986, -0.39638168)
+                quatf physics:localRot0 = (0.99265, 0.0285437, 0.11539604, -0.022695491)
+                quatf physics:localRot1 = (0.99264985, 0.028543014, 0.115396835, -0.022696394)
+                float physics:lowerLimit = -70.645424
+                float physics:upperLimit = 114.64946
             }
 
             def PhysicsRevoluteJoint "right_thumb" (
