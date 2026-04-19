@@ -710,6 +710,24 @@ def Xform "World"
                 float physics:lowerLimit = -90.03456
                 float physics:upperLimit = 71.24874
             }
+
+            def PhysicsRevoluteJoint "right_elbow" (
+                prepend apiSchemas = ["PhysicsDriveAPI:angular"]
+            )
+            {
+                uniform token axis = "Y"
+                float drive:angular:physics:damping = 12
+                float drive:angular:physics:stiffness = 2
+                float drive:angular:physics:targetPosition = -30
+                rel physics:body0 = </World/JointTest/UpperElbow>
+                rel physics:body1 = </World/JointTest/LowerElbow>
+                point3f physics:localPos0 = (0.03843, -0.12064, -0.24804)
+                point3f physics:localPos1 = (0.03838, -0.12084, -0.24802)
+                quatf physics:localRot0 = (0.70710677, 0, 0, 0.70710677)
+                quatf physics:localRot1 = (0.70710677, 0, 0, 0.70710677)
+                float physics:lowerLimit = -69.55451
+                float physics:upperLimit = 42.765446
+            }
         }
     }
 }
@@ -775,4 +793,3 @@ def "Render" (
         }
     }
 }
-
