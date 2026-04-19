@@ -7,8 +7,8 @@
                 double radius = 5
             }
             dictionary Perspective = {
-                double3 position = (0.09672044998983181, -0.44304273936282557, -0.2558383745797042)
-                double3 target = (0.07870321674577824, -0.13147332366501419, -0.23340910254376546)
+                double3 position = (0.6021088544727401, -0.5459240564721443, 0.0840811885039688)
+                double3 target = (0.07870320657976271, -0.13147332627519775, -0.2334091205929118)
             }
             dictionary Right = {
                 double3 position = (0, -500, 0)
@@ -705,7 +705,7 @@ def Xform "World"
                 uniform token axis = "Y"
                 float drive:angular:physics:damping = 5
                 float drive:angular:physics:stiffness = 20
-                float drive:angular:physics:targetPosition = -3.5
+                float drive:angular:physics:targetPosition = -2.1000001
                 rel physics:body0 = </World/JointTest/RightShoulderSupport>
                 rel physics:body1 = </World/JointTest/ShoulderPitch>
                 point3f physics:localPos0 = (-0.00046249336, -0.07241509, -0.04704027)
@@ -721,8 +721,8 @@ def Xform "World"
             )
             {
                 uniform token axis = "Y"
-                float drive:angular:physics:damping = 2
-                float drive:angular:physics:stiffness = 8
+                float drive:angular:physics:damping = 5
+                float drive:angular:physics:stiffness = 20
                 float drive:angular:physics:targetPosition = 1
                 rel physics:body0 = </World/JointTest/ShoulderPitch>
                 rel physics:body1 = </World/JointTest/UpperArm>
@@ -739,9 +739,9 @@ def Xform "World"
             )
             {
                 uniform token axis = "Y"
-                float drive:angular:physics:damping = 6
-                float drive:angular:physics:stiffness = 2
-                float drive:angular:physics:targetPosition = -9.3
+                float drive:angular:physics:damping = 5
+                float drive:angular:physics:stiffness = 20
+                float drive:angular:physics:targetPosition = -13.7
                 rel physics:body0 = </World/JointTest/UpperArm>
                 rel physics:body1 = </World/JointTest/UpperElbow>
                 point3f physics:localPos0 = (-0.00006, -0.11989, -0.14907)
@@ -757,9 +757,9 @@ def Xform "World"
             )
             {
                 uniform token axis = "Y"
-                float drive:angular:physics:damping = 100
-                float drive:angular:physics:stiffness = 1000
-                float drive:angular:physics:targetPosition = 8
+                float drive:angular:physics:damping = 5
+                float drive:angular:physics:stiffness = 20
+                float drive:angular:physics:targetPosition = -24
                 rel physics:body0 = </World/JointTest/UpperElbow>
                 rel physics:body1 = </World/JointTest/LowerElbow>
                 point3f physics:localPos0 = (0.03843, -0.12064, -0.24804)
@@ -774,9 +774,9 @@ def Xform "World"
                 prepend apiSchemas = ["PhysicsDriveAPI:angular"]
             )
             {
-                float drive:angular:physics:damping = 6
-                float drive:angular:physics:stiffness = 2
-                float drive:angular:physics:targetPosition = -13
+                float drive:angular:physics:damping = 5
+                float drive:angular:physics:stiffness = 20
+                float drive:angular:physics:targetPosition = 3.4
                 uniform token physics:axis = "X"
                 rel physics:body0 = </World/JointTest/LowerElbow>
                 rel physics:body1 = </World/JointTest/Forearm>
@@ -794,8 +794,9 @@ def Xform "World"
                 prepend apiSchemas = ["PhysicsDriveAPI:angular"]
             )
             {
-                float drive:angular:physics:damping = 14
-                float drive:angular:physics:stiffness = 1.5
+                float drive:angular:physics:damping = 5
+                float drive:angular:physics:stiffness = 20
+                float drive:angular:physics:targetPosition = -3.7
                 uniform token physics:axis = "Y"
                 rel physics:body0 = </World/JointTest/Forearm>
                 rel physics:body1 = </World/JointTest/Wrist>
@@ -813,8 +814,8 @@ def Xform "World"
                 prepend apiSchemas = ["PhysicsDriveAPI:angular"]
             )
             {
-                float drive:angular:physics:damping = 10
-                float drive:angular:physics:stiffness = 1
+                float drive:angular:physics:damping = 5
+                float drive:angular:physics:stiffness = 20
                 uniform token physics:axis = "Y"
                 rel physics:body0 = </World/JointTest/Wrist>
                 rel physics:body1 = </World/JointTest/Palm>
@@ -830,8 +831,8 @@ def Xform "World"
                 prepend apiSchemas = ["PhysicsDriveAPI:angular"]
             )
             {
-                float drive:angular:physics:damping = 6
-                float drive:angular:physics:stiffness = 2
+                float drive:angular:physics:damping = 5
+                float drive:angular:physics:stiffness = 20
                 uniform token physics:axis = "Y"
                 rel physics:body0 = </World/JointTest/Palm>
                 rel physics:body1 = </World/JointTest/Thumb>
@@ -847,8 +848,8 @@ def Xform "World"
                 prepend apiSchemas = ["PhysicsDriveAPI:angular"]
             )
             {
-                float drive:angular:physics:damping = 6
-                float drive:angular:physics:stiffness = 2
+                float drive:angular:physics:damping = 5
+                float drive:angular:physics:stiffness = 20
                 uniform token physics:axis = "Y"
                 rel physics:body0 = </World/JointTest/Palm>
                 rel physics:body1 = </World/JointTest/Index>
