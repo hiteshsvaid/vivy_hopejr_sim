@@ -7,8 +7,8 @@
                 double radius = 5
             }
             dictionary Perspective = {
-                double3 position = (0.6021088544727401, -0.5459240564721443, 0.0840811885039688)
-                double3 target = (0.07870320657976271, -0.13147332627519775, -0.2334091205929118)
+                double3 position = (0.3492994629555049, -0.2375980799236311, -0.17207772329888482)
+                double3 target = (0.1962469375326149, -0.03455569482522844, -0.39331493597262723)
             }
             dictionary Right = {
                 double3 position = (0, -500, 0)
@@ -796,16 +796,16 @@ def Xform "World"
             {
                 float drive:angular:physics:damping = 5
                 float drive:angular:physics:stiffness = 20
-                float drive:angular:physics:targetPosition = -3.7
-                uniform token physics:axis = "Y"
+                float drive:angular:physics:targetPosition = 17
+                uniform token physics:axis = "X"
                 rel physics:body0 = </World/JointTest/Forearm>
                 rel physics:body1 = </World/JointTest/Wrist>
                 float physics:breakForce = 3.4028235e38
                 float physics:breakTorque = 3.4028235e38
-                point3f physics:localPos0 = (0.1579265, -0.14307544, -0.34384504)
-                point3f physics:localPos1 = (0.1579265, -0.14307544, -0.34384504)
-                quatf physics:localRot0 = (0.9551123, -0.21374306, 0.027581567, 0.20325764)
-                quatf physics:localRot1 = (0.9551123, -0.21374306, 0.027581567, 0.20325764)
+                point3f physics:localPos0 = (0.18816772, -0.11995501, -0.35097864)
+                point3f physics:localPos1 = (0.18816765, -0.11995491, -0.35097843)
+                quatf physics:localRot0 = (0.9112755, -0.11682665, -0.39319512, -0.036415026)
+                quatf physics:localRot1 = (0.91127574, -0.11682541, -0.3931949, -0.036415055)
                 float physics:lowerLimit = -30.172441
                 float physics:upperLimit = 30.278606
             }
