@@ -470,18 +470,17 @@ class VivyTargetViewer:
         else:
             return
 
-        model_to_stage_rotation = np.asarray(self.model_to_stage_transform[:3, :3], dtype=float)
         stage_anchor_position = stage_pose[:3, 3] if self._stage_anchor_pose is None else self._stage_anchor_pose[:3, 3]
         conditioned_delta_world = np.asarray(
             payload.get("conditioned_position_delta_world") or [0.0, 0.0, 0.0],
             dtype=float,
         )
         quest_mapped_position = np.asarray(
-            stage_anchor_position + (model_to_stage_rotation @ conditioned_delta_world),
+            stage_anchor_position + conditioned_delta_world,
             dtype=float,
         )
         sim_target_position = np.asarray(
-            quest_mapped_position + (model_to_stage_rotation @ self.world_offset),
+            quest_mapped_position + self.world_offset,
             dtype=float,
         )
         show_pitch_frames = bool(flow_control.get("show_pitch_frames", False))
