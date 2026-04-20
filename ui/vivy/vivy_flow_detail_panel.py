@@ -506,6 +506,10 @@ class VivyFlowDetailPanel:
             return
 
         self._window = ui.Window("Vivy Flow Details", width=self.width, height=self.height)
+        try:
+            self._window.deferred_dock_in("Console")
+        except Exception:
+            pass
         with self._window.frame:
             with ui.ScrollingFrame():
                 with ui.VStack(spacing=6, height=0):

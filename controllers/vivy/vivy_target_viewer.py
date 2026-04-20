@@ -144,6 +144,7 @@ class VivyTargetViewer:
         self.side_panel = VivySidePanel()
         self.flow_panel = VivyFlowPanel()
         self.flow_detail_panel = VivyFlowDetailPanel()
+        self._ensure_panels_created()
         self._joint_write_ready = False
         self._last_joint_write_warn_time = 0.0
         self._last_panel_signal_timestamp: float | None = None
@@ -151,6 +152,14 @@ class VivyTargetViewer:
         self._last_panel_real_feedback_timestamp: float | None = None
         self._last_panel_real_feedback_arrival_time: float | None = None
         self._last_bus_hz: float | None = None
+
+    def _ensure_panels_created(self) -> None:
+        for panel in (self.side_panel, self.flow_panel, self.flow_detail_panel):
+            try:
+                panel._ensure_window()
+            except Exception:
+                pass
+
 
     def _read_real_feedback(self) -> dict[str, object] | None:
         payload = _load_json_file(REAL_FEEDBACK_PATH)

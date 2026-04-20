@@ -53,6 +53,10 @@ class VivySidePanel:
 
         self._window = ui.Window("Vivy Quest", width=self.width, height=self.height)
         try:
+            self._window.deferred_dock_in("Stage")
+        except Exception:
+            pass
+        try:
             self._window.focus()
         except Exception:
             pass

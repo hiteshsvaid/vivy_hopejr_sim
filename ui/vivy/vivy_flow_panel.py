@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import time
 from pathlib import Path
 from typing import Any
 
@@ -141,7 +142,8 @@ class VivyFlowPanel:
         self._docked = False
         self._row_frames: dict[str, Any] = {}
         self._toggle_buttons: dict[str, Any] = {}
-        self._label_buttons: dict[str, Any] = {}
+        self._label_widgets: dict[str, Any] = {}
+        self._select_buttons: dict[str, Any] = {}
         self._icon_widgets: dict[str, Any] = {}
 
     def _dock_window(self, ui_module: Any) -> None:
@@ -253,18 +255,28 @@ class VivyFlowPanel:
                 self._icon_widgets[key] = ui.Image(node_icon_path, width=16, height=16)
             else:
                 self._icon_widgets[key] = ui.Spacer(width=16)
-            self._label_buttons[key] = ui.Button(
-                "-",
-                width=0,
+            self._select_buttons[key] = ui.Button(
+                "o",
+                width=18,
                 clicked_fn=lambda k=key: self._select_node(k),
                 style={
-                    "alignment": 1,
                     "background_color": 0x00000000,
                     "border_width": 0,
                     "color": self._TEXT_NEUTRAL,
                     "font_size": 13,
                 },
             )
+            self._label_widgets[key] = ui.Label(
+                "-",
+                width=max(160, self.width - indent * 16 - 82),
+                alignment=ui.Alignment.LEFT_CENTER,
+                name="TreeView.Item",
+                style={"color": self._TEXT_NEUTRAL, "font_size": 13},
+            )
+            try:
+                self._label_widgets[key].set_mouse_pressed_fn(lambda x, y, b, m, k=key: self._select_node(k))
+            except Exception:
+                pass
 
     def _ensure_window(self) -> None:
         if self._window is not None:
@@ -275,6 +287,13 @@ class VivyFlowPanel:
             return
 
         self._window = ui.Window("Vivy Flow", width=self.width, height=self.height)
+        try:
+            self._window.deferred_dock_in("Vivy Quest")
+        except Exception:
+            try:
+                self._window.deferred_dock_in("Stage")
+            except Exception:
+                pass
         with self._window.frame:
             with ui.ScrollingFrame():
                 with ui.VStack(spacing=6, height=0):
@@ -314,9 +333,10 @@ class VivyFlowPanel:
         if selected:
             color = self._TEXT_SELECTED
         try:
-            self._label_buttons[key].text = text
-            self._label_buttons[key].style = {
-                "alignment": 1,
+            self._label_widgets[key].text = text
+            self._label_widgets[key].style = {"color": color, "font_size": 13}
+            self._select_buttons[key].text = "*" if selected else "o"
+            self._select_buttons[key].style = {
                 "background_color": 0x00000000,
                 "border_width": 0,
                 "color": color,
@@ -337,7 +357,7 @@ class VivyFlowPanel:
 
     def update(self, payload: dict[str, Any] | None = None, flow_state: dict[str, Any] | None = None) -> None:
         self._ensure_window()
-        if not self._label_buttons:
+        if not self._label_widgets:
             return
         try:
             import omni.ui as ui

@@ -15,12 +15,9 @@ try:
 except ImportError:
     DynamicCuboid = None
 try:
-    from omni.isaac.core.utils.nucleus import get_assets_root_path
+    from isaacsim.storage.native import get_assets_root_path
 except ImportError:
-    try:
-        from omni.isaac.nucleus import get_assets_root_path
-    except ImportError:
-        get_assets_root_path = None
+    get_assets_root_path = None
 
 
 class TeleopDebugVisuals:
