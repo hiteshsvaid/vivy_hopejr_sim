@@ -7,8 +7,8 @@
                 double radius = 5
             }
             dictionary Perspective = {
-                double3 position = (0.5862395677031792, -1.1417044127261857, 0.20902773374881084)
-                double3 target = (0.14618894686904987, -0.1354567323043563, -0.2814578543909865)
+                double3 position = (0.4276375315301832, 0.2648919385116953, -0.6416840427585794)
+                double3 target = (0.2212051655873516, -0.1435059626974443, -0.446287687459148)
             }
             dictionary Right = {
                 double3 position = (0, -500, 0)
@@ -529,9 +529,9 @@ def Xform "World"
 
             def Xform "EndEffector"
             {
-                float3 xformOp:rotateXYZ = (0.98844874, 141.89586, 15.00731)
+                float3 xformOp:rotateXYZ = (1.3420341, 130.12431, -0.43051085)
                 float3 xformOp:scale = (1, 1, 1)
-                float3 xformOp:translate = (0.18586423, -0.09546602, -0.42922118)
+                float3 xformOp:translate = (0.24062029, -0.1173617, -0.4109102)
                 uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ", "xformOp:scale"]
             }
 
@@ -938,3 +938,4 @@ def "Render" (
         }
     }
 }
+
