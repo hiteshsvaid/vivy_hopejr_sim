@@ -470,23 +470,20 @@ class VivyTargetViewer:
         else:
             return
 
-        target_pose_model = payload.get("target_pose_model")
-        if target_pose_model is None:
-            target_pose_stage = stage_pose
-        else:
-            target_pose_model = np.asarray(target_pose_model, dtype=float)
-            if self._stage_anchor_pose is not None and np.allclose(
-                np.asarray(payload.get("conditioned_position_delta_world") or [0.0, 0.0, 0.0], dtype=float),
-                0.0,
-                atol=1e-6,
-            ):
-                try:
-                    self._anchor_model_to_stage_transform = self._stage_anchor_pose @ np.linalg.inv(target_pose_model)
-                except np.linalg.LinAlgError:
-                    self._anchor_model_to_stage_transform = self.model_to_stage_transform
-            target_pose_stage = self._anchor_model_to_stage_transform @ target_pose_model
-
-        sim_target_position = np.asarray(target_pose_stage[:3, 3], dtype=float)
+        model_to_stage_rotation = np.asarray(self.model_to_stage_transform[:3, :3], dtype=float)
+        stage_anchor_position = stage_pose[:3, 3] if self._stage_anchor_pose is None else self._stage_anchor_pose[:3, 3]
+        conditioned_delta_world = np.asarray(
+            payload.get("conditioned_position_delta_world") or [0.0, 0.0, 0.0],
+            dtype=float,
+        )
+        quest_mapped_position = np.asarray(
+            stage_anchor_position + (model_to_stage_rotation @ conditioned_delta_world),
+            dtype=float,
+        )
+        sim_target_position = np.asarray(
+            quest_mapped_position + (model_to_stage_rotation @ self.world_offset),
+            dtype=float,
+        )
         show_pitch_frames = bool(flow_control.get("show_pitch_frames", False))
         pitch_visual = self._build_pitch_visual(stage) if show_pitch_frames else None
         self.visuals.enabled = bool(flow_control.get("sim_view_enabled", True))
@@ -494,7 +491,7 @@ class VivyTargetViewer:
             stage,
             quest_anchor_position=np.asarray(payload.get("quest_anchor_position") or [0.0, 0.0, 0.0], dtype=float),
             quest_current_position=np.asarray((payload.get("hand_state") or {}).get("position") or [0.0, 0.0, 0.0], dtype=float),
-            quest_mapped_position=sim_target_position,
+            quest_mapped_position=quest_mapped_position,
             sim_target_position=sim_target_position,
             reference_position=stage_pose[:3, 3],
             actual_end_effector_position=stage_pose[:3, 3],
