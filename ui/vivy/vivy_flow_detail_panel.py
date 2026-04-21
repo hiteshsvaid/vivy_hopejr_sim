@@ -130,6 +130,24 @@ class VivyFlowDetailPanel:
             self._labels["axis_sign_z_model"].set_value(str(signs[2]))
             self._labels["position_scale_model"].set_value(str(position_scale))
             self._labels["target_max_delta_model"].set_value(str(controller_defaults.get("target_max_delta_m_per_tick", 0.0)))
+            self._labels["right_wrist_thumbstick_sign_model"].set_value(
+                str(controller_defaults.get("right_wrist_thumbstick_sign", -1.0))
+            )
+            self._labels["right_wrist_thumbstick_scale_deg_model"].set_value(
+                str(controller_defaults.get("right_wrist_thumbstick_scale_deg", 30.0))
+            )
+            self._labels["right_wrist_thumbstick_deadband_model"].set_value(
+                str(controller_defaults.get("right_wrist_thumbstick_deadband", 0.1))
+            )
+            self._labels["right_palm_thumbstick_sign_model"].set_value(
+                str(controller_defaults.get("right_palm_thumbstick_sign", 1.0))
+            )
+            self._labels["right_palm_thumbstick_scale_deg_model"].set_value(
+                str(controller_defaults.get("right_palm_thumbstick_scale_deg", 30.0))
+            )
+            self._labels["right_palm_thumbstick_deadband_model"].set_value(
+                str(controller_defaults.get("right_palm_thumbstick_deadband", 0.1))
+            )
             self._labels["axis_status"].text = "Edit and save. Applies live."
         except Exception:
             pass
@@ -147,10 +165,22 @@ class VivyFlowDetailPanel:
             script_defaults = dict(config.get("script_editor_test_defaults") or {})
             position_scale = float(self._labels["position_scale_model"].get_value_as_string())
             target_max_delta = float(self._labels["target_max_delta_model"].get_value_as_string())
+            wrist_thumbstick_sign = float(self._labels["right_wrist_thumbstick_sign_model"].get_value_as_string())
+            wrist_thumbstick_scale_deg = float(self._labels["right_wrist_thumbstick_scale_deg_model"].get_value_as_string())
+            wrist_thumbstick_deadband = float(self._labels["right_wrist_thumbstick_deadband_model"].get_value_as_string())
+            palm_thumbstick_sign = float(self._labels["right_palm_thumbstick_sign_model"].get_value_as_string())
+            palm_thumbstick_scale_deg = float(self._labels["right_palm_thumbstick_scale_deg_model"].get_value_as_string())
+            palm_thumbstick_deadband = float(self._labels["right_palm_thumbstick_deadband_model"].get_value_as_string())
             controller_defaults["position_scale"] = position_scale
             controller_defaults["quest_position_axes"] = axes
             controller_defaults["quest_position_signs"] = list(signs)
             controller_defaults["target_max_delta_m_per_tick"] = target_max_delta
+            controller_defaults["right_wrist_thumbstick_sign"] = wrist_thumbstick_sign
+            controller_defaults["right_wrist_thumbstick_scale_deg"] = wrist_thumbstick_scale_deg
+            controller_defaults["right_wrist_thumbstick_deadband"] = wrist_thumbstick_deadband
+            controller_defaults["right_palm_thumbstick_sign"] = palm_thumbstick_sign
+            controller_defaults["right_palm_thumbstick_scale_deg"] = palm_thumbstick_scale_deg
+            controller_defaults["right_palm_thumbstick_deadband"] = palm_thumbstick_deadband
             script_defaults["position_scale"] = position_scale
             script_defaults["quest_position_axes"] = axes
             script_defaults["quest_position_signs"] = list(signs)
@@ -159,7 +189,8 @@ class VivyFlowDetailPanel:
             self._write_vivy_config(config)
             self._labels["axis_status"].text = (
                 f"Saved position_scale={position_scale} axes={axes} signs={signs} "
-                f"target_max_delta={target_max_delta}. Applies live."
+                f"target_max_delta={target_max_delta} wrist_deadband={wrist_thumbstick_deadband} "
+                f"palm_deadband={palm_thumbstick_deadband}. Applies live."
             )
         except Exception as exc:
             self._labels["axis_status"].text = f"Save failed: {exc}"

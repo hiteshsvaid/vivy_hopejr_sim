@@ -8,13 +8,26 @@ class MappingDetailSection:
         self.panel = panel
 
     def build(self, ui: Any, parent: Any, header_style: dict[str, Any], value_style: dict[str, Any]) -> None:
+        def add_row(label: str, model_key: str, *, width: int = 90, units: str | None = None) -> None:
+            with ui.HStack(height=26, spacing=6):
+                ui.Label(label, width=170, style=value_style)
+                field = ui.StringField(width=width)
+                self.panel._labels[model_key] = field.model
+                if units:
+                    ui.Label(units, width=64, style=value_style)
+
         with ui.VStack(spacing=4) as axis_editor:
             self.panel._labels["axis_editor"] = axis_editor
-            ui.Label("Axis / Sign Remap", style=header_style)
+            ui.Label("Position Mapping", style=header_style)
             with ui.HStack(height=26, spacing=6):
                 ui.Label("axes", width=48, style=value_style)
                 axis_field = ui.StringField(width=80)
                 self.panel._labels["axis_axes_model"] = axis_field.model
+            ui.Label(
+                "Reorders Quest controller translation axes before IK. Use permutations like xyz or zxy.",
+                style=value_style,
+                word_wrap=True,
+            )
             with ui.HStack(height=26, spacing=6):
                 ui.Label("sign x", width=48, style=value_style)
                 sign_x = ui.StringField(width=60)
@@ -25,22 +38,63 @@ class MappingDetailSection:
                 ui.Label("sign z", width=48, style=value_style)
                 sign_z = ui.StringField(width=60)
                 self.panel._labels["axis_sign_z_model"] = sign_z.model
-            with ui.HStack(height=26, spacing=6):
-                ui.Label("position_scale", width=120, style=value_style)
-                position_scale_field = ui.StringField(width=80)
-                self.panel._labels["position_scale_model"] = position_scale_field.model
+            ui.Label(
+                "Flips the remapped translation axes. Use 1.0 for normal and -1.0 to invert.",
+                style=value_style,
+                word_wrap=True,
+            )
+            add_row("position_scale", "position_scale_model")
             ui.Label(
                 "Scales Quest translation before IK. Larger values make controller motion move the target more.",
                 style=value_style,
                 word_wrap=True,
             )
-            with ui.HStack(height=26, spacing=6):
-                ui.Label("target_max_delta", width=120, style=value_style)
-                target_delta_field = ui.StringField(width=80)
-                self.panel._labels["target_max_delta_model"] = target_delta_field.model
-                ui.Label("m/tick", width=48, style=value_style)
+            add_row("target_max_delta", "target_max_delta_model", units="m/tick")
             ui.Label(
                 "Limits target-position change per control tick before IK sees it.",
+                style=value_style,
+                word_wrap=True,
+            )
+            ui.Spacer(height=8)
+            ui.Label("Thumbstick Distal Joints", style=header_style)
+            ui.Label(
+                "Thumbstick input bypasses target motion. X drives right_wrist and Y drives right_palm.",
+                style=value_style,
+                word_wrap=True,
+            )
+            add_row("wrist sign", "right_wrist_thumbstick_sign_model")
+            ui.Label(
+                "Inverts wrist direction from thumbstick X. Use 1.0 or -1.0.",
+                style=value_style,
+                word_wrap=True,
+            )
+            add_row("wrist scale", "right_wrist_thumbstick_scale_deg_model", units="deg")
+            ui.Label(
+                "Maximum wrist offset driven by full left or right thumbstick deflection.",
+                style=value_style,
+                word_wrap=True,
+            )
+            add_row("wrist deadband", "right_wrist_thumbstick_deadband_model")
+            ui.Label(
+                "Ignores small thumbstick X noise below this magnitude.",
+                style=value_style,
+                word_wrap=True,
+            )
+            add_row("palm sign", "right_palm_thumbstick_sign_model")
+            ui.Label(
+                "Inverts palm direction from thumbstick Y. Use 1.0 or -1.0.",
+                style=value_style,
+                word_wrap=True,
+            )
+            add_row("palm scale", "right_palm_thumbstick_scale_deg_model", units="deg")
+            ui.Label(
+                "Maximum palm offset driven by full up or down thumbstick deflection.",
+                style=value_style,
+                word_wrap=True,
+            )
+            add_row("palm deadband", "right_palm_thumbstick_deadband_model")
+            ui.Label(
+                "Ignores small thumbstick Y noise so X-only motion does not lift the palm.",
                 style=value_style,
                 word_wrap=True,
             )

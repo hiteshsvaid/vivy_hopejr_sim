@@ -75,6 +75,8 @@ class VivySidePanel:
                         self._labels["quest_pos"] = ui.Label("-", style=value_style)
                         ui.Label("grip / trigger", style=value_style)
                         self._labels["quest_grip_trigger"] = ui.Label("-", style=value_style)
+                        ui.Label("thumbstick", style=value_style)
+                        self._labels["quest_thumbstick"] = ui.Label("-", style=value_style)
 
                     ui.Label("STATE", style=section_style)
                     with ui.VGrid(column_count=2, column_widths=[110, 0], row_height=22):
@@ -277,6 +279,7 @@ class VivySidePanel:
         hand = payload.get("hand_state") or {}
         grip = float(hand.get("grip", 0.0)) if isinstance(hand, dict) else 0.0
         trigger = float(hand.get("trigger", 0.0)) if isinstance(hand, dict) else 0.0
+        thumbstick = hand.get("thumbstick") if isinstance(hand, dict) else None
         enabled = bool(hand.get("enabled", True)) if isinstance(hand, dict) else False
         clutch = bool(hand.get("clutch", False)) if isinstance(hand, dict) else False
         waiting_for_anchor = bool(payload.get("waiting_for_anchor", True))
@@ -286,6 +289,13 @@ class VivySidePanel:
 
         self._labels["quest_pos"].text = self._fmt_vec3(hand.get("position"))
         self._labels["quest_grip_trigger"].text = f"grip={grip:.2f}  trigger={trigger:.2f}"
+        if isinstance(thumbstick, (list, tuple)) and len(thumbstick) == 2:
+            try:
+                self._labels["quest_thumbstick"].text = f"x={float(thumbstick[0]):+.2f}  y={float(thumbstick[1]):+.2f}"
+            except Exception:
+                self._labels["quest_thumbstick"].text = "-"
+        else:
+            self._labels["quest_thumbstick"].text = "-"
         self._labels["state_enabled_clutch"].text = f"enabled={enabled}  clutch={clutch}"
         self._labels["state_startup_anchor"].text = f"startup={startup}  anchor={anchor}  frozen={frozen}"
         bus_live = bool(payload.get("real_feedback_live", False))
