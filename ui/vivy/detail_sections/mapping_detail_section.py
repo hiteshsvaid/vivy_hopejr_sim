@@ -62,39 +62,37 @@ class MappingDetailSection:
                 style=value_style,
                 word_wrap=True,
             )
-            add_row("wrist sign", "right_wrist_thumbstick_sign_model")
+            with ui.VStack(spacing=4):
+                table_header_style = {**value_style, "font_size": 12}
+                with ui.HStack(height=22, spacing=8):
+                    ui.Label("joint", width=120, style=table_header_style)
+                    ui.Label("stick axis", width=80, style=table_header_style)
+                    ui.Label("sign", width=70, style=table_header_style)
+                    ui.Label("scale deg", width=80, style=table_header_style)
+                    ui.Label("deadband", width=80, style=table_header_style)
+
+                with ui.HStack(height=26, spacing=8):
+                    ui.Label("right_wrist", width=120, style=value_style)
+                    ui.Label("X", width=80, style=value_style)
+                    wrist_sign = ui.StringField(width=70)
+                    self.panel._labels["right_wrist_thumbstick_sign_model"] = wrist_sign.model
+                    wrist_scale = ui.StringField(width=80)
+                    self.panel._labels["right_wrist_thumbstick_scale_deg_model"] = wrist_scale.model
+                    wrist_deadband = ui.StringField(width=80)
+                    self.panel._labels["right_wrist_thumbstick_deadband_model"] = wrist_deadband.model
+
+                with ui.HStack(height=26, spacing=8):
+                    ui.Label("right_palm", width=120, style=value_style)
+                    ui.Label("Y", width=80, style=value_style)
+                    palm_sign = ui.StringField(width=70)
+                    self.panel._labels["right_palm_thumbstick_sign_model"] = palm_sign.model
+                    palm_scale = ui.StringField(width=80)
+                    self.panel._labels["right_palm_thumbstick_scale_deg_model"] = palm_scale.model
+                    palm_deadband = ui.StringField(width=80)
+                    self.panel._labels["right_palm_thumbstick_deadband_model"] = palm_deadband.model
+
             ui.Label(
-                "Inverts wrist direction from thumbstick X. Use 1.0 or -1.0.",
-                style=value_style,
-                word_wrap=True,
-            )
-            add_row("wrist scale", "right_wrist_thumbstick_scale_deg_model", units="deg")
-            ui.Label(
-                "Maximum wrist offset driven by full left or right thumbstick deflection.",
-                style=value_style,
-                word_wrap=True,
-            )
-            add_row("wrist deadband", "right_wrist_thumbstick_deadband_model")
-            ui.Label(
-                "Ignores small thumbstick X noise below this magnitude.",
-                style=value_style,
-                word_wrap=True,
-            )
-            add_row("palm sign", "right_palm_thumbstick_sign_model")
-            ui.Label(
-                "Inverts palm direction from thumbstick Y. Use 1.0 or -1.0.",
-                style=value_style,
-                word_wrap=True,
-            )
-            add_row("palm scale", "right_palm_thumbstick_scale_deg_model", units="deg")
-            ui.Label(
-                "Maximum palm offset driven by full up or down thumbstick deflection.",
-                style=value_style,
-                word_wrap=True,
-            )
-            add_row("palm deadband", "right_palm_thumbstick_deadband_model")
-            ui.Label(
-                "Ignores small thumbstick Y noise so X-only motion does not lift the palm.",
+                "Sign inverts direction. Scale is max joint offset at full stick deflection. Deadband ignores small axis leakage.",
                 style=value_style,
                 word_wrap=True,
             )

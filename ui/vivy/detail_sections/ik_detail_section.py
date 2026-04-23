@@ -11,12 +11,15 @@ class IkDetailSection:
         helper_style = {**value_style, "font_size": 12}
         with ui.VStack(spacing=4) as ik_editor:
             self.panel._labels["ik_editor"] = ik_editor
-            ui.Label("IK Joint Table", style=header_style)
+            ui.Label("Joint Tuning Table", style=header_style)
             with ui.VStack(spacing=4) as ik_joint_table_container:
                 self.panel._labels["ik_joint_table_container"] = ik_joint_table_container
                 with ui.HStack(height=22, spacing=8):
                     ui.Label("joint", width=170, style={**value_style, "font_size": 12})
-                    ui.Label("axis", width=110, style={**value_style, "font_size": 12})
+                    ui.Label("axis", width=90, style={**value_style, "font_size": 12})
+                    ui.Label("weight", width=70, style={**value_style, "font_size": 12})
+                    ui.Label("neutral bias", width=70, style={**value_style, "font_size": 12})
+                    ui.Label("joint tick", width=70, style={**value_style, "font_size": 12})
                     ui.Label("mode", width=90, style={**value_style, "font_size": 12})
             ui.Spacer(height=6)
             ui.Label("IK Tuning", style=header_style)
@@ -176,7 +179,7 @@ class IkDetailSection:
         )
 
     def update(self, rows: dict[str, dict[str, Any]], payload: dict[str, Any]) -> None:
-        names = self.panel._list_joint_names()
+        names = self.panel._list_ik_table_joint_names()
         self.panel._refresh_ik_joint_table(rows)
         ik_actual_hz = float(payload.get("ik_actual_hz") or 0.0)
         self.panel._labels["ik_actual_hz_value"].text = f"{ik_actual_hz:.1f}"

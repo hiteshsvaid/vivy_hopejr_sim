@@ -313,12 +313,22 @@ class VivyFlowDetailPanel:
             return [str(name) for name in names]
         return []
 
+    def _list_ik_table_joint_names(self) -> list[str]:
+        config = self._read_vivy_config()
+        names = list(self._list_joint_names())
+        excluded = ((config.get("kinematics") or {}).get("excluded_joints") or [])
+        for name in excluded:
+            name_text = str(name)
+            if name_text not in names:
+                names.append(name_text)
+        return names
+
     def _joint_axis_map(self) -> dict[str, str]:
         config = self._read_vivy_config()
         joints = dict(config.get("joints") or {})
         result: dict[str, str] = {}
-        for name in self._list_joint_names():
-            result[name] = str(dict(joints.get(name) or {}).get("axis") or "-")
+        for name in self._list_ik_table_joint_names():
+            result[name] = str(dict(joints.get(name) or {}).get("axis") or "Y")
         return result
 
     def _refresh_ik_jacobian_mode_dropdown(self, selected_mode: str | None = None) -> None:
@@ -369,6 +379,7 @@ class VivyFlowDetailPanel:
         axis: str | None = None,
         weight: float | None = None,
         neutral_bias_weight: float | None = None,
+        output_max_delta_deg_per_tick: float | None = None,
     ) -> None:
         try:
             config = self._read_vivy_config()
@@ -390,6 +401,10 @@ class VivyFlowDetailPanel:
                 if neutral_bias_weight < 0.0:
                     raise ValueError("neutral_bias_weight must be >= 0")
                 joint_entry["neutral_bias_weight"] = float(neutral_bias_weight)
+            if output_max_delta_deg_per_tick is not None:
+                if output_max_delta_deg_per_tick < 0.0:
+                    raise ValueError("output_max_delta_deg_per_tick must be >= 0")
+                joint_entry["output_max_delta_deg_per_tick"] = float(output_max_delta_deg_per_tick)
             joints[joint_name] = joint_entry
             config["joints"] = joints
             self._write_vivy_config(config)
@@ -397,9 +412,16 @@ class VivyFlowDetailPanel:
             axis_text = str(joint_entry.get("axis") or "-")
             weight_text = float(joint_entry.get("weight", 1.0))
             neutral_bias_text = float(joint_entry.get("neutral_bias_weight", 0.0))
+            tick_text = float(
+                joint_entry.get(
+                    "output_max_delta_deg_per_tick",
+                    (config.get("controller_defaults") or {}).get("output_max_delta_deg_per_tick", 0.0),
+                )
+            )
             self._labels["ik_status"].text = (
                 f"Saved {joint_name}: axis={axis_text} mode={mode_text} "
-                f"weight={weight_text:.2f} neutral_bias={neutral_bias_text:.2f}. Applies live."
+                f"weight={weight_text:.2f} neutral_bias={neutral_bias_text:.2f} "
+                f"joint_tick={tick_text:.2f}. Applies live."
             )
         except Exception as exc:
             self._labels["ik_status"].text = f"Save failed: {exc}"
@@ -412,11 +434,13 @@ class VivyFlowDetailPanel:
         container = self._labels.get("ik_joint_table_container")
         if container is None:
             return
-        names = self._list_joint_names()
+        names = self._list_ik_table_joint_names()
         self._ik_joint_names = names
         axis_map = self._joint_axis_map()
         config = self._read_vivy_config()
         joints = dict(config.get("joints") or {})
+        controller_defaults = dict(config.get("controller_defaults") or {})
+        default_output_delta = float(controller_defaults.get("output_max_delta_deg_per_tick", 2.0))
         signature = tuple(
             (
                 joint_name,
@@ -424,6 +448,7 @@ class VivyFlowDetailPanel:
                 str(rows.get(joint_name, {}).get("mode") or "solve"),
                 float(dict(joints.get(joint_name) or {}).get("weight", 1.0)),
                 float(dict(joints.get(joint_name) or {}).get("neutral_bias_weight", 0.0)),
+                float(dict(joints.get(joint_name) or {}).get("output_max_delta_deg_per_tick", default_output_delta)),
             )
             for joint_name in names
         )
@@ -441,12 +466,15 @@ class VivyFlowDetailPanel:
                 ui.Label("axis", width=90, style=header_style)
                 ui.Label("weight", width=70, style=header_style)
                 ui.Label("neutral bias", width=70, style=header_style)
+                ui.Label("joint tick", width=70, style=header_style)
                 ui.Label("mode", width=90, style=header_style)
             for joint_name in names:
+                joint_entry = dict(joints.get(joint_name) or {})
                 current_axis = str(axis_map.get(joint_name, "Y"))
-                current_mode = str(rows.get(joint_name, {}).get("mode") or "solve")
+                current_mode = str(rows.get(joint_name, {}).get("mode") or ("hold" if bool(joint_entry.get("hold_start", False)) else "solve"))
                 current_weight = float(dict(joints.get(joint_name) or {}).get("weight", 1.0))
                 current_neutral_bias = float(dict(joints.get(joint_name) or {}).get("neutral_bias_weight", 0.0))
+                current_output_delta = float(joint_entry.get("output_max_delta_deg_per_tick", default_output_delta))
                 with ui.HStack(height=24, spacing=8):
                     ui.Label(joint_name, width=170, style={"color": self._TEXT_NEUTRAL, "font_size": 12})
                     axis_index = self._joint_axis_options.index(current_axis) if current_axis in self._joint_axis_options else 0
@@ -473,6 +501,14 @@ class VivyFlowDetailPanel:
                         lambda model, joint_name=joint_name: self._save_joint_mode_axis(
                             joint_name,
                             neutral_bias_weight=float(model.get_value_as_string()),
+                        )
+                    )
+                    output_delta_field = ui.StringField(width=70)
+                    output_delta_field.model.set_value(f"{current_output_delta:.2f}")
+                    output_delta_field.model.add_end_edit_fn(
+                        lambda model, joint_name=joint_name: self._save_joint_mode_axis(
+                            joint_name,
+                            output_max_delta_deg_per_tick=float(model.get_value_as_string()),
                         )
                     )
                     mode_options = ["solve", "hold"]
