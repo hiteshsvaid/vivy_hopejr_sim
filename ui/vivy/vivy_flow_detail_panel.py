@@ -130,24 +130,6 @@ class VivyFlowDetailPanel:
             self._labels["axis_sign_z_model"].set_value(str(signs[2]))
             self._labels["position_scale_model"].set_value(str(position_scale))
             self._labels["target_max_delta_model"].set_value(str(controller_defaults.get("target_max_delta_m_per_tick", 0.0)))
-            self._labels["right_wrist_thumbstick_sign_model"].set_value(
-                str(controller_defaults.get("right_wrist_thumbstick_sign", -1.0))
-            )
-            self._labels["right_wrist_thumbstick_scale_deg_model"].set_value(
-                str(controller_defaults.get("right_wrist_thumbstick_scale_deg", 30.0))
-            )
-            self._labels["right_wrist_thumbstick_deadband_model"].set_value(
-                str(controller_defaults.get("right_wrist_thumbstick_deadband", 0.1))
-            )
-            self._labels["right_palm_thumbstick_sign_model"].set_value(
-                str(controller_defaults.get("right_palm_thumbstick_sign", 1.0))
-            )
-            self._labels["right_palm_thumbstick_scale_deg_model"].set_value(
-                str(controller_defaults.get("right_palm_thumbstick_scale_deg", 30.0))
-            )
-            self._labels["right_palm_thumbstick_deadband_model"].set_value(
-                str(controller_defaults.get("right_palm_thumbstick_deadband", 0.1))
-            )
             self._labels["axis_status"].text = "Edit and save. Applies live."
         except Exception:
             pass
@@ -165,22 +147,10 @@ class VivyFlowDetailPanel:
             script_defaults = dict(config.get("script_editor_test_defaults") or {})
             position_scale = float(self._labels["position_scale_model"].get_value_as_string())
             target_max_delta = float(self._labels["target_max_delta_model"].get_value_as_string())
-            wrist_thumbstick_sign = float(self._labels["right_wrist_thumbstick_sign_model"].get_value_as_string())
-            wrist_thumbstick_scale_deg = float(self._labels["right_wrist_thumbstick_scale_deg_model"].get_value_as_string())
-            wrist_thumbstick_deadband = float(self._labels["right_wrist_thumbstick_deadband_model"].get_value_as_string())
-            palm_thumbstick_sign = float(self._labels["right_palm_thumbstick_sign_model"].get_value_as_string())
-            palm_thumbstick_scale_deg = float(self._labels["right_palm_thumbstick_scale_deg_model"].get_value_as_string())
-            palm_thumbstick_deadband = float(self._labels["right_palm_thumbstick_deadband_model"].get_value_as_string())
             controller_defaults["position_scale"] = position_scale
             controller_defaults["quest_position_axes"] = axes
             controller_defaults["quest_position_signs"] = list(signs)
             controller_defaults["target_max_delta_m_per_tick"] = target_max_delta
-            controller_defaults["right_wrist_thumbstick_sign"] = wrist_thumbstick_sign
-            controller_defaults["right_wrist_thumbstick_scale_deg"] = wrist_thumbstick_scale_deg
-            controller_defaults["right_wrist_thumbstick_deadband"] = wrist_thumbstick_deadband
-            controller_defaults["right_palm_thumbstick_sign"] = palm_thumbstick_sign
-            controller_defaults["right_palm_thumbstick_scale_deg"] = palm_thumbstick_scale_deg
-            controller_defaults["right_palm_thumbstick_deadband"] = palm_thumbstick_deadband
             script_defaults["position_scale"] = position_scale
             script_defaults["quest_position_axes"] = axes
             script_defaults["quest_position_signs"] = list(signs)
@@ -189,8 +159,7 @@ class VivyFlowDetailPanel:
             self._write_vivy_config(config)
             self._labels["axis_status"].text = (
                 f"Saved position_scale={position_scale} axes={axes} signs={signs} "
-                f"target_max_delta={target_max_delta} wrist_deadband={wrist_thumbstick_deadband} "
-                f"palm_deadband={palm_thumbstick_deadband}. Applies live."
+                f"target_max_delta={target_max_delta}. Applies live."
             )
         except Exception as exc:
             self._labels["axis_status"].text = f"Save failed: {exc}"
@@ -323,6 +292,9 @@ class VivyFlowDetailPanel:
                 names.append(name_text)
         return names
 
+    def _is_ik_joint(self, joint_name: str) -> bool:
+        return joint_name in set(self._list_joint_names())
+
     def _joint_axis_map(self) -> dict[str, str]:
         config = self._read_vivy_config()
         joints = dict(config.get("joints") or {})
@@ -371,6 +343,11 @@ class VivyFlowDetailPanel:
             return False
         raise ValueError("expected true/false")
 
+    @staticmethod
+    def _parse_scale_text(value: str) -> float:
+        cleaned = str(value).strip().lower().replace("deg", "").replace("x", "").strip()
+        return float(cleaned)
+
     def _save_joint_mode_axis(
         self,
         joint_name: str,
@@ -386,6 +363,9 @@ class VivyFlowDetailPanel:
             joints = dict(config.get("joints") or {})
             joint_entry = dict(joints.get(joint_name) or {})
             if mode is not None:
+                if not self._is_ik_joint(joint_name):
+                    self._labels["ik_status"].text = f"Ignored {joint_name}: non-IK joints do not use solve/hold."
+                    return
                 if mode not in {"hold", "solve"}:
                     raise ValueError("mode must be hold or solve")
                 joint_entry["hold_start"] = mode == "hold"
@@ -426,6 +406,89 @@ class VivyFlowDetailPanel:
         except Exception as exc:
             self._labels["ik_status"].text = f"Save failed: {exc}"
 
+    def _joint_direct_input_config(self, joint_name: str, controller_defaults: dict[str, Any]) -> dict[str, Any]:
+        if joint_name == "right_forearm_twist":
+            enabled = bool(controller_defaults.get("forearm_twist_from_controller_rotation", False))
+            return {
+                "source": "rotation" if enabled else "none",
+                "axis": str(controller_defaults.get("forearm_twist_controller_axis", "z")).lower(),
+                "sign": float(controller_defaults.get("forearm_twist_controller_sign", 1.0)),
+                "scale": float(controller_defaults.get("forearm_twist_controller_scale", 1.0)),
+                "deadband": None,
+            }
+        if joint_name == "right_wrist":
+            return {
+                "source": "thumbstick",
+                "axis": "X",
+                "sign": float(controller_defaults.get("right_wrist_thumbstick_sign", -1.0)),
+                "scale": float(controller_defaults.get("right_wrist_thumbstick_scale_deg", 30.0)),
+                "deadband": float(controller_defaults.get("right_wrist_thumbstick_deadband", 0.1)),
+            }
+        if joint_name == "right_palm":
+            return {
+                "source": "thumbstick",
+                "axis": "Y",
+                "sign": float(controller_defaults.get("right_palm_thumbstick_sign", 1.0)),
+                "scale": float(controller_defaults.get("right_palm_thumbstick_scale_deg", 30.0)),
+                "deadband": float(controller_defaults.get("right_palm_thumbstick_deadband", 0.1)),
+            }
+        return {"source": "none", "axis": "-", "sign": None, "scale": None, "deadband": None}
+
+    def _save_joint_direct_input(
+        self,
+        joint_name: str,
+        *,
+        source: str | None = None,
+        input_axis: str | None = None,
+        sign: float | None = None,
+        scale: float | None = None,
+        deadband: float | None = None,
+    ) -> None:
+        try:
+            config = self._read_vivy_config()
+            controller_defaults = dict(config.get("controller_defaults") or {})
+            if joint_name == "right_forearm_twist":
+                if source is not None:
+                    if source not in {"none", "rotation"}:
+                        raise ValueError("forearm input source must be none or rotation")
+                    controller_defaults["forearm_twist_from_controller_rotation"] = source == "rotation"
+                if input_axis is not None:
+                    input_axis = input_axis.strip().lower()
+                    if input_axis not in {"x", "y", "z"}:
+                        raise ValueError("forearm input axis must be x, y, or z")
+                    controller_defaults["forearm_twist_controller_axis"] = input_axis
+                if sign is not None:
+                    controller_defaults["forearm_twist_controller_sign"] = float(sign)
+                if scale is not None:
+                    controller_defaults["forearm_twist_controller_scale"] = float(scale)
+            elif joint_name == "right_wrist":
+                if sign is not None:
+                    controller_defaults["right_wrist_thumbstick_sign"] = float(sign)
+                if scale is not None:
+                    controller_defaults["right_wrist_thumbstick_scale_deg"] = float(scale)
+                if deadband is not None:
+                    controller_defaults["right_wrist_thumbstick_deadband"] = float(deadband)
+            elif joint_name == "right_palm":
+                if sign is not None:
+                    controller_defaults["right_palm_thumbstick_sign"] = float(sign)
+                if scale is not None:
+                    controller_defaults["right_palm_thumbstick_scale_deg"] = float(scale)
+                if deadband is not None:
+                    controller_defaults["right_palm_thumbstick_deadband"] = float(deadband)
+            else:
+                self._labels["ik_status"].text = f"Ignored {joint_name}: no direct input mapping."
+                return
+            config["controller_defaults"] = controller_defaults
+            self._write_vivy_config(config)
+            direct = self._joint_direct_input_config(joint_name, controller_defaults)
+            self._last_ik_table_signature = None
+            self._labels["ik_status"].text = (
+                f"Saved {joint_name} direct input: source={direct['source']} axis={direct['axis']} "
+                f"sign={direct['sign']} scale={direct['scale']} deadband={direct['deadband']}."
+            )
+        except Exception as exc:
+            self._labels["ik_status"].text = f"Save failed: {exc}"
+
     def _refresh_ik_joint_table(self, rows: dict[str, dict[str, Any]]) -> None:
         try:
             import omni.ui as ui
@@ -441,14 +504,24 @@ class VivyFlowDetailPanel:
         joints = dict(config.get("joints") or {})
         controller_defaults = dict(config.get("controller_defaults") or {})
         default_output_delta = float(controller_defaults.get("output_max_delta_deg_per_tick", 2.0))
+        ik_joint_names = set(self._list_joint_names())
+        direct_inputs = {
+            joint_name: self._joint_direct_input_config(joint_name, controller_defaults) for joint_name in names
+        }
         signature = tuple(
             (
                 joint_name,
+                joint_name in ik_joint_names,
                 str(axis_map.get(joint_name, "Y")),
                 str(rows.get(joint_name, {}).get("mode") or "solve"),
                 float(dict(joints.get(joint_name) or {}).get("weight", 1.0)),
                 float(dict(joints.get(joint_name) or {}).get("neutral_bias_weight", 0.0)),
                 float(dict(joints.get(joint_name) or {}).get("output_max_delta_deg_per_tick", default_output_delta)),
+                str(direct_inputs[joint_name]["source"]),
+                str(direct_inputs[joint_name]["axis"]),
+                str(direct_inputs[joint_name]["sign"]),
+                str(direct_inputs[joint_name]["scale"]),
+                str(direct_inputs[joint_name]["deadband"]),
             )
             for joint_name in names
         )
@@ -467,11 +540,21 @@ class VivyFlowDetailPanel:
                 ui.Label("weight", width=70, style=header_style)
                 ui.Label("neutral bias", width=70, style=header_style)
                 ui.Label("joint tick", width=70, style=header_style)
-                ui.Label("mode", width=90, style=header_style)
+                ui.Label("IK mode", width=90, style=header_style)
+                ui.Label("direct input", width=105, style=header_style)
+                ui.Label("input axis", width=75, style=header_style)
+                ui.Label("sign", width=60, style=header_style)
+                ui.Label("scale *", width=70, style=header_style)
+                ui.Label("deadband", width=70, style=header_style)
             for joint_name in names:
                 joint_entry = dict(joints.get(joint_name) or {})
+                is_ik_joint = joint_name in ik_joint_names
+                direct_input = direct_inputs[joint_name]
                 current_axis = str(axis_map.get(joint_name, "Y"))
-                current_mode = str(rows.get(joint_name, {}).get("mode") or ("hold" if bool(joint_entry.get("hold_start", False)) else "solve"))
+                current_mode = str(
+                    rows.get(joint_name, {}).get("mode")
+                    or ("hold" if bool(joint_entry.get("hold_start", False)) else "solve")
+                )
                 current_weight = float(dict(joints.get(joint_name) or {}).get("weight", 1.0))
                 current_neutral_bias = float(dict(joints.get(joint_name) or {}).get("neutral_bias_weight", 0.0))
                 current_output_delta = float(joint_entry.get("output_max_delta_deg_per_tick", default_output_delta))
@@ -487,22 +570,26 @@ class VivyFlowDetailPanel:
                             axis=self._joint_axis_options[int(model.as_int)],
                         )
                     )
-                    weight_field = ui.StringField(width=70)
-                    weight_field.model.set_value(f"{current_weight:.2f}")
-                    weight_field.model.add_end_edit_fn(
-                        lambda model, joint_name=joint_name: self._save_joint_mode_axis(
-                            joint_name,
-                            weight=float(model.get_value_as_string()),
+                    if is_ik_joint:
+                        weight_field = ui.StringField(width=70)
+                        weight_field.model.set_value(f"{current_weight:.2f}")
+                        weight_field.model.add_end_edit_fn(
+                            lambda model, joint_name=joint_name: self._save_joint_mode_axis(
+                                joint_name,
+                                weight=float(model.get_value_as_string()),
+                            )
                         )
-                    )
-                    neutral_bias_field = ui.StringField(width=70)
-                    neutral_bias_field.model.set_value(f"{current_neutral_bias:.2f}")
-                    neutral_bias_field.model.add_end_edit_fn(
-                        lambda model, joint_name=joint_name: self._save_joint_mode_axis(
-                            joint_name,
-                            neutral_bias_weight=float(model.get_value_as_string()),
+                        neutral_bias_field = ui.StringField(width=70)
+                        neutral_bias_field.model.set_value(f"{current_neutral_bias:.2f}")
+                        neutral_bias_field.model.add_end_edit_fn(
+                            lambda model, joint_name=joint_name: self._save_joint_mode_axis(
+                                joint_name,
+                                neutral_bias_weight=float(model.get_value_as_string()),
+                            )
                         )
-                    )
+                    else:
+                        ui.Label("n/a", width=70, style={"color": self._TEXT_NEUTRAL, "font_size": 12})
+                        ui.Label("n/a", width=70, style={"color": self._TEXT_NEUTRAL, "font_size": 12})
                     output_delta_field = ui.StringField(width=70)
                     output_delta_field.model.set_value(f"{current_output_delta:.2f}")
                     output_delta_field.model.add_end_edit_fn(
@@ -511,17 +598,100 @@ class VivyFlowDetailPanel:
                             output_max_delta_deg_per_tick=float(model.get_value_as_string()),
                         )
                     )
-                    mode_options = ["solve", "hold"]
-                    mode_index = mode_options.index(current_mode) if current_mode in mode_options else 0
-                    mode_combo = ui.ComboBox(mode_index, *mode_options, width=90)
-                    mode_model = mode_combo.model
-                    mode_item_model = mode_model.get_item_value_model()
-                    mode_item_model.add_value_changed_fn(
-                        lambda model, joint_name=joint_name: self._save_joint_mode_axis(
-                            joint_name,
-                            mode=["solve", "hold"][int(model.as_int)],
+                    if is_ik_joint:
+                        mode_options = ["solve", "hold"]
+                        mode_index = mode_options.index(current_mode) if current_mode in mode_options else 0
+                        mode_combo = ui.ComboBox(mode_index, *mode_options, width=90)
+                        mode_model = mode_combo.model
+                        mode_item_model = mode_model.get_item_value_model()
+                        mode_item_model.add_value_changed_fn(
+                            lambda model, joint_name=joint_name: self._save_joint_mode_axis(
+                                joint_name,
+                                mode=["solve", "hold"][int(model.as_int)],
+                            )
                         )
-                    )
+                    else:
+                        ui.Label(
+                            "non-IK",
+                            width=90,
+                            style={"color": self._TEXT_NEUTRAL, "font_size": 12},
+                        )
+                    if joint_name == "right_forearm_twist":
+                        source_options = ["none", "rotation"]
+                        source_index = (
+                            source_options.index(str(direct_input["source"]))
+                            if str(direct_input["source"]) in source_options
+                            else 0
+                        )
+                        source_combo = ui.ComboBox(source_index, *source_options, width=105)
+                        source_model = source_combo.model.get_item_value_model()
+                        source_model.add_value_changed_fn(
+                            lambda model, joint_name=joint_name: self._save_joint_direct_input(
+                                joint_name,
+                                source=["none", "rotation"][int(model.as_int)],
+                            )
+                        )
+                        input_axis_options = ["x", "y", "z"]
+                        input_axis = str(direct_input["axis"]).lower()
+                        input_axis_index = input_axis_options.index(input_axis) if input_axis in input_axis_options else 0
+                        input_axis_combo = ui.ComboBox(input_axis_index, *input_axis_options, width=75)
+                        input_axis_model = input_axis_combo.model.get_item_value_model()
+                        input_axis_model.add_value_changed_fn(
+                            lambda model, joint_name=joint_name: self._save_joint_direct_input(
+                                joint_name,
+                                input_axis=["x", "y", "z"][int(model.as_int)],
+                            )
+                        )
+                        sign_field = ui.StringField(width=60)
+                        sign_field.model.set_value(f"{float(direct_input['sign']):.2f}")
+                        sign_field.model.add_end_edit_fn(
+                            lambda model, joint_name=joint_name: self._save_joint_direct_input(
+                                joint_name,
+                                sign=float(model.get_value_as_string()),
+                            )
+                        )
+                        scale_field = ui.StringField(width=70)
+                        scale_field.model.set_value(f"{float(direct_input['scale']):.2f}x")
+                        scale_field.model.add_end_edit_fn(
+                            lambda model, joint_name=joint_name: self._save_joint_direct_input(
+                                joint_name,
+                                scale=self._parse_scale_text(model.get_value_as_string()),
+                            )
+                        )
+                        ui.Label("n/a", width=70, style={"color": self._TEXT_NEUTRAL, "font_size": 12})
+                    elif joint_name in {"right_wrist", "right_palm"}:
+                        ui.Label("thumbstick", width=105, style={"color": self._TEXT_NEUTRAL, "font_size": 12})
+                        ui.Label(str(direct_input["axis"]), width=75, style={"color": self._TEXT_NEUTRAL, "font_size": 12})
+                        sign_field = ui.StringField(width=60)
+                        sign_field.model.set_value(f"{float(direct_input['sign']):.2f}")
+                        sign_field.model.add_end_edit_fn(
+                            lambda model, joint_name=joint_name: self._save_joint_direct_input(
+                                joint_name,
+                                sign=float(model.get_value_as_string()),
+                            )
+                        )
+                        scale_field = ui.StringField(width=70)
+                        scale_field.model.set_value(f"{float(direct_input['scale']):.2f} deg")
+                        scale_field.model.add_end_edit_fn(
+                            lambda model, joint_name=joint_name: self._save_joint_direct_input(
+                                joint_name,
+                                scale=self._parse_scale_text(model.get_value_as_string()),
+                            )
+                        )
+                        deadband_field = ui.StringField(width=70)
+                        deadband_field.model.set_value(f"{float(direct_input['deadband']):.2f}")
+                        deadband_field.model.add_end_edit_fn(
+                            lambda model, joint_name=joint_name: self._save_joint_direct_input(
+                                joint_name,
+                                deadband=float(model.get_value_as_string()),
+                            )
+                        )
+                    else:
+                        ui.Label("none", width=105, style={"color": self._TEXT_NEUTRAL, "font_size": 12})
+                        ui.Label("n/a", width=75, style={"color": self._TEXT_NEUTRAL, "font_size": 12})
+                        ui.Label("n/a", width=60, style={"color": self._TEXT_NEUTRAL, "font_size": 12})
+                        ui.Label("n/a", width=70, style={"color": self._TEXT_NEUTRAL, "font_size": 12})
+                        ui.Label("n/a", width=70, style={"color": self._TEXT_NEUTRAL, "font_size": 12})
 
     def _save_ik_tuning(self) -> None:
         try:
@@ -536,20 +706,6 @@ class VivyFlowDetailPanel:
             controller_defaults["output_max_delta_deg_per_tick"] = float(
                 self._labels["output_max_delta_model"].get_value_as_string()
             )
-            controller_defaults["forearm_twist_from_controller_rotation"] = self._parse_bool_text(
-                self._labels["forearm_twist_enable_model"].get_value_as_string()
-            )
-            controller_defaults["forearm_twist_controller_axis"] = str(
-                self._labels["forearm_twist_axis_model"].get_value_as_string()
-            ).strip().lower()
-            controller_defaults["forearm_twist_controller_sign"] = float(
-                self._labels["forearm_twist_sign_model"].get_value_as_string()
-            )
-            controller_defaults["forearm_twist_controller_scale"] = float(
-                self._labels["forearm_twist_scale_model"].get_value_as_string()
-            )
-            if controller_defaults["forearm_twist_controller_axis"] not in {"x", "y", "z"}:
-                raise ValueError("forearm_twist_controller_axis must be x, y, or z")
             config["controller_defaults"] = controller_defaults
             self._write_vivy_config(config)
             self._labels["ik_status"].text = (
