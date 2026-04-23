@@ -289,13 +289,15 @@ class VivySidePanel:
 
         self._labels["quest_pos"].text = self._fmt_vec3(hand.get("position"))
         self._labels["quest_grip_trigger"].text = f"grip={grip:.2f}  trigger={trigger:.2f}"
-        if isinstance(thumbstick, (list, tuple)) and len(thumbstick) == 2:
-            try:
-                self._labels["quest_thumbstick"].text = f"x={float(thumbstick[0]):+.2f}  y={float(thumbstick[1]):+.2f}"
-            except Exception:
-                self._labels["quest_thumbstick"].text = "-"
-        else:
-            self._labels["quest_thumbstick"].text = "-"
+        thumbstick_label = self._labels.get("quest_thumbstick")
+        if thumbstick_label is not None:
+            if isinstance(thumbstick, (list, tuple)) and len(thumbstick) == 2:
+                try:
+                    thumbstick_label.text = f"x={float(thumbstick[0]):+.2f}  y={float(thumbstick[1]):+.2f}"
+                except Exception:
+                    thumbstick_label.text = "-"
+            else:
+                thumbstick_label.text = "-"
         self._labels["state_enabled_clutch"].text = f"enabled={enabled}  clutch={clutch}"
         self._labels["state_startup_anchor"].text = f"startup={startup}  anchor={anchor}  frozen={frozen}"
         bus_live = bool(payload.get("real_feedback_live", False))

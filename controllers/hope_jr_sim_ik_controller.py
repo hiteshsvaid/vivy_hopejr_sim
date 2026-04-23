@@ -841,6 +841,7 @@ class HopeJrSimIkController:
             "quest_position_signs": self.teleop_mapper.quest_position_signs.tolist(),
             "grip": float(hand_state.get("grip", 0.0)),
             "trigger": float(hand_state.get("trigger", 0.0)),
+            "thumbstick": hand_state.get("thumbstick"),
             "ik_method": "stage_differential_dls" if stage_dls_delta_deg is not None else "model_iterative_dls",
         }
         hand_position = np.asarray(hand_state.get("position", [0.0, 0.0, 0.0]), dtype=float)
