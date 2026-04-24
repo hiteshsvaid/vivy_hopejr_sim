@@ -73,10 +73,16 @@ class VivySidePanel:
                     with ui.VGrid(column_count=2, column_widths=[110, 0], row_height=22):
                         ui.Label("position", style=value_style)
                         self._labels["quest_pos"] = ui.Label("-", style=value_style)
-                        ui.Label("grip / trigger", style=value_style)
-                        self._labels["quest_grip_trigger"] = ui.Label("-", style=value_style)
+                        ui.Label("tracking", style=value_style)
+                        self._labels["quest_tracking"] = ui.Label("-", style=value_style)
                         ui.Label("thumbstick", style=value_style)
                         self._labels["quest_thumbstick"] = ui.Label("-", style=value_style)
+                        ui.Label("analog", style=value_style)
+                        self._labels["quest_analog"] = ui.Label("-", style=value_style)
+                        ui.Label("presses", style=value_style)
+                        self._labels["quest_presses"] = ui.Label("-", style=value_style)
+                        ui.Label("face / menu", style=value_style)
+                        self._labels["quest_face_buttons"] = ui.Label("-", style=value_style)
 
                     ui.Label("STATE", style=section_style)
                     with ui.VGrid(column_count=2, column_widths=[110, 0], row_height=22):
@@ -280,15 +286,25 @@ class VivySidePanel:
         grip = float(hand.get("grip", 0.0)) if isinstance(hand, dict) else 0.0
         trigger = float(hand.get("trigger", 0.0)) if isinstance(hand, dict) else 0.0
         thumbstick = hand.get("thumbstick") if isinstance(hand, dict) else None
+        is_tracked = bool(hand.get("is_tracked", False)) if isinstance(hand, dict) else False
+        thumbstick_click = bool(hand.get("thumbstick_click", False)) if isinstance(hand, dict) else False
+        trigger_button = bool(hand.get("trigger_button", False)) if isinstance(hand, dict) else False
+        grip_button = bool(hand.get("grip_button", False)) if isinstance(hand, dict) else False
         enabled = bool(hand.get("enabled", True)) if isinstance(hand, dict) else False
         clutch = bool(hand.get("clutch", False)) if isinstance(hand, dict) else False
+        primary_button = bool(hand.get("primary_button", False)) if isinstance(hand, dict) else False
+        secondary_button = bool(hand.get("secondary_button", False)) if isinstance(hand, dict) else False
+        a_pressed = bool(hand.get("a_pressed", False)) if isinstance(hand, dict) else False
+        b_pressed = bool(hand.get("b_pressed", False)) if isinstance(hand, dict) else False
+        x_pressed = bool(hand.get("x_pressed", False)) if isinstance(hand, dict) else False
+        y_pressed = bool(hand.get("y_pressed", False)) if isinstance(hand, dict) else False
         waiting_for_anchor = bool(payload.get("waiting_for_anchor", True))
         startup = "neutral" if waiting_for_anchor else "live"
         anchor = "captured" if payload.get("quest_anchor_position") is not None else "pending"
         frozen = "yes" if payload.get("freeze_active") else "no"
 
         self._labels["quest_pos"].text = self._fmt_vec3(hand.get("position"))
-        self._labels["quest_grip_trigger"].text = f"grip={grip:.2f}  trigger={trigger:.2f}"
+        self._labels["quest_tracking"].text = f"tracked={is_tracked}  enabled={enabled}  clutch={clutch}"
         thumbstick_label = self._labels.get("quest_thumbstick")
         if thumbstick_label is not None:
             if isinstance(thumbstick, (list, tuple)) and len(thumbstick) == 2:
@@ -298,6 +314,13 @@ class VivySidePanel:
                     thumbstick_label.text = "-"
             else:
                 thumbstick_label.text = "-"
+        self._labels["quest_analog"].text = f"grip={grip:.2f}  trigger={trigger:.2f}"
+        self._labels["quest_presses"].text = (
+            f"stick={thumbstick_click}  grip={grip_button}  trigger={trigger_button}"
+        )
+        self._labels["quest_face_buttons"].text = (
+            f"pri={primary_button}  sec={secondary_button}  A={a_pressed}  B={b_pressed}  X={x_pressed}  Y={y_pressed}"
+        )
         self._labels["state_enabled_clutch"].text = f"enabled={enabled}  clutch={clutch}"
         self._labels["state_startup_anchor"].text = f"startup={startup}  anchor={anchor}  frozen={frozen}"
         bus_live = bool(payload.get("real_feedback_live", False))
