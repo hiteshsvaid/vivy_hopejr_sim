@@ -44,21 +44,7 @@ class VivyFlowPanel:
         "quest": ["processor", "ik", "sim"],
         "processor": ["teleop_state"],
         "teleop_state": [],
-        "ik": ["ik_subprocess", "joint_targets", "fanout"],
-        "ik_subprocess": [
-            "quest_anchor_capture",
-            "anchor_delta",
-            "deadband",
-            "axis_remap",
-            "world_transform",
-            "target_pose",
-        ],
-        "quest_anchor_capture": [],
-        "anchor_delta": [],
-        "deadband": [],
-        "axis_remap": [],
-        "world_transform": [],
-        "target_pose": [],
+        "ik": ["joint_targets", "fanout"],
         "joint_targets": [],
         "fanout": ["real", "log"],
         "sim": ["sim_input", "sim_joint_targets"],
@@ -74,13 +60,6 @@ class VivyFlowPanel:
         "teleop_state": "processor",
         "ik": "quest",
         "sim": "quest",
-        "ik_subprocess": "ik",
-        "quest_anchor_capture": "ik_subprocess",
-        "anchor_delta": "ik_subprocess",
-        "deadband": "ik_subprocess",
-        "axis_remap": "ik_subprocess",
-        "world_transform": "ik_subprocess",
-        "target_pose": "ik_subprocess",
         "joint_targets": "ik",
         "fanout": "ik",
         "real": "fanout",
@@ -96,13 +75,6 @@ class VivyFlowPanel:
         "teleop_state": 3,
         "ik": 2,
         "sim": 2,
-        "ik_subprocess": 3,
-        "quest_anchor_capture": 4,
-        "anchor_delta": 4,
-        "deadband": 4,
-        "axis_remap": 4,
-        "world_transform": 4,
-        "target_pose": 4,
         "joint_targets": 3,
         "fanout": 3,
         "real": 4,
@@ -117,18 +89,12 @@ class VivyFlowPanel:
     }
 
     _INPUT_NODES = {"sim_input", "sim_joint_targets"}
-    _OUTPUT_NODES = {"teleop_state", "target_pose", "joint_targets"}
+    _OUTPUT_NODES = {"teleop_state", "joint_targets"}
     _NODE_ICON_FILES = {
         "root": CONTENT_ICON_DIR / "usd_stage_256.png",
         "quest": GRAPH_ICON_DIR / "type_input_noBorder_dark.svg",
         "processor": GRAPH_ICON_DIR / "type_script_noBorder_dark.svg",
         "ik": GRAPH_ICON_DIR / "type_function_noBorder_dark.svg",
-        "ik_subprocess": GRAPH_ICON_DIR / "type_compound_noBorder_dark.svg",
-        "quest_anchor_capture": GRAPH_ICON_DIR / "type_event_noBorder_dark.svg",
-        "anchor_delta": GRAPH_ICON_DIR / "type_math_noBorder_dark.svg",
-        "deadband": GRAPH_ICON_DIR / "type_math_noBorder_dark.svg",
-        "axis_remap": GRAPH_ICON_DIR / "type_math_noBorder_dark.svg",
-        "world_transform": GRAPH_ICON_DIR / "type_scene_graph_noBorder_dark.svg",
         "fanout": GRAPH_ICON_DIR / "type_io_noBorder_dark.svg",
         "real": GRAPH_ICON_DIR / "type_io_noBorder_dark.svg",
         "log": GRAPH_ICON_DIR / "type_debug_noBorder_dark.svg",
@@ -305,13 +271,6 @@ class VivyFlowPanel:
                         "processor",
                         "teleop_state",
                         "ik",
-                        "ik_subprocess",
-                        "quest_anchor_capture",
-                        "anchor_delta",
-                        "deadband",
-                        "axis_remap",
-                        "world_transform",
-                        "target_pose",
                         "joint_targets",
                         "fanout",
                         "real",
@@ -370,6 +329,8 @@ class VivyFlowPanel:
         hand = payload.get("hand_state") or {}
 
         selected = str(flow_state.get("selected_node") or "sim")
+        if selected not in self._label_widgets:
+            selected = "sim"
         quest_mode = str(flow_state.get("quest_mode") or "?")
         target = str(flow_state.get("target") or "?")
         robot_output = str(flow_state.get("robot_output") or "-")
@@ -393,13 +354,6 @@ class VivyFlowPanel:
         self._set_row("teleop_state", "Out: Teleop State", "active" if state_active or source_active else "inactive", selected == "teleop_state", flow_state)
         self._set_row("ik", "IK  (quest_ik_arm)", "warn" if freeze_active else ("active" if target == "real" else "inactive"), selected == "ik", flow_state)
         self._set_row("sim", f"Sim View  {'ON' if sim_view_enabled else 'OFF'}", "active" if sim_branch_active and sim_view_enabled else "inactive", selected == "sim", flow_state)
-        self._set_row("ik_subprocess", "subprocess", "active" if target == "real" else "inactive", selected == "ik_subprocess", flow_state)
-        self._set_row("quest_anchor_capture", "anchor capture", "active" if target == "real" else "inactive", selected == "quest_anchor_capture", flow_state)
-        self._set_row("anchor_delta", "anchor-relative delta", "active" if target == "real" else "inactive", selected == "anchor_delta", flow_state)
-        self._set_row("deadband", "deadband", "active" if target == "real" else "inactive", selected == "deadband", flow_state)
-        self._set_row("axis_remap", "axis/sign remap", "active" if target == "real" else "inactive", selected == "axis_remap", flow_state)
-        self._set_row("world_transform", "world transform", "active" if target == "real" else "inactive", selected == "world_transform", flow_state)
-        self._set_row("target_pose", "Out: Target Pose", "active" if state_active or target == "real" else "inactive", selected == "target_pose", flow_state)
         self._set_row("joint_targets", "Out: Joint Targets", "warn" if freeze_active else ("active" if target == "real" else "inactive"), selected == "joint_targets", flow_state)
         self._set_row("fanout", "fanout_target_arm", "warn" if freeze_active else ("active" if target == "real" else "inactive"), selected == "fanout", flow_state)
         self._set_row("real", "Real Arm", "warn" if freeze_active else ("active" if robot_branch_active else "inactive"), selected == "real", flow_state)

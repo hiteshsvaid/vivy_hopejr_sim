@@ -703,6 +703,9 @@ class VivyFlowDetailPanel:
             controller_defaults["ik_max_iteration"] = int(self._labels["ik_max_iteration_model"].get_value_as_string())
             controller_defaults["ik_damping"] = float(self._labels["ik_damping_model"].get_value_as_string())
             controller_defaults["ik_max_step_deg"] = float(self._labels["ik_max_step_model"].get_value_as_string())
+            controller_defaults["ignore_ik_when_thumbstick_active"] = bool(
+                self._labels["ignore_ik_when_thumbstick_active_model"].get_value_as_bool()
+            )
             controller_defaults["output_max_delta_deg_per_tick"] = float(
                 self._labels["output_max_delta_model"].get_value_as_string()
             )

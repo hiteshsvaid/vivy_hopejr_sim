@@ -103,6 +103,17 @@ class IkDetailSection:
                     word_wrap=True,
                 )
 
+            with ui.VStack(spacing=2):
+                with ui.HStack(height=26, spacing=6):
+                    ui.Label("thumbstick skips IK", width=120, style=value_style)
+                    thumbstick_ignore = ui.CheckBox(width=24)
+                    self.panel._labels["ignore_ik_when_thumbstick_active_model"] = thumbstick_ignore.model
+                ui.Label(
+                    "When enabled, active wrist or palm thumbstick input bypasses pose IK and only applies direct thumbstick joint commands.",
+                    style=helper_style,
+                    word_wrap=True,
+                )
+
             self.panel._labels["ik_tuning_button"] = ui.Button(
                 "Save IK Tuning",
                 height=28,
@@ -120,6 +131,9 @@ class IkDetailSection:
         self.panel._labels["ik_max_iteration_model"].set_value(str(controller_defaults.get("ik_max_iteration", 80)))
         self.panel._labels["ik_damping_model"].set_value(str(controller_defaults.get("ik_damping", 0.01)))
         self.panel._labels["ik_max_step_model"].set_value(str(controller_defaults.get("ik_max_step_deg", 8.0)))
+        self.panel._labels["ignore_ik_when_thumbstick_active_model"].set_value(
+            bool(controller_defaults.get("ignore_ik_when_thumbstick_active", True))
+        )
         self.panel._labels["output_max_delta_model"].set_value(
             str(controller_defaults.get("output_max_delta_deg_per_tick", 2.0))
         )
