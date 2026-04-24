@@ -366,8 +366,9 @@ class VivyFlowDetailPanel:
                 if not self._is_ik_joint(joint_name):
                     self._labels["ik_status"].text = f"Ignored {joint_name}: non-IK joints do not use solve/hold."
                     return
-                if mode not in {"hold", "solve"}:
-                    raise ValueError("mode must be hold or solve")
+                if mode not in {"hold", "solve", "direct"}:
+                    raise ValueError("mode must be solve, hold, or direct")
+                joint_entry["ik_mode"] = mode
                 joint_entry["hold_start"] = mode == "hold"
             if axis is not None:
                 if axis not in self._joint_axis_options:
@@ -388,7 +389,7 @@ class VivyFlowDetailPanel:
             joints[joint_name] = joint_entry
             config["joints"] = joints
             self._write_vivy_config(config)
-            mode_text = "hold" if bool(joint_entry.get("hold_start", False)) else "solve"
+            mode_text = str(joint_entry.get("ik_mode") or ("hold" if bool(joint_entry.get("hold_start", False)) else "solve"))
             axis_text = str(joint_entry.get("axis") or "-")
             weight_text = float(joint_entry.get("weight", 1.0))
             neutral_bias_text = float(joint_entry.get("neutral_bias_weight", 0.0))
@@ -599,7 +600,7 @@ class VivyFlowDetailPanel:
                         )
                     )
                     if is_ik_joint:
-                        mode_options = ["solve", "hold"]
+                        mode_options = ["solve", "hold", "direct"]
                         mode_index = mode_options.index(current_mode) if current_mode in mode_options else 0
                         mode_combo = ui.ComboBox(mode_index, *mode_options, width=90)
                         mode_model = mode_combo.model
@@ -607,7 +608,7 @@ class VivyFlowDetailPanel:
                         mode_item_model.add_value_changed_fn(
                             lambda model, joint_name=joint_name: self._save_joint_mode_axis(
                                 joint_name,
-                                mode=["solve", "hold"][int(model.as_int)],
+                                mode=["solve", "hold", "direct"][int(model.as_int)],
                             )
                         )
                     else:
