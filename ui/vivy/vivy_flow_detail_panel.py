@@ -414,7 +414,7 @@ class VivyFlowDetailPanel:
                 "source": "rotation" if enabled else "none",
                 "axis": str(controller_defaults.get("forearm_twist_controller_axis", "z")).lower(),
                 "sign": float(controller_defaults.get("forearm_twist_controller_sign", 1.0)),
-                "scale": float(controller_defaults.get("forearm_twist_controller_scale", 1.0)),
+                "scale": None,
                 "deadband": None,
             }
         if joint_name == "right_wrist":
@@ -460,8 +460,6 @@ class VivyFlowDetailPanel:
                     controller_defaults["forearm_twist_controller_axis"] = input_axis
                 if sign is not None:
                     controller_defaults["forearm_twist_controller_sign"] = float(sign)
-                if scale is not None:
-                    controller_defaults["forearm_twist_controller_scale"] = float(scale)
             elif joint_name == "right_wrist":
                 if sign is not None:
                     controller_defaults["right_wrist_thumbstick_sign"] = float(sign)
@@ -647,14 +645,7 @@ class VivyFlowDetailPanel:
                                 sign=float(model.get_value_as_string()),
                             )
                         )
-                        scale_field = ui.StringField(width=70)
-                        scale_field.model.set_value(f"{float(direct_input['scale']):.2f}x")
-                        scale_field.model.add_end_edit_fn(
-                            lambda model, joint_name=joint_name: self._save_joint_direct_input(
-                                joint_name,
-                                scale=self._parse_scale_text(model.get_value_as_string()),
-                            )
-                        )
+                        ui.Label("joint tick", width=70, style={"color": self._TEXT_NEUTRAL, "font_size": 12})
                         ui.Label("n/a", width=70, style={"color": self._TEXT_NEUTRAL, "font_size": 12})
                     elif joint_name in {"right_wrist", "right_palm"}:
                         ui.Label("thumbstick", width=105, style={"color": self._TEXT_NEUTRAL, "font_size": 12})

@@ -37,8 +37,7 @@ class IkDetailSection:
                     ui.Label("scale *", width=70, style={**value_style, "font_size": 12})
                     ui.Label("deadband", width=70, style={**value_style, "font_size": 12})
                 ui.Label(
-                    "* scale multiplies raw input. Rotation input is already degrees, so forearm scale is x. "
-                    "Wrist/palm thumbstick speed now comes from that joint's joint tick; the scale column only applies to direct rotation input such as forearm twist.",
+                    "* Direct-joint speed now comes from that joint's joint tick. The sign column flips input direction and input axis selects the controller/thumbstick axis.",
                     style=helper_style,
                     word_wrap=True,
                 )
