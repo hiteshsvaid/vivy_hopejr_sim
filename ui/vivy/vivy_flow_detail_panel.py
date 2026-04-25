@@ -422,7 +422,7 @@ class VivyFlowDetailPanel:
                 "source": "thumbstick",
                 "axis": "X",
                 "sign": float(controller_defaults.get("right_wrist_thumbstick_sign", -1.0)),
-                "scale": float(controller_defaults.get("right_wrist_thumbstick_scale_deg", 30.0)),
+                "scale": None,
                 "deadband": float(controller_defaults.get("right_wrist_thumbstick_deadband", 0.1)),
             }
         if joint_name == "right_palm":
@@ -430,7 +430,7 @@ class VivyFlowDetailPanel:
                 "source": "thumbstick",
                 "axis": "Y",
                 "sign": float(controller_defaults.get("right_palm_thumbstick_sign", 1.0)),
-                "scale": float(controller_defaults.get("right_palm_thumbstick_scale_deg", 30.0)),
+                "scale": None,
                 "deadband": float(controller_defaults.get("right_palm_thumbstick_deadband", 0.1)),
             }
         return {"source": "none", "axis": "-", "sign": None, "scale": None, "deadband": None}
@@ -465,15 +465,11 @@ class VivyFlowDetailPanel:
             elif joint_name == "right_wrist":
                 if sign is not None:
                     controller_defaults["right_wrist_thumbstick_sign"] = float(sign)
-                if scale is not None:
-                    controller_defaults["right_wrist_thumbstick_scale_deg"] = float(scale)
                 if deadband is not None:
                     controller_defaults["right_wrist_thumbstick_deadband"] = float(deadband)
             elif joint_name == "right_palm":
                 if sign is not None:
                     controller_defaults["right_palm_thumbstick_sign"] = float(sign)
-                if scale is not None:
-                    controller_defaults["right_palm_thumbstick_scale_deg"] = float(scale)
                 if deadband is not None:
                     controller_defaults["right_palm_thumbstick_deadband"] = float(deadband)
             else:
@@ -671,14 +667,7 @@ class VivyFlowDetailPanel:
                                 sign=float(model.get_value_as_string()),
                             )
                         )
-                        scale_field = ui.StringField(width=70)
-                        scale_field.model.set_value(f"{float(direct_input['scale']):.2f} deg")
-                        scale_field.model.add_end_edit_fn(
-                            lambda model, joint_name=joint_name: self._save_joint_direct_input(
-                                joint_name,
-                                scale=self._parse_scale_text(model.get_value_as_string()),
-                            )
-                        )
+                        ui.Label("joint tick", width=70, style={"color": self._TEXT_NEUTRAL, "font_size": 12})
                         deadband_field = ui.StringField(width=70)
                         deadband_field.model.set_value(f"{float(direct_input['deadband']):.2f}")
                         deadband_field.model.add_end_edit_fn(

@@ -38,7 +38,7 @@ class IkDetailSection:
                     ui.Label("deadband", width=70, style={**value_style, "font_size": 12})
                 ui.Label(
                     "* scale multiplies raw input. Rotation input is already degrees, so forearm scale is x. "
-                    "Thumbstick input is -1..1, so wrist/palm scale is deg at full stick.",
+                    "Wrist/palm thumbstick speed now comes from that joint's joint tick; the scale column only applies to direct rotation input such as forearm twist.",
                     style=helper_style,
                     word_wrap=True,
                 )
@@ -151,7 +151,7 @@ class IkDetailSection:
                 )
 
             ui.Label(
-                "Current solution: wrist and palm stay direct-input only, IK stays off while thumbstick is active, and proximal solve joints remain locked through release until the target meaningfully moves.",
+                "Current solution: wrist and palm use velocity-style direct control, IK stays off while thumbstick is active, and proximal solve joints remain locked through release until the target meaningfully moves.",
                 style=helper_style,
                 word_wrap=True,
             )
