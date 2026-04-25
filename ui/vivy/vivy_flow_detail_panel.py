@@ -282,9 +282,16 @@ class VivyFlowDetailPanel:
             return [str(name) for name in names]
         return []
 
+    def _list_controlled_joint_names(self) -> list[str]:
+        config = self._read_vivy_config()
+        names = config.get("controlled_joint_names")
+        if isinstance(names, list):
+            return [str(name) for name in names]
+        return self._list_joint_names()
+
     def _list_ik_table_joint_names(self) -> list[str]:
         config = self._read_vivy_config()
-        names = list(self._list_joint_names())
+        names = list(self._list_controlled_joint_names())
         excluded = ((config.get("kinematics") or {}).get("excluded_joints") or [])
         for name in excluded:
             name_text = str(name)
@@ -363,8 +370,8 @@ class VivyFlowDetailPanel:
             joints = dict(config.get("joints") or {})
             joint_entry = dict(joints.get(joint_name) or {})
             if mode is not None:
-                if not self._is_ik_joint(joint_name):
-                    self._labels["ik_status"].text = f"Ignored {joint_name}: non-IK joints do not use solve/hold."
+                if not self._is_ik_joint(joint_name) and mode != "direct":
+                    self._labels["ik_status"].text = f"Ignored {joint_name}: non-chain joints only support direct mode."
                     return
                 if mode not in {"hold", "solve", "direct"}:
                     raise ValueError("mode must be solve, hold, or direct")
@@ -547,6 +554,7 @@ class VivyFlowDetailPanel:
                 current_axis = str(axis_map.get(joint_name, "Y"))
                 current_mode = str(
                     rows.get(joint_name, {}).get("mode")
+                    or joint_entry.get("ik_mode")
                     or ("hold" if bool(joint_entry.get("hold_start", False)) else "solve")
                 )
                 current_weight = float(dict(joints.get(joint_name) or {}).get("weight", 1.0))
@@ -606,7 +614,7 @@ class VivyFlowDetailPanel:
                         )
                     else:
                         ui.Label(
-                            "non-IK",
+                            current_mode if current_mode == "direct" else "non-IK",
                             width=90,
                             style={"color": self._TEXT_NEUTRAL, "font_size": 12},
                         )

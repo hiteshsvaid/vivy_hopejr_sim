@@ -120,9 +120,11 @@ class VivyTargetViewer:
         self.joint_root_path = controller_defaults.get("joint_root_path", "/World/JointTest/Joints")
         self.world_offset = np.asarray(controller_defaults.get("world_offset", [0.0, 0.0, 0.0]), dtype=float)
         self.real_feedback_max_age_s = float(controller_defaults.get("packet_stale_timeout_s", 0.75))
-        joint_names = list(self.sim_config["joint_names"])
-        self.joint_names = list(joint_names)
-        neutral_deg = np.asarray([float(self.sim_config["joints"][name]["neutral_deg"]) for name in joint_names], dtype=float)
+        ik_joint_names = list(self.sim_config["joint_names"])
+        controlled_joint_names = list(self.sim_config.get("controlled_joint_names") or ik_joint_names)
+        self.ik_joint_names = list(ik_joint_names)
+        self.joint_names = list(controlled_joint_names)
+        neutral_deg = np.asarray([float(self.sim_config["joints"][name]["neutral_deg"]) for name in ik_joint_names], dtype=float)
         self.kinematics = VivyArmKinematics.from_json(SIM_CONFIG_PATH)
         self.model_neutral_pose = self.kinematics.forward_kinematics(neutral_deg)
         self.model_to_stage_transform = np.eye(4)
@@ -138,7 +140,7 @@ class VivyTargetViewer:
             articulation_root_path=self.articulation_root_path,
             joint_root_path=self.joint_root_path,
             end_effector_path=self.end_effector_path,
-            joint_names=joint_names,
+            joint_names=self.joint_names,
         )
         self.visuals = TeleopDebugVisuals(teleop_debug_root=self.teleop_debug_root, enabled=True)
         self.side_panel = VivySidePanel()
@@ -460,7 +462,7 @@ class VivyTargetViewer:
         elif (
             teleop_changed
             and isinstance(joint_targets_deg, list)
-            and len(joint_targets_deg) == len(self.sim_config["joint_names"])
+            and len(joint_targets_deg) == len(self.joint_names)
         ):
             self._write_sim_joint_positions(stage, np.asarray(joint_targets_deg, dtype=float), update_state=False)
             self._last_applied_command_timestamp = signal_timestamp
