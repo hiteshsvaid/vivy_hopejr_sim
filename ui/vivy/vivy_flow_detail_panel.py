@@ -539,7 +539,6 @@ class VivyFlowDetailPanel:
                 ui.Label("direct input", width=105, style=header_style)
                 ui.Label("input axis", width=75, style=header_style)
                 ui.Label("sign", width=60, style=header_style)
-                ui.Label("scale *", width=70, style=header_style)
                 ui.Label("deadband", width=70, style=header_style)
             for joint_name in names:
                 joint_entry = dict(joints.get(joint_name) or {})
@@ -645,7 +644,6 @@ class VivyFlowDetailPanel:
                                 sign=float(model.get_value_as_string()),
                             )
                         )
-                        ui.Label("joint tick", width=70, style={"color": self._TEXT_NEUTRAL, "font_size": 12})
                         ui.Label("n/a", width=70, style={"color": self._TEXT_NEUTRAL, "font_size": 12})
                     elif joint_name in {"right_wrist", "right_palm"}:
                         ui.Label("thumbstick", width=105, style={"color": self._TEXT_NEUTRAL, "font_size": 12})
@@ -658,7 +656,6 @@ class VivyFlowDetailPanel:
                                 sign=float(model.get_value_as_string()),
                             )
                         )
-                        ui.Label("joint tick", width=70, style={"color": self._TEXT_NEUTRAL, "font_size": 12})
                         deadband_field = ui.StringField(width=70)
                         deadband_field.model.set_value(f"{float(direct_input['deadband']):.2f}")
                         deadband_field.model.add_end_edit_fn(
@@ -671,7 +668,6 @@ class VivyFlowDetailPanel:
                         ui.Label("none", width=105, style={"color": self._TEXT_NEUTRAL, "font_size": 12})
                         ui.Label("n/a", width=75, style={"color": self._TEXT_NEUTRAL, "font_size": 12})
                         ui.Label("n/a", width=60, style={"color": self._TEXT_NEUTRAL, "font_size": 12})
-                        ui.Label("n/a", width=70, style={"color": self._TEXT_NEUTRAL, "font_size": 12})
                         ui.Label("n/a", width=70, style={"color": self._TEXT_NEUTRAL, "font_size": 12})
 
     def _save_ik_tuning(self) -> None:

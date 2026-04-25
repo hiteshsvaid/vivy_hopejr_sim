@@ -34,10 +34,9 @@ class IkDetailSection:
                     ui.Label("direct input", width=105, style={**value_style, "font_size": 12})
                     ui.Label("input axis", width=75, style={**value_style, "font_size": 12})
                     ui.Label("sign", width=60, style={**value_style, "font_size": 12})
-                    ui.Label("scale *", width=70, style={**value_style, "font_size": 12})
                     ui.Label("deadband", width=70, style={**value_style, "font_size": 12})
                 ui.Label(
-                    "* Direct-joint speed now comes from that joint's joint tick. The sign column flips input direction and input axis selects the controller/thumbstick axis.",
+                    "Direct-joint speed now comes from that joint's joint tick. The sign column flips input direction and input axis selects the controller/thumbstick axis.",
                     style=helper_style,
                     word_wrap=True,
                 )
@@ -150,7 +149,7 @@ class IkDetailSection:
                 )
 
             ui.Label(
-                "Current solution: wrist and palm use velocity-style direct control, IK stays off while thumbstick is active, and proximal solve joints remain locked through release until the target meaningfully moves.",
+                "These knobs affect IK handoff only, not direct joint speed. Current solution: wrist and palm use velocity-style direct control, IK stays off while thumbstick is active, and proximal solve joints remain locked through release until the target meaningfully moves.",
                 style=helper_style,
                 word_wrap=True,
             )
