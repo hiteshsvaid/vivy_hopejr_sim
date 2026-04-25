@@ -414,6 +414,25 @@ class VivyFlowDetailPanel:
         except Exception as exc:
             self._labels["ik_status"].text = f"Save failed: {exc}"
 
+    def _format_direct_input_source_label(self, source: Any) -> str:
+        cleaned = str(source or "none").strip().lower()
+        label_map = {
+            "none": "none",
+            "grip": "grip",
+            "trigger": "trigger",
+            "a": "A",
+            "a_pressed": "A",
+            "b": "B",
+            "b_pressed": "B",
+            "x": "X",
+            "x_pressed": "X",
+            "y": "Y",
+            "y_pressed": "Y",
+            "primary_button": "primary",
+            "secondary_button": "secondary",
+        }
+        return label_map.get(cleaned, cleaned)
+
     def _joint_direct_input_config(self, joint_name: str, controller_defaults: dict[str, Any]) -> dict[str, Any]:
         if joint_name == "right_forearm_twist":
             enabled = bool(controller_defaults.get("forearm_twist_from_controller_rotation", False))
@@ -439,6 +458,23 @@ class VivyFlowDetailPanel:
                 "sign": float(controller_defaults.get("right_palm_thumbstick_sign", 1.0)),
                 "scale": None,
                 "deadband": float(controller_defaults.get("right_palm_thumbstick_deadband", 0.1)),
+            }
+        if joint_name in {"right_thumb", "right_index"}:
+            inward_source = self._format_direct_input_source_label(
+                controller_defaults.get(f"{joint_name}_inward_input_source", "none")
+            )
+            outward_source = self._format_direct_input_source_label(
+                controller_defaults.get(f"{joint_name}_outward_input_source", "none")
+            )
+            source = inward_source
+            if outward_source != "none":
+                source = f"{inward_source}/{outward_source}" if inward_source != "none" else outward_source
+            return {
+                "source": source,
+                "axis": "n/a",
+                "sign": float(controller_defaults.get(f"{joint_name}_direct_velocity_sign", 1.0)),
+                "scale": None,
+                "deadband": None,
             }
         return {"source": "none", "axis": "-", "sign": None, "scale": None, "deadband": None}
 
@@ -477,6 +513,9 @@ class VivyFlowDetailPanel:
                     controller_defaults["right_palm_thumbstick_sign"] = float(sign)
                 if deadband is not None:
                     controller_defaults["right_palm_thumbstick_deadband"] = float(deadband)
+            elif joint_name in {"right_thumb", "right_index"}:
+                if sign is not None:
+                    controller_defaults[f"{joint_name}_direct_velocity_sign"] = float(sign)
             else:
                 self._labels["ik_status"].text = f"Ignored {joint_name}: no direct input mapping."
                 return
@@ -672,6 +711,18 @@ class VivyFlowDetailPanel:
                                 deadband=float(model.get_value_as_string()),
                             )
                         )
+                    elif joint_name in {"right_thumb", "right_index"}:
+                        ui.Label(str(direct_input["source"]), width=105, style={"color": self._TEXT_NEUTRAL, "font_size": 12})
+                        ui.Label("n/a", width=75, style={"color": self._TEXT_NEUTRAL, "font_size": 12})
+                        sign_field = ui.StringField(width=60)
+                        sign_field.model.set_value(f"{float(direct_input['sign']):.2f}")
+                        sign_field.model.add_end_edit_fn(
+                            lambda model, joint_name=joint_name: self._save_joint_direct_input(
+                                joint_name,
+                                sign=float(model.get_value_as_string()),
+                            )
+                        )
+                        ui.Label("n/a", width=70, style={"color": self._TEXT_NEUTRAL, "font_size": 12})
                     else:
                         ui.Label("none", width=105, style={"color": self._TEXT_NEUTRAL, "font_size": 12})
                         ui.Label("n/a", width=75, style={"color": self._TEXT_NEUTRAL, "font_size": 12})
