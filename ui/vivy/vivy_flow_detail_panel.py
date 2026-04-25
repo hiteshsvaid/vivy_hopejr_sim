@@ -707,6 +707,15 @@ class VivyFlowDetailPanel:
             controller_defaults["ignore_ik_when_thumbstick_active"] = bool(
                 self._labels["ignore_ik_when_thumbstick_active_model"].get_value_as_bool()
             )
+            controller_defaults["thumbstick_release_deadband"] = float(
+                self._labels["thumbstick_release_deadband_model"].get_value_as_string()
+            )
+            controller_defaults["thumbstick_release_hold_frames"] = int(
+                self._labels["thumbstick_release_hold_frames_model"].get_value_as_string()
+            )
+            controller_defaults["thumbstick_release_target_move_tolerance_m"] = float(
+                self._labels["thumbstick_release_target_move_tolerance_m_model"].get_value_as_string()
+            )
             controller_defaults["output_max_delta_deg_per_tick"] = float(
                 self._labels["output_max_delta_model"].get_value_as_string()
             )

@@ -114,6 +114,48 @@ class IkDetailSection:
                     word_wrap=True,
                 )
 
+            ui.Spacer(height=6)
+            ui.Label("Thumbstick Handoff", style=header_style)
+
+            with ui.VStack(spacing=2):
+                with ui.HStack(height=26, spacing=6):
+                    ui.Label("release deadband", width=120, style=value_style)
+                    release_deadband = ui.StringField(width=100)
+                    self.panel._labels["thumbstick_release_deadband_model"] = release_deadband.model
+                ui.Label(
+                    "Stick-center threshold used to keep thumbstick mode active during release. IK stays suppressed until the active axis is near center.",
+                    style=helper_style,
+                    word_wrap=True,
+                )
+
+            with ui.VStack(spacing=2):
+                with ui.HStack(height=26, spacing=6):
+                    ui.Label("release hold frames", width=120, style=value_style)
+                    release_hold_frames = ui.StringField(width=100)
+                    self.panel._labels["thumbstick_release_hold_frames_model"] = release_hold_frames.model
+                ui.Label(
+                    "Short solve-joint hold after thumbstick release. This prevents the first IK frame from jumping immediately.",
+                    style=helper_style,
+                    word_wrap=True,
+                )
+
+            with ui.VStack(spacing=2):
+                with ui.HStack(height=26, spacing=6):
+                    ui.Label("target move tol (m)", width=120, style=value_style)
+                    release_move_tol = ui.StringField(width=100)
+                    self.panel._labels["thumbstick_release_target_move_tolerance_m_model"] = release_move_tol.model
+                ui.Label(
+                    "After thumbstick release, keep solve joints locked until the cartesian target moves by at least this amount. Larger values resist small controller drift.",
+                    style=helper_style,
+                    word_wrap=True,
+                )
+
+            ui.Label(
+                "Current solution: wrist and palm stay direct-input only, IK stays off while thumbstick is active, and proximal solve joints remain locked through release until the target meaningfully moves.",
+                style=helper_style,
+                word_wrap=True,
+            )
+
             self.panel._labels["ik_tuning_button"] = ui.Button(
                 "Save IK Tuning",
                 height=28,
@@ -133,6 +175,15 @@ class IkDetailSection:
         self.panel._labels["ik_max_step_model"].set_value(str(controller_defaults.get("ik_max_step_deg", 8.0)))
         self.panel._labels["ignore_ik_when_thumbstick_active_model"].set_value(
             bool(controller_defaults.get("ignore_ik_when_thumbstick_active", True))
+        )
+        self.panel._labels["thumbstick_release_deadband_model"].set_value(
+            str(controller_defaults.get("thumbstick_release_deadband", 0.1))
+        )
+        self.panel._labels["thumbstick_release_hold_frames_model"].set_value(
+            str(controller_defaults.get("thumbstick_release_hold_frames", 2))
+        )
+        self.panel._labels["thumbstick_release_target_move_tolerance_m_model"].set_value(
+            str(controller_defaults.get("thumbstick_release_target_move_tolerance_m", 0.015))
         )
         self.panel._labels["output_max_delta_model"].set_value(
             str(controller_defaults.get("output_max_delta_deg_per_tick", 2.0))
