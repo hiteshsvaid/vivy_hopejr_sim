@@ -11,9 +11,10 @@ try:
 except ImportError:
     GroundPlane = None
 try:
-    from isaacsim.core.api.objects import DynamicCuboid
+    from isaacsim.core.api.objects import DynamicCuboid, FixedCuboid
 except ImportError:
     DynamicCuboid = None
+    FixedCuboid = None
 try:
     from isaacsim.storage.native import get_assets_root_path
 except ImportError:
@@ -27,6 +28,7 @@ class TeleopDebugVisuals:
         self._table_asset_path: str | None = None
         self._table_asset_resolved = False
         self._table_spawned = False
+        self._table_collider_spawned = False
         self._cube_spawned = False
 
     def _set_visibility(self, prim, usd_geom, visible: bool) -> None:
@@ -184,6 +186,25 @@ class TeleopDebugVisuals:
             scale_attr = table.CreateAttribute("xformOp:scale", sdf.ValueTypeNames.Double3)
         scale_attr.Set(gf.Vec3d(1.0, 1.0, 1.0))
         self._set_order(table, ["xformOp:translate", "xformOp:orient", "xformOp:scale"])
+
+    def _ensure_table_collider(self, stage) -> None:
+        if FixedCuboid is None:
+            return
+        prim_path = "/World/TableTopCollider"
+        if stage.GetPrimAtPath(prim_path).IsValid():
+            self._table_collider_spawned = True
+            return
+        if self._table_collider_spawned:
+            return
+        FixedCuboid(
+            prim_path=prim_path,
+            name="table_top_collider",
+            position=np.array([0.05584, 0.09835, -0.35666]),
+            size=1.0,
+            scale=np.array([0.76, 1.52, 0.03]),
+            visible=False,
+        )
+        self._table_collider_spawned = True
 
     def _ensure_table_cube(self, stage) -> None:
         if DynamicCuboid is None:
@@ -368,6 +389,7 @@ class TeleopDebugVisuals:
 
         self._ensure_ground_plane(stage, UsdGeom, Sdf, Gf)
         self._ensure_table_asset(stage, Sdf, Gf)
+        self._ensure_table_collider(stage)
         self._ensure_table_cube(stage)
         stage.DefinePrim(self.teleop_debug_root, "Xform")
         sim_target_color = (0.0, 1.0, 0.0) if waiting_for_anchor else (1.0, 0.0, 0.0)
