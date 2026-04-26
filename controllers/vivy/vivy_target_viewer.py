@@ -125,6 +125,10 @@ class VivyTargetViewer:
         self.ik_joint_names = list(ik_joint_names)
         self.joint_names = list(controlled_joint_names)
         neutral_deg = np.asarray([float(self.sim_config["joints"][name]["neutral_deg"]) for name in ik_joint_names], dtype=float)
+        self.neutral_joint_positions_deg = np.asarray(
+            [float(self.sim_config["joints"][name]["neutral_deg"]) for name in controlled_joint_names],
+            dtype=float,
+        )
         self.kinematics = VivyArmKinematics.from_json(SIM_CONFIG_PATH)
         self.model_neutral_pose = self.kinematics.forward_kinematics(neutral_deg)
         self.model_to_stage_transform = np.eye(4)
@@ -149,6 +153,7 @@ class VivyTargetViewer:
         self._ensure_panels_created()
         self._joint_write_ready = False
         self._last_joint_write_warn_time = 0.0
+        self._waiting_anchor_neutral_applied = False
         self._last_panel_signal_timestamp: float | None = None
         self._last_panel_signal_arrival_time: float | None = None
         self._last_panel_real_feedback_timestamp: float | None = None
@@ -454,18 +459,26 @@ class VivyTargetViewer:
         teleop_changed = signal_timestamp is not None and signal_timestamp != self._last_signal_timestamp
         feedback_changed = feedback_timestamp is not None and feedback_timestamp != self._last_applied_feedback_timestamp
 
+        stage_write_blocked = waiting_for_anchor
+        if stage_write_blocked:
+            if not self._waiting_anchor_neutral_applied:
+                self._write_sim_joint_positions(stage, self.neutral_joint_positions_deg, update_state=True)
+                self._waiting_anchor_neutral_applied = True
+        else:
+            self._waiting_anchor_neutral_applied = False
         joint_targets_deg = payload.get("current_joint_targets_deg")
-        if real_joint_positions_deg is not None:
-            if feedback_changed:
-                self._write_sim_joint_positions(stage, np.asarray(real_joint_positions_deg, dtype=float), update_state=True)
-                self._last_applied_feedback_timestamp = feedback_timestamp
-        elif (
-            teleop_changed
-            and isinstance(joint_targets_deg, list)
-            and len(joint_targets_deg) == len(self.joint_names)
-        ):
-            self._write_sim_joint_positions(stage, np.asarray(joint_targets_deg, dtype=float), update_state=False)
-            self._last_applied_command_timestamp = signal_timestamp
+        if not stage_write_blocked:
+            if real_joint_positions_deg is not None:
+                if feedback_changed:
+                    self._write_sim_joint_positions(stage, np.asarray(real_joint_positions_deg, dtype=float), update_state=True)
+                    self._last_applied_feedback_timestamp = feedback_timestamp
+            elif (
+                teleop_changed
+                and isinstance(joint_targets_deg, list)
+                and len(joint_targets_deg) == len(self.joint_names)
+            ):
+                self._write_sim_joint_positions(stage, np.asarray(joint_targets_deg, dtype=float), update_state=False)
+                self._last_applied_command_timestamp = signal_timestamp
 
         if teleop_changed:
             self._last_signal_timestamp = signal_timestamp
