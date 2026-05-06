@@ -14,6 +14,7 @@ USD_DIR = ASSET_ROOT / 'usd'
 VISUAL_ONLY_PARTS = [
     'chest',
     'arm_v2-chest_clone',
+    'arm_v2-body_torso_clone',
     'shoulder_support_bottom',
     'shoulder_support_top',
     'arm_v2-shoulder_support_bottom',

@@ -44,6 +44,33 @@ def Xform "World"
         prepend apiSchemas = ["PhysicsArticulationRootAPI"]
     )
     {
+        def Xform "Torso" (
+            prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]
+        )
+        {
+            vector3f physics:angularVelocity = (0, 0, 0)
+            float physics:mass = 1
+            rel physics:simulationOwner
+            vector3f physics:velocity = (0, 0, 0)
+            quatf xformOp:orient = (1, 0, 0, 0)
+            float3 xformOp:scale = (1, 1, 1)
+            float3 xformOp:translate = (0, 0, 0)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+
+            def Xform "Visuals"
+            {
+                float3 xformOp:rotateXYZ = (180, 0, 0)
+                float3 xformOp:scale = (0.001, 0.001, 0.001)
+                uniform token[] xformOpOrder = ["xformOp:rotateXYZ", "xformOp:scale"]
+
+                def Xform "arm_v2_body_torso_clone" (
+                    references = @./assets/usd/arm_v2-body_torso_clone_visual.usd@
+                )
+                {
+                }
+            }
+        }
+
         def Xform "Chest" (
             prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]
         )
@@ -714,11 +741,21 @@ def Xform "World"
 
         def Scope "Joints"
         {
-            def PhysicsFixedJoint "world_to_chest"
+            def PhysicsFixedJoint "world_to_torso"
             {
-                rel physics:body1 = </World/JointTest/Chest>
+                rel physics:body1 = </World/JointTest/Torso>
                 point3f physics:localPos0 = (0, 0.100275, -0.106247)
                 point3f physics:localPos1 = (0, 0.100275, -0.106247)
+                quatf physics:localRot0 = (1, 0, 0, 0)
+                quatf physics:localRot1 = (1, 0, 0, 0)
+            }
+
+            def PhysicsFixedJoint "torso_to_chest"
+            {
+                rel physics:body0 = </World/JointTest/Torso>
+                rel physics:body1 = </World/JointTest/Chest>
+                point3f physics:localPos0 = (0, 0, 0)
+                point3f physics:localPos1 = (0, 0, 0)
                 quatf physics:localRot0 = (1, 0, 0, 0)
                 quatf physics:localRot1 = (1, 0, 0, 0)
             }
