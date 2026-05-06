@@ -109,14 +109,14 @@ def Xform "World"
                 float3 xformOp:scale = (0.001, 0.001, 0.001)
                 uniform token[] xformOpOrder = ["xformOp:rotateXYZ", "xformOp:scale"]
 
-                def Xform "arm_v2_shoulder_support_bottom" (
-                    references = @./assets/usd/arm_v2-shoulder_support_bottom_visual.usd@
+                def Xform "arm_v2_new_shoulder_bottom_right" (
+                    references = @./assets/usd/arm_v2-new_shoulder_bottom_right_visual.usd@
                 )
                 {
                 }
 
-                def Xform "arm_v2_shoulder_support_top" (
-                    references = @./assets/usd/arm_v2-shoulder_support_top_visual.usd@
+                def Xform "arm_v2_new_shoulder_top_right" (
+                    references = @./assets/usd/arm_v2-new_shoulder_top_right_visual.usd@
                 )
                 {
                 }
@@ -137,6 +137,33 @@ def Xform "World"
                     float3 xformOp:scale = (1, 1, 1)
                     float3 xformOp:translate = (0.0000096, -0.0454, -0.049591437)
                     uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ", "xformOp:scale"]
+                }
+            }
+        }
+
+        def Xform "LeftShoulderSupport"
+        {
+            quatf xformOp:orient = (1, 0, 0, 0)
+            float3 xformOp:scale = (1, 1, 1)
+            float3 xformOp:translate = (0, 0, 0)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+
+            def Xform "Visuals"
+            {
+                float3 xformOp:rotateXYZ = (180, 0, 0)
+                float3 xformOp:scale = (0.001, 0.001, 0.001)
+                uniform token[] xformOpOrder = ["xformOp:rotateXYZ", "xformOp:scale"]
+
+                def Xform "arm_v2_new_shoulder_bottom_left" (
+                    references = @./assets/usd/arm_v2-new_shoulder_bottom_left_visual.usd@
+                )
+                {
+                }
+
+                def Xform "arm_v2_new_shoulder_top_left" (
+                    references = @./assets/usd/arm_v2-new_shoulder_top_left_visual.usd@
+                )
+                {
                 }
             }
         }
@@ -938,4 +965,3 @@ def "Render" (
         }
     }
 }
-
