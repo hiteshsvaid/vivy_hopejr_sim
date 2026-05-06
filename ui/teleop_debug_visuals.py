@@ -6,6 +6,11 @@ import numpy as np
 from scipy.spatial.transform import Rotation
 import carb
 
+TABLE_TOP_Z = -0.34166
+TABLE_CUBE_SCALE = np.array([0.04, 0.04, 0.04])
+TABLE_CUBE_POSITION_XY = np.array([0.24971, 0.05408])
+TABLE_CUBE_CLEARANCE_M = 0.001
+
 try:
     from isaacsim.core.api.objects.ground_plane import GroundPlane
 except ImportError:
@@ -215,12 +220,13 @@ class TeleopDebugVisuals:
             return
         if self._cube_spawned:
             return
+        cube_center_z = TABLE_TOP_Z + (float(TABLE_CUBE_SCALE[2]) * 0.5) + TABLE_CUBE_CLEARANCE_M
         DynamicCuboid(
             prim_path=prim_path,
             name="table_cube",
-            position=np.array([0.24971, 0.05408, -0.32166]),
+            position=np.array([TABLE_CUBE_POSITION_XY[0], TABLE_CUBE_POSITION_XY[1], cube_center_z]),
             size=1.0,
-            scale=np.array([0.04, 0.04, 0.04]),
+            scale=TABLE_CUBE_SCALE,
             mass=0.05,
             density=400.0,
             color=np.array([0.82, 0.18, 0.18]),
