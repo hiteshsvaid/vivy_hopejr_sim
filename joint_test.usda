@@ -114,10 +114,11 @@ def Xform "World"
         }
 
         def Xform "Head" (
-            prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]
+            prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI", "PhysicsFilteredPairsAPI"]
         )
         {
             vector3f physics:angularVelocity = (0, 0, 0)
+            rel physics:filteredPairs = </World/JointTest/Chest>
             float physics:mass = 0.5
             rel physics:simulationOwner
             vector3f physics:velocity = (0, 0, 0)
@@ -150,13 +151,45 @@ def Xform "World"
                 {
                 }
             }
+
+            def Xform "Colliders"
+            {
+                def Cube "HeadBase" (
+                    prepend apiSchemas = ["PhysicsCollisionAPI"]
+                )
+                {
+                    float3[] extent = [(-0.5, -0.5, -0.5), (0.5, 0.5, 0.5)]
+                    rel physics:simulationOwner
+                    double size = 1
+                    token visibility = "invisible"
+                    quatf xformOp:orient = (1, 0, 0, 0)
+                    float3 xformOp:scale = (0.12958863, 0.19680552, 0.024312878)
+                    float3 xformOp:translate = (0, 0.09910993, -0.019552287)
+                    uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+                }
+
+                def Cube "HeadPanFixed" (
+                    prepend apiSchemas = ["PhysicsCollisionAPI"]
+                )
+                {
+                    float3[] extent = [(-0.5, -0.5, -0.5), (0.5, 0.5, 0.5)]
+                    rel physics:simulationOwner
+                    double size = 1
+                    token visibility = "invisible"
+                    quatf xformOp:orient = (1, 0, 0, 0)
+                    float3 xformOp:scale = (0.053125497, 0.05, 0.04640857)
+                    float3 xformOp:translate = (0.032914184, 0.10369513, 0.016604057)
+                    uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+                }
+            }
         }
 
         def Xform "HeadPanTiltAssembly" (
-            prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]
+            prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI", "PhysicsFilteredPairsAPI"]
         )
         {
             vector3f physics:angularVelocity = (0, 0, 0)
+            rel physics:filteredPairs = </World/JointTest/Head>
             float physics:mass = 0.3
             rel physics:simulationOwner
             vector3f physics:velocity = (0, 0, 0)
@@ -1124,20 +1157,30 @@ def Xform "World"
             {
                 rel physics:body0 = </World/JointTest/Chest>
                 rel physics:body1 = </World/JointTest/Head>
-                point3f physics:localPos0 = (0, 0, 0)
-                point3f physics:localPos1 = (0, 0, 0)
+                point3f physics:localPos0 = (0.0077448767, 0.095156886, -0.021690365)
+                point3f physics:localPos1 = (0.0077448767, 0.095156886, -0.021690365)
                 quatf physics:localRot0 = (1, 0, 0, 0)
                 quatf physics:localRot1 = (1, 0, 0, 0)
             }
 
-            def PhysicsFixedJoint "head_to_pan_tilt_assembly"
+            def PhysicsRevoluteJoint "head_pan" (
+                prepend apiSchemas = ["PhysicsDriveAPI:angular"]
+            )
             {
+                float drive:angular:physics:damping = 5
+                float drive:angular:physics:stiffness = 20
+                float drive:angular:physics:targetPosition = 0
+                uniform token physics:axis = "Z"
                 rel physics:body0 = </World/JointTest/Head>
                 rel physics:body1 = </World/JointTest/HeadPanTiltAssembly>
-                point3f physics:localPos0 = (0, 0, 0)
-                point3f physics:localPos1 = (0, 0, 0)
+                float physics:breakForce = 3.4028235e38
+                float physics:breakTorque = 3.4028235e38
+                point3f physics:localPos0 = (0.049069095, 0.101289146, 0.04124727)
+                point3f physics:localPos1 = (0.049069095, 0.101289146, 0.04124727)
                 quatf physics:localRot0 = (1, 0, 0, 0)
                 quatf physics:localRot1 = (1, 0, 0, 0)
+                float physics:lowerLimit = -90
+                float physics:upperLimit = 90
             }
 
             def PhysicsFixedJoint "pan_tilt_assembly_to_camera_holder"
