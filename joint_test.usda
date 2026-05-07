@@ -1183,14 +1183,24 @@ def Xform "World"
                 float physics:upperLimit = 90
             }
 
-            def PhysicsFixedJoint "pan_tilt_assembly_to_camera_holder"
+            def PhysicsRevoluteJoint "head_tilt" (
+                prepend apiSchemas = ["PhysicsDriveAPI:angular"]
+            )
             {
+                float drive:angular:physics:damping = 5
+                float drive:angular:physics:stiffness = 20
+                float drive:angular:physics:targetPosition = 0
+                uniform token physics:axis = "Y"
                 rel physics:body0 = </World/JointTest/HeadPanTiltAssembly>
                 rel physics:body1 = </World/JointTest/HeadTiltCameraHolderAssembly>
-                point3f physics:localPos0 = (0, 0, 0)
-                point3f physics:localPos1 = (0, 0, 0)
+                float physics:breakForce = 3.4028235e38
+                float physics:breakTorque = 3.4028235e38
+                point3f physics:localPos0 = (0.09513975, 0.079990774, 0.05998797)
+                point3f physics:localPos1 = (0.09513975, 0.079990774, 0.05998797)
                 quatf physics:localRot0 = (1, 0, 0, 0)
                 quatf physics:localRot1 = (1, 0, 0, 0)
+                float physics:lowerLimit = -88.35966
+                float physics:upperLimit = 90.04298
             }
 
             def PhysicsFixedJoint "right_shoulder_support_fixed"
