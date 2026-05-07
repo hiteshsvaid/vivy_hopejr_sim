@@ -152,6 +152,66 @@ def Xform "World"
             }
         }
 
+        def Xform "HeadPanTiltAssembly" (
+            prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]
+        )
+        {
+            vector3f physics:angularVelocity = (0, 0, 0)
+            float physics:mass = 0.3
+            rel physics:simulationOwner
+            vector3f physics:velocity = (0, 0, 0)
+            quatf xformOp:orient = (1, 0, 0, 0)
+            float3 xformOp:scale = (1, 1, 1)
+            float3 xformOp:translate = (0, 0, 0)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+
+            def Xform "Visuals"
+            {
+                float3 xformOp:rotateXYZ = (180, 0, 0)
+                float3 xformOp:scale = (0.001, 0.001, 0.001)
+                uniform token[] xformOpOrder = ["xformOp:rotateXYZ", "xformOp:scale"]
+
+                def Xform "arm_v2_head_tilt_clone" (
+                    references = @./assets/usd/arm_v2-head_tilt_clone_visual.usd@
+                )
+                {
+                }
+
+                def Xform "arm_v2_head_tilt_STS3215_servo_clone" (
+                    references = @./assets/usd/arm_v2-head_tilt_STS3215_servo_clone_visual.usd@
+                )
+                {
+                }
+            }
+        }
+
+        def Xform "HeadTiltCameraHolderAssembly" (
+            prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]
+        )
+        {
+            vector3f physics:angularVelocity = (0, 0, 0)
+            float physics:mass = 0.2
+            rel physics:simulationOwner
+            vector3f physics:velocity = (0, 0, 0)
+            quatf xformOp:orient = (1, 0, 0, 0)
+            float3 xformOp:scale = (1, 1, 1)
+            float3 xformOp:translate = (0, 0, 0)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+
+            def Xform "Visuals"
+            {
+                float3 xformOp:rotateXYZ = (180, 0, 0)
+                float3 xformOp:scale = (0.001, 0.001, 0.001)
+                uniform token[] xformOpOrder = ["xformOp:rotateXYZ", "xformOp:scale"]
+
+                def Xform "arm_v2_head_tilt_camera_holder_assembly" (
+                    references = @./assets/usd/arm_v2-head_tilt_camera_holder_assembly_visual.usd@
+                )
+                {
+                }
+            }
+        }
+
         def Xform "RightShoulderSupport" (
             prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI", "PhysicsFilteredPairsAPI"]
         )
@@ -1064,6 +1124,26 @@ def Xform "World"
             {
                 rel physics:body0 = </World/JointTest/Chest>
                 rel physics:body1 = </World/JointTest/Head>
+                point3f physics:localPos0 = (0, 0, 0)
+                point3f physics:localPos1 = (0, 0, 0)
+                quatf physics:localRot0 = (1, 0, 0, 0)
+                quatf physics:localRot1 = (1, 0, 0, 0)
+            }
+
+            def PhysicsFixedJoint "head_to_pan_tilt_assembly"
+            {
+                rel physics:body0 = </World/JointTest/Head>
+                rel physics:body1 = </World/JointTest/HeadPanTiltAssembly>
+                point3f physics:localPos0 = (0, 0, 0)
+                point3f physics:localPos1 = (0, 0, 0)
+                quatf physics:localRot0 = (1, 0, 0, 0)
+                quatf physics:localRot1 = (1, 0, 0, 0)
+            }
+
+            def PhysicsFixedJoint "pan_tilt_assembly_to_camera_holder"
+            {
+                rel physics:body0 = </World/JointTest/HeadPanTiltAssembly>
+                rel physics:body1 = </World/JointTest/HeadTiltCameraHolderAssembly>
                 point3f physics:localPos0 = (0, 0, 0)
                 point3f physics:localPos1 = (0, 0, 0)
                 quatf physics:localRot0 = (1, 0, 0, 0)
