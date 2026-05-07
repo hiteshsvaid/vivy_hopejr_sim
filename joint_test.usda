@@ -113,6 +113,45 @@ def Xform "World"
             }
         }
 
+        def Xform "Head" (
+            prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]
+        )
+        {
+            vector3f physics:angularVelocity = (0, 0, 0)
+            float physics:mass = 0.5
+            rel physics:simulationOwner
+            vector3f physics:velocity = (0, 0, 0)
+            quatf xformOp:orient = (1, 0, 0, 0)
+            float3 xformOp:scale = (1, 1, 1)
+            float3 xformOp:translate = (0, 0, 0)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+
+            def Xform "Visuals"
+            {
+                float3 xformOp:rotateXYZ = (180, 0, 0)
+                float3 xformOp:scale = (0.001, 0.001, 0.001)
+                uniform token[] xformOpOrder = ["xformOp:rotateXYZ", "xformOp:scale"]
+
+                def Xform "arm_v2_head_base_clone" (
+                    references = @./assets/usd/arm_v2-head_base_clone_visual.usd@
+                )
+                {
+                }
+
+                def Xform "arm_v2_head_pan_clone" (
+                    references = @./assets/usd/arm_v2-head_pan_clone_visual.usd@
+                )
+                {
+                }
+
+                def Xform "arm_v2_head_pan_STS3215_servo_clone" (
+                    references = @./assets/usd/arm_v2-head_pan_STS3215_servo_clone_visual.usd@
+                )
+                {
+                }
+            }
+        }
+
         def Xform "RightShoulderSupport" (
             prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI", "PhysicsFilteredPairsAPI"]
         )
@@ -597,7 +636,7 @@ def Xform "World"
             vector3f physics:angularVelocity = (0, 0, 0)
             rel physics:filteredPairs = [
                 </World/JointTest/RightLowerElbow>,
-                </World/JointTest/Wrist>,
+                </World/JointTest/RightWrist>,
             ]
             float physics:mass = 0.3
             rel physics:simulationOwner
@@ -653,7 +692,28 @@ def Xform "World"
             }
         }
 
-        def Xform "Wrist" (
+        def Xform "LeftWrist"
+        {
+            quatf xformOp:orient = (1, 0, 0, 0)
+            float3 xformOp:scale = (1, 1, 1)
+            float3 xformOp:translate = (0, 0, 0)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+
+            def Xform "Visuals"
+            {
+                float3 xformOp:rotateXYZ = (180, 0, 0)
+                float3 xformOp:scale = (0.001, 0.001, 0.001)
+                uniform token[] xformOpOrder = ["xformOp:rotateXYZ", "xformOp:scale"]
+
+                def Xform "arm_v2_wrist_yaw_pitch_left" (
+                    references = @./assets/usd/arm_v2-wrist_yaw_pitch_left_visual.usd@
+                )
+                {
+                }
+            }
+        }
+
+        def Xform "RightWrist" (
             prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI", "PhysicsFilteredPairsAPI"]
         )
         {
@@ -700,12 +760,51 @@ def Xform "World"
             }
         }
 
-        def Xform "Palm" (
+        def Xform "LeftPalm"
+        {
+            quatf xformOp:orient = (1, 0, 0, 0)
+            float3 xformOp:scale = (1, 1, 1)
+            float3 xformOp:translate = (0, 0, 0)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+
+            def Xform "Visuals"
+            {
+                float3 xformOp:rotateXYZ = (180, 0, 0)
+                float3 xformOp:scale = (0.001, 0.001, 0.001)
+                uniform token[] xformOpOrder = ["xformOp:rotateXYZ", "xformOp:scale"]
+
+                def Xform "arm_v2_palm_base_left" (
+                    references = @./assets/usd/arm_v2-palm_base_left_visual.usd@
+                )
+                {
+                }
+
+                def Xform "arm_v2_wrist_servo_sts3215_left" (
+                    references = @./assets/usd/arm_v2-wrist_servo_sts3215_left_visual.usd@
+                )
+                {
+                }
+
+                def Xform "arm_v2_thumb_servo_sts3215_left" (
+                    references = @./assets/usd/arm_v2-thumb_servo_sts3215_left_visual.usd@
+                )
+                {
+                }
+
+                def Xform "arm_v2_index_servo_sts3215_left" (
+                    references = @./assets/usd/arm_v2-index_servo_sts3215_left_visual.usd@
+                )
+                {
+                }
+            }
+        }
+
+        def Xform "RightPalm" (
             prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI", "PhysicsFilteredPairsAPI"]
         )
         {
             vector3f physics:angularVelocity = (0, 0, 0)
-            rel physics:filteredPairs = </World/JointTest/Wrist>
+            rel physics:filteredPairs = </World/JointTest/RightWrist>
             float physics:mass = 0.25
             rel physics:simulationOwner
             vector3f physics:velocity = (0, 0, 0)
@@ -808,12 +907,33 @@ def Xform "World"
             }
         }
 
-        def Xform "Thumb" (
+        def Xform "LeftThumb"
+        {
+            quatf xformOp:orient = (1, 0, 0, 0)
+            float3 xformOp:scale = (1, 1, 1)
+            float3 xformOp:translate = (0, 0, 0)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+
+            def Xform "Visuals"
+            {
+                float3 xformOp:rotateXYZ = (180, 0, 0)
+                float3 xformOp:scale = (0.001, 0.001, 0.001)
+                uniform token[] xformOpOrder = ["xformOp:rotateXYZ", "xformOp:scale"]
+
+                def Xform "arm_v2_thumb_left" (
+                    references = @./assets/usd/arm_v2-thumb_left_visual.usd@
+                )
+                {
+                }
+            }
+        }
+
+        def Xform "RightThumb" (
             prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI", "PhysicsFilteredPairsAPI"]
         )
         {
             vector3f physics:angularVelocity = (0, 0, 0)
-            rel physics:filteredPairs = </World/JointTest/Palm>
+            rel physics:filteredPairs = </World/JointTest/RightPalm>
             float physics:mass = 0.15
             rel physics:simulationOwner
             vector3f physics:velocity = (0, 0, 0)
@@ -853,12 +973,33 @@ def Xform "World"
             }
         }
 
-        def Xform "Index" (
+        def Xform "LeftIndex"
+        {
+            quatf xformOp:orient = (1, 0, 0, 0)
+            float3 xformOp:scale = (1, 1, 1)
+            float3 xformOp:translate = (0, 0, 0)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+
+            def Xform "Visuals"
+            {
+                float3 xformOp:rotateXYZ = (180, 0, 0)
+                float3 xformOp:scale = (0.001, 0.001, 0.001)
+                uniform token[] xformOpOrder = ["xformOp:rotateXYZ", "xformOp:scale"]
+
+                def Xform "arm_v2_index_left" (
+                    references = @./assets/usd/arm_v2-index_left_visual.usd@
+                )
+                {
+                }
+            }
+        }
+
+        def Xform "RightIndex" (
             prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI", "PhysicsFilteredPairsAPI"]
         )
         {
             vector3f physics:angularVelocity = (0, 0, 0)
-            rel physics:filteredPairs = </World/JointTest/Palm>
+            rel physics:filteredPairs = </World/JointTest/RightPalm>
             float physics:mass = 0.15
             rel physics:simulationOwner
             vector3f physics:velocity = (0, 0, 0)
@@ -913,6 +1054,16 @@ def Xform "World"
             {
                 rel physics:body0 = </World/JointTest/Torso>
                 rel physics:body1 = </World/JointTest/Chest>
+                point3f physics:localPos0 = (0, 0, 0)
+                point3f physics:localPos1 = (0, 0, 0)
+                quatf physics:localRot0 = (1, 0, 0, 0)
+                quatf physics:localRot1 = (1, 0, 0, 0)
+            }
+
+            def PhysicsFixedJoint "chest_to_head"
+            {
+                rel physics:body0 = </World/JointTest/Chest>
+                rel physics:body1 = </World/JointTest/Head>
                 point3f physics:localPos0 = (0, 0, 0)
                 point3f physics:localPos1 = (0, 0, 0)
                 quatf physics:localRot0 = (1, 0, 0, 0)
@@ -1030,7 +1181,7 @@ def Xform "World"
                 float drive:angular:physics:targetPosition = 0
                 uniform token physics:axis = "X"
                 rel physics:body0 = </World/JointTest/RightForearm>
-                rel physics:body1 = </World/JointTest/Wrist>
+                rel physics:body1 = </World/JointTest/RightWrist>
                 float physics:breakForce = 3.4028235e38
                 float physics:breakTorque = 3.4028235e38
                 point3f physics:localPos0 = (0.18816772, -0.11995501, -0.35097864)
@@ -1049,8 +1200,8 @@ def Xform "World"
                 float drive:angular:physics:stiffness = 20
                 float drive:angular:physics:targetPosition = 0
                 uniform token physics:axis = "Y"
-                rel physics:body0 = </World/JointTest/Wrist>
-                rel physics:body1 = </World/JointTest/Palm>
+                rel physics:body0 = </World/JointTest/RightWrist>
+                rel physics:body1 = </World/JointTest/RightPalm>
                 point3f physics:localPos0 = (0.18683325, -0.09497089, -0.39638165)
                 point3f physics:localPos1 = (0.1868333, -0.094970986, -0.39638168)
                 quatf physics:localRot0 = (0.99265, 0.0285437, 0.11539604, -0.022695491)
@@ -1067,8 +1218,8 @@ def Xform "World"
                 float drive:angular:physics:stiffness = 20
                 float drive:angular:physics:targetPosition = -4.4
                 uniform token physics:axis = "Y"
-                rel physics:body0 = </World/JointTest/Palm>
-                rel physics:body1 = </World/JointTest/Thumb>
+                rel physics:body0 = </World/JointTest/RightPalm>
+                rel physics:body1 = </World/JointTest/RightThumb>
                 point3f physics:localPos0 = (0.23349442, -0.09778478, -0.45210323)
                 point3f physics:localPos1 = (0.23349442, -0.09778475, -0.45210323)
                 quatf physics:localRot0 = (0.9964513, 0.012107542, 0.08327842, 0.0016886563)
@@ -1085,8 +1236,8 @@ def Xform "World"
                 float drive:angular:physics:stiffness = 20
                 float drive:angular:physics:targetPosition = -8.900001
                 uniform token physics:axis = "Y"
-                rel physics:body0 = </World/JointTest/Palm>
-                rel physics:body1 = </World/JointTest/Index>
+                rel physics:body0 = </World/JointTest/RightPalm>
+                rel physics:body1 = </World/JointTest/RightIndex>
                 point3f physics:localPos0 = (0.27701327, -0.09952547, -0.40806836)
                 point3f physics:localPos1 = (0.2770133, -0.099525444, -0.40806836)
                 quatf physics:localRot0 = (0.9903057, -0.011475503, 0.13742168, 0.016678296)
