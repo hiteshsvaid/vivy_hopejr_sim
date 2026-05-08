@@ -7,8 +7,8 @@
                 double radius = 5
             }
             dictionary Perspective = {
-                double3 position = (0.3419022250009203, -0.5330118622546661, -0.28591567436229615)
-                double3 target = (0.1932623238227415, -0.15024231369946106, -0.4085256273388972)
+                double3 position = (-0.009166963526526658, -0.3687452084929858, -0.003974364410878776)
+                double3 target = (0.04052203642129212, 0.022156987343652512, -0.003554232046292229)
             }
             dictionary Right = {
                 double3 position = (0, -500, 0)
@@ -300,8 +300,18 @@ def Xform "World"
             }
         }
 
-        def Xform "LeftShoulderSupport"
+        def Xform "LeftShoulderSupport" (
+            prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI", "PhysicsFilteredPairsAPI"]
+        )
         {
+            vector3f physics:angularVelocity = (0, 0, 0)
+            rel physics:filteredPairs = [
+                </World/JointTest/LeftShoulderPitch>,
+                </World/JointTest/LeftUpperArm>,
+            ]
+            float physics:mass = 0.5
+            rel physics:simulationOwner
+            vector3f physics:velocity = (0, 0, 0)
             quatf xformOp:orient = (1, 0, 0, 0)
             float3 xformOp:scale = (1, 1, 1)
             float3 xformOp:translate = (0, 0, 0)
@@ -323,6 +333,24 @@ def Xform "World"
                     references = @./assets/usd/arm_v2-new_shoulder_top_left_visual.usd@
                 )
                 {
+                }
+            }
+
+            def Xform "Colliders"
+            {
+                def Cone "LeftShoulderSupport" (
+                    prepend apiSchemas = ["PhysicsCollisionAPI"]
+                )
+                {
+                    double height = 0.09135
+                    bool physics:collisionEnabled = 0
+                    rel physics:simulationOwner
+                    double radius = 0.07
+                    token visibility = "invisible"
+                    float3 xformOp:rotateXYZ = (90, 0, 180)
+                    float3 xformOp:scale = (1, 1, 1)
+                    float3 xformOp:translate = (0.0000096, 0.24622713, -0.049591437)
+                    uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ", "xformOp:scale"]
                 }
             }
         }
@@ -1207,8 +1235,18 @@ def Xform "World"
             {
                 rel physics:body0 = </World/JointTest/Chest>
                 rel physics:body1 = </World/JointTest/RightShoulderSupport>
-                point3f physics:localPos0 = (0, 0, 0)
-                point3f physics:localPos1 = (0, 0, 0)
+                point3f physics:localPos0 = (0, -0.004777086, -0.054338735)
+                point3f physics:localPos1 = (0, -0.004777086, -0.054338735)
+                quatf physics:localRot0 = (1, 0, 0, 0)
+                quatf physics:localRot1 = (1, 0, 0, 0)
+            }
+
+            def PhysicsFixedJoint "left_shoulder_support_fixed"
+            {
+                rel physics:body0 = </World/JointTest/Chest>
+                rel physics:body1 = </World/JointTest/LeftShoulderSupport>
+                point3f physics:localPos0 = (0, 0.20230971, -0.04706804)
+                point3f physics:localPos1 = (0, 0.20230971, -0.04706804)
                 quatf physics:localRot0 = (1, 0, 0, 0)
                 quatf physics:localRot1 = (1, 0, 0, 0)
             }
