@@ -7,8 +7,8 @@
                 double radius = 5
             }
             dictionary Perspective = {
-                double3 position = (0.5162270034038615, -0.386106460068897, -0.39880185641881943)
-                double3 target = (-0.10615897289595899, 0.10289614715279666, -0.5353417175977444)
+                double3 position = (0.2527403237551285, 0.06791308497755072, -0.3421356007706382)
+                double3 target = (0.012179636136252475, 0.44840635417684793, -0.4534635946402732)
             }
             dictionary Right = {
                 double3 position = (0, -500, 0)
@@ -1688,10 +1688,10 @@ def Xform "World"
                 rel physics:body1 = </World/JointTest/LeftWrist>
                 float physics:breakForce = 3.4028235e38
                 float physics:breakTorque = 3.4028235e38
-                point3f physics:localPos0 = (0.18816772, 0.11995501, -0.35097864)
-                point3f physics:localPos1 = (0.18816765, 0.11995491, -0.35097843)
-                quatf physics:localRot0 = (0.9112755, -0.11682665, -0.39319512, -0.036415026)
-                quatf physics:localRot1 = (0.91127574, -0.11682541, -0.3931949, -0.036415055)
+                point3f physics:localPos0 = (0.18532291, 0.31780812, -0.3508826)
+                point3f physics:localPos1 = (0.18532284, 0.31780803, -0.35088238)
+                quatf physics:localRot0 = (0.9258294, -0.1153276, -0.35758272, -0.04091534)
+                quatf physics:localRot1 = (0.9258296, -0.11532636, -0.35758257, -0.04091542)
                 float physics:lowerLimit = -30.172441
                 float physics:upperLimit = 30.278606
             }
@@ -1706,8 +1706,8 @@ def Xform "World"
                 uniform token physics:axis = "Y"
                 rel physics:body0 = </World/JointTest/LeftWrist>
                 rel physics:body1 = </World/JointTest/LeftPalm>
-                point3f physics:localPos0 = (0.18683325, 0.09497089, -0.39638165)
-                point3f physics:localPos1 = (0.1868333, 0.094970986, -0.39638168)
+                point3f physics:localPos0 = (0.18478622, 0.2970268, -0.39503664)
+                point3f physics:localPos1 = (0.18478628, 0.2970269, -0.39503667)
                 quatf physics:localRot0 = (0.99265, 0.0285437, 0.11539604, -0.022695491)
                 quatf physics:localRot1 = (0.99264985, 0.028543014, 0.115396835, -0.022696394)
                 float physics:lowerLimit = -70.645424
@@ -1724,8 +1724,8 @@ def Xform "World"
                 uniform token physics:axis = "Y"
                 rel physics:body0 = </World/JointTest/LeftPalm>
                 rel physics:body1 = </World/JointTest/LeftThumb>
-                point3f physics:localPos0 = (0.23349442, 0.09778478, -0.45210323)
-                point3f physics:localPos1 = (0.23349442, 0.09778475, -0.45210323)
+                point3f physics:localPos0 = (0.2325652, 0.29505867, -0.45130885)
+                point3f physics:localPos1 = (0.2325652, 0.29505864, -0.45130885)
                 quatf physics:localRot0 = (0.9964513, 0.012107542, 0.08327842, 0.0016886563)
                 quatf physics:localRot1 = (0.9964514, 0.012108011, 0.08327804, 0.0016889471)
                 float physics:lowerLimit = -49.082954
@@ -1742,8 +1742,8 @@ def Xform "World"
                 uniform token physics:axis = "Y"
                 rel physics:body0 = </World/JointTest/LeftPalm>
                 rel physics:body1 = </World/JointTest/LeftIndex>
-                point3f physics:localPos0 = (0.27701327, 0.09952547, -0.40806836)
-                point3f physics:localPos1 = (0.2770133, 0.099525444, -0.40806836)
+                point3f physics:localPos0 = (0.2757072, 0.29376063, -0.4065916)
+                point3f physics:localPos1 = (0.27570722, 0.29376063, -0.4065916)
                 quatf physics:localRot0 = (0.9903057, -0.011475503, 0.13742168, 0.016678296)
                 quatf physics:localRot1 = (0.9903057, -0.011475579, 0.13742182, 0.016678197)
                 float physics:lowerLimit = -94.20118
@@ -1800,8 +1800,8 @@ def Xform "World"
                 rel physics:body1 = </World/JointTest/RightWrist>
                 float physics:breakForce = 3.4028235e38
                 float physics:breakTorque = 3.4028235e38
-                point3f physics:localPos0 = (0.18816772, -0.11995501, -0.35097864)
-                point3f physics:localPos1 = (0.18816765, -0.11995491, -0.35097843)
+                point3f physics:localPos0 = (0.18658559, -0.12001365, -0.3526458)
+                point3f physics:localPos1 = (0.18658552, -0.120013535, -0.3526456)
                 quatf physics:localRot0 = (0.9112755, -0.11682665, -0.39319512, -0.036415026)
                 quatf physics:localRot1 = (0.91127574, -0.11682541, -0.3931949, -0.036415055)
                 float physics:lowerLimit = -30.172441
