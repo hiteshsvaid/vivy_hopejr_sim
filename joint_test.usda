@@ -7,8 +7,8 @@
                 double radius = 5
             }
             dictionary Perspective = {
-                double3 position = (0.6261385359837103, 0.2523191155269409, -0.1950807952870486)
-                double3 target = (-0.05192055347158708, 0.29236461055085905, -0.2659651056080642)
+                double3 position = (0.9387823097130351, 0.07182159917906751, -0.06490960417953448)
+                double3 target = (-0.05080636504063796, 0.2054165766276873, -0.16911608097052544)
             }
             dictionary Right = {
                 double3 position = (0, -500, 0)
@@ -832,8 +832,18 @@ def Xform "World"
             }
         }
 
-        def Xform "LeftForearm"
+        def Xform "LeftForearm" (
+            prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI", "PhysicsFilteredPairsAPI"]
+        )
         {
+            vector3f physics:angularVelocity = (0, 0, 0)
+            rel physics:filteredPairs = [
+                </World/JointTest/LeftLowerElbow>,
+                </World/JointTest/LeftWrist>,
+            ]
+            float physics:mass = 0.3
+            rel physics:simulationOwner
+            vector3f physics:velocity = (0, 0, 0)
             quatf xformOp:orient = (1, 0, 0, 0)
             float3 xformOp:scale = (1, 1, 1)
             float3 xformOp:translate = (0, 0, 0)
@@ -841,6 +851,7 @@ def Xform "World"
 
             def Xform "Visuals"
             {
+                token visibility = "inherited"
                 float3 xformOp:rotateXYZ = (180, 0, 0)
                 float3 xformOp:scale = (0.001, 0.001, 0.001)
                 uniform token[] xformOpOrder = ["xformOp:rotateXYZ", "xformOp:scale"]
@@ -855,6 +866,24 @@ def Xform "World"
                     references = @./assets/usd/arm_v2-forearm_r_left_visual.usd@
                 )
                 {
+                }
+            }
+
+            def Xform "Colliders"
+            {
+                def Cylinder "LeftForearm" (
+                    prepend apiSchemas = ["PhysicsCollisionAPI"]
+                )
+                {
+                    float3[] extent = [(-0.03499925, -0.03499925, -0.03422154), (0.03499925, 0.03499925, 0.03422154)]
+                    double height = 0.06844307
+                    rel physics:simulationOwner
+                    double radius = 0.03499925
+                    token visibility = "invisible"
+                    quatf xformOp:orient = (-0.3768363, -0.00949822, -0.92619944, 0.007665665)
+                    float3 xformOp:scale = (1, 1, 0.9144084)
+                    float3 xformOp:translate = (0.11335141, 0.31916952, -0.32082835)
+                    uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
                 }
             }
         }
@@ -878,6 +907,7 @@ def Xform "World"
 
             def Xform "Visuals"
             {
+                token visibility = "inherited"
                 float3 xformOp:rotateXYZ = (180, 0, 0)
                 float3 xformOp:scale = (0.001, 0.001, 0.001)
                 uniform token[] xformOpOrder = ["xformOp:rotateXYZ", "xformOp:scale"]
@@ -1484,6 +1514,26 @@ def Xform "World"
                 quatf physics:localRot1 = (0.70710677, 0, 0, 0.70710677)
                 float physics:lowerLimit = -79.51286
                 float physics:upperLimit = 27.312378
+            }
+
+            def PhysicsRevoluteJoint "left_forearm_twist" (
+                prepend apiSchemas = ["PhysicsDriveAPI:angular"]
+            )
+            {
+                float drive:angular:physics:damping = 5
+                float drive:angular:physics:stiffness = 20
+                float drive:angular:physics:targetPosition = 0
+                uniform token physics:axis = "X"
+                rel physics:body0 = </World/JointTest/LeftLowerElbow>
+                rel physics:body1 = </World/JointTest/LeftForearm>
+                float physics:breakForce = 3.4028235e38
+                float physics:breakTorque = 3.4028235e38
+                point3f physics:localPos0 = (0.08066095, 0.31956032, -0.28904092)
+                point3f physics:localPos1 = (0.08066095, 0.31956032, -0.28904092)
+                quatf physics:localRot0 = (0.9275554, -0.0059026917, 0.37344265, 0.012112523)
+                quatf physics:localRot1 = (0.9275554, -0.0059026917, 0.37344265, 0.012112523)
+                float physics:lowerLimit = -89.295784
+                float physics:upperLimit = 89.105156
             }
 
             def PhysicsRevoluteJoint "right_elbow" (
