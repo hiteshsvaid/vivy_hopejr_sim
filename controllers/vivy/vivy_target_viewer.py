@@ -12,6 +12,7 @@ from scipy.spatial.transform import Rotation
 
 SIM_CONFIG_PATH = Path("/home/viaan/huggingface/lerobot/src/lerobot/robots/vivy/vivy_global_config.json")
 KINEMATICS_PATH = Path("/home/viaan/huggingface/lerobot/src/lerobot/robots/vivy/vivy_arm_kinematics.py")
+QUEST_TELEOP_MAPPER_PATH = Path("/home/viaan/vivy_hopejr_sim/controllers/quest_teleop_mapper.py")
 TELEOP_STATE_PATH = Path("/home/viaan/huggingface/lerobot/src/lerobot/robots/vivy/fanout/teleop_state.py")
 TELEOP_DEBUG_VISUALS_PATH = Path("/home/viaan/vivy_hopejr_sim/ui/teleop_debug_visuals.py")
 STAGE_IO_PATH = Path("/home/viaan/vivy_hopejr_sim/controllers/stage_io.py")
@@ -43,6 +44,16 @@ def _load_sim_config() -> dict:
 def _load_kinematics_class():
     module = _load_module("vivy_target_viewer_kinematics", KINEMATICS_PATH)
     return getattr(module, "VivyArmKinematics", module.HopeJrArmKinematics)
+
+
+def _load_kinematics_make_pose():
+    module = _load_module("vivy_target_viewer_kinematics_make_pose", KINEMATICS_PATH)
+    return module.make_pose
+
+
+def _load_quest_teleop_mapper_class():
+    module = _load_module("vivy_target_viewer_quest_teleop_mapper", QUEST_TELEOP_MAPPER_PATH)
+    return module.QuestTeleopMapper
 
 
 def _load_shared_signal_helpers():
@@ -114,10 +125,25 @@ def _load_json_file(path: Path) -> dict | None:
     return payload if isinstance(payload, dict) else None
 
 
+def _parse_position_axes(value: str) -> tuple[int, int, int]:
+    axis_map = {"x": 0, "y": 1, "z": 2}
+    cleaned = str(value).strip().lower()
+    if len(cleaned) != 3 or any(ch not in axis_map for ch in cleaned):
+        return (0, 1, 2)
+    return tuple(axis_map[ch] for ch in cleaned)
+
+
 class VivyTargetViewer:
     def __init__(self, *, signal_path: str | Path | None = None, interval_s: float = 0.05):
         default_signal_path, read_teleop_state = _load_shared_signal_helpers()
         VivyArmKinematics = _load_kinematics_class()
+        make_pose = _load_kinematics_make_pose()
+        QuestTeleopMapper = _load_quest_teleop_mapper_class()
+        HopeJrStageIo = _load_stage_io_class()
+        TeleopDebugVisuals = _load_visuals_class()
+        VivySidePanel = _load_side_panel_class()
+        VivyFlowPanel = _load_flow_panel_class()
+        VivyFlowDetailPanel = _load_flow_detail_panel_class()
         self._read_teleop_state = read_teleop_state
         self.signal_path = Path(default_signal_path if signal_path is None else signal_path)
         self.interval_s = float(interval_s)
@@ -159,6 +185,31 @@ class VivyTargetViewer:
             [float(self.sim_config["joints"][name]["max_deg"]) for name in self.stage_joint_names],
             dtype=float,
         )
+        ik_chains = dict(self.sim_config.get("ik_chains") or {})
+        left_chain_config = dict(ik_chains.get("left_arm") or {})
+        left_end_effector_config = dict(left_chain_config.get("end_effector") or {})
+        left_end_effector_path = str(left_end_effector_config.get("frame_path", "/World/JointTest/LeftForearm/EndEffector"))
+        left_joint_names = list(left_chain_config.get("joint_names") or [])
+        if not left_joint_names:
+            left_joint_names = list(self.ik_joint_names)
+        self.left_kinematics = VivyArmKinematics.from_json(SIM_CONFIG_PATH, chain_name="left_arm")
+        self.left_position_scale = float(controller_defaults.get("position_scale", 1.0))
+        self.left_world_offset = np.asarray(controller_defaults.get("world_offset", [0.0, 0.0, 0.0]), dtype=float)
+        self.left_world_rotate_xyz = np.asarray(controller_defaults.get("world_rotate_xyz", [0.0, 0.0, 0.0]), dtype=float)
+        self.left_quest_position_axes = _parse_position_axes(str(controller_defaults.get("quest_position_axes", "xyz")))
+        self.left_quest_position_signs = np.asarray(controller_defaults.get("quest_position_signs", [1.0, 1.0, 1.0]), dtype=float)
+        self.left_teleop_mapper = QuestTeleopMapper(
+            position_scale=self.left_position_scale,
+            world_offset=self.left_world_offset,
+            world_rotate_xyz_deg=self.left_world_rotate_xyz,
+            quest_position_axes=self.left_quest_position_axes,
+            quest_position_signs=self.left_quest_position_signs,
+            position_only=bool(controller_defaults.get("position_only", True)),
+            anchor_delay_s=float(controller_defaults.get("anchor_delay_s", 1.0)),
+            quest_deadband_m=float(controller_defaults.get("quest_deadband_m", 0.01)),
+            make_pose=make_pose,
+            hand_key="left_hand",
+        )
         self.controlled_min_joint_positions_deg = np.asarray(
             [float(self.sim_config["joints"][name]["min_deg"]) for name in self.joint_names],
             dtype=float,
@@ -175,13 +226,14 @@ class VivyTargetViewer:
         self.model_neutral_pose = self.kinematics.forward_kinematics(neutral_deg)
         self.model_to_stage_transform = np.eye(4)
         self._anchor_model_to_stage_transform = np.eye(4)
+        self.left_stage_io = HopeJrStageIo(
+            articulation_root_path=self.articulation_root_path,
+            joint_root_path=self.joint_root_path,
+            end_effector_path=left_end_effector_path,
+            joint_names=left_joint_names,
+        )
         self._stage_anchor_pose = None
         self._last_waiting_for_anchor = True
-        HopeJrStageIo = _load_stage_io_class()
-        TeleopDebugVisuals = _load_visuals_class()
-        VivySidePanel = _load_side_panel_class()
-        VivyFlowPanel = _load_flow_panel_class()
-        VivyFlowDetailPanel = _load_flow_detail_panel_class()
         self.stage_io = HopeJrStageIo(
             articulation_root_path=self.articulation_root_path,
             joint_root_path=self.joint_root_path,
@@ -488,6 +540,21 @@ class VivyTargetViewer:
         except Exception:
             return None
 
+    @staticmethod
+    def _extract_left_hand_state(payload: dict) -> dict | None:
+        normalized = payload.get("normalized")
+        if isinstance(normalized, dict):
+            left_hand = normalized.get("left_hand")
+            if isinstance(left_hand, dict):
+                return left_hand
+        parsed_message = payload.get("parsed_message")
+        if isinstance(parsed_message, dict):
+            for key in ("left_hand", "left", "leftController", "LeftHand"):
+                left_hand = parsed_message.get(key)
+                if isinstance(left_hand, dict):
+                    return left_hand
+        return None
+
     def _on_update(self, _event: object) -> None:
         now = time.monotonic()
         if now - self._last_tick_time < self.interval_s:
@@ -506,10 +573,6 @@ class VivyTargetViewer:
         real_feedback = self._read_real_feedback()
         real_joint_positions_deg = self._read_real_feedback_joint_positions_deg(real_feedback)
         panel_payload = self._inject_real_feedback_rows(payload, real_feedback)
-        try:
-            self.side_panel.update(panel_payload)
-        except Exception:
-            pass
         try:
             self.flow_panel.update(payload, flow_control)
         except Exception:
@@ -606,6 +669,36 @@ class VivyTargetViewer:
                     )[:3, 3] + self.world_offset
             except Exception:
                 pass
+        left_map_result = None
+        left_hand_payload = None
+        if stage is not None:
+            left_hand = self._extract_left_hand_state(payload)
+            if isinstance(left_hand, dict):
+                left_hand_payload = left_hand
+                left_joint_targets_deg = self.left_stage_io.read_current_joint_targets_deg(stage)
+                if left_joint_targets_deg is not None:
+                    left_current_sim_pose = self.left_kinematics.forward_kinematics(
+                        np.asarray(left_joint_targets_deg, dtype=float)
+                    )
+                    left_stage_pose = self.left_stage_io.read_stage_end_effector_pose(stage)
+                    left_map_result = self.left_teleop_mapper.map_packet(
+                        {"normalized": {"left_hand": left_hand}},
+                        current_sim_pose=left_current_sim_pose,
+                        current_stage_pose=left_stage_pose,
+                        anchor_joint_targets_deg=np.asarray(left_joint_targets_deg, dtype=float),
+                    )
+        payload["left_hand_state"] = left_hand_payload
+        payload["left_follow_target_enabled"] = None if left_map_result is None else left_map_result.follow_target_enabled
+        payload["left_waiting_for_anchor"] = None if left_map_result is None else left_map_result.waiting_for_anchor
+        payload["left_anchor_position"] = None if left_map_result is None else left_map_result.quest_anchor_position
+        panel_payload["left_hand_state"] = left_hand_payload
+        panel_payload["left_follow_target_enabled"] = None if left_map_result is None else left_map_result.follow_target_enabled
+        panel_payload["left_waiting_for_anchor"] = None if left_map_result is None else left_map_result.waiting_for_anchor
+        panel_payload["left_anchor_position"] = None if left_map_result is None else left_map_result.quest_anchor_position
+        try:
+            self.side_panel.update(panel_payload)
+        except Exception:
+            pass
         show_pitch_frames = bool(flow_control.get("show_pitch_frames", False))
         pitch_visual = self._build_pitch_visual(stage) if show_pitch_frames else None
         self.visuals.enabled = bool(flow_control.get("sim_view_enabled", True))
@@ -615,6 +708,9 @@ class VivyTargetViewer:
             quest_current_position=np.asarray((payload.get("hand_state") or {}).get("position") or [0.0, 0.0, 0.0], dtype=float),
             quest_mapped_position=quest_mapped_position,
             sim_target_position=sim_target_position,
+            left_quest_mapped_position=None if left_map_result is None else left_map_result.quest_mapped_position_stage,
+            left_sim_target_position=None if left_map_result is None else left_map_result.sim_target_position_stage,
+            left_waiting_for_anchor=None if left_map_result is None else left_map_result.waiting_for_anchor,
             reference_position=stage_pose[:3, 3],
             actual_end_effector_position=stage_pose[:3, 3],
             actual_end_effector_pose=stage_pose,

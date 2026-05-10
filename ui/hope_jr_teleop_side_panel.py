@@ -162,17 +162,19 @@ class HopeJrTeleopSidePanel:
 
                     with ui.VStack(spacing=2):
                         ui.Label("MARKERS", style=section_style)
-                        with ui.VGrid(column_count=4, row_height=18, column_widths=[18, 0, 18, 0], spacing=6):
+                        with ui.VGrid(column_count=2, row_height=18, column_widths=[18, 0], spacing=6):
                             with ui.ZStack(width=12, height=12):
                                 ui.Rectangle(style={"background_color": 0xFFFF8000})
-                            ui.Label("QuestMapped", word_wrap=True)
+                            ui.Label("RightQuestMapped", word_wrap=True)
                             with ui.ZStack(width=12, height=12):
                                 ui.Rectangle(style={"background_color": 0xFFFF0000})
-                            ui.Label("SimTarget live", word_wrap=True)
-
+                            ui.Label("RightSimTarget live", word_wrap=True)
                             with ui.ZStack(width=12, height=12):
-                                ui.Rectangle(style={"background_color": 0xFF00FF00})
-                            ui.Label("SimTarget waiting", word_wrap=True)
+                                ui.Rectangle(style={"background_color": 0xFF66AFFF})
+                            ui.Label("LeftQuestMapped", word_wrap=True)
+                            with ui.ZStack(width=12, height=12):
+                                ui.Rectangle(style={"background_color": 0xFF2A66FF})
+                            ui.Label("LeftSimTarget live", word_wrap=True)
                             with ui.ZStack(width=12, height=12):
                                 ui.Rectangle(style={"background_color": 0xFF1A80FF})
                             ui.Label("ActualEndEffector", word_wrap=True)

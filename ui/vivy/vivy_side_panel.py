@@ -22,7 +22,7 @@ class VivySidePanel:
         self._event_rows = 12
         self._event_history_limit = 80
         self._event_history: list[dict[str, str]] = []
-        self._last_event_state: dict[str, Any] | None = None
+        self._last_event_state: dict[str, dict[str, Any]] = {}
         self._bus_stale_since_monotonic: float | None = None
         self._bus_stale_event_logged = False
 
@@ -176,89 +176,101 @@ class VivySidePanel:
             self._event_history.insert(0, event)
         del self._event_history[self._event_history_limit :]
 
-    def _update_event_history(self, payload: dict[str, Any], *, bus_live: bool, bus_status: str) -> None:
+    def _update_event_history(
+        self,
+        payload: dict[str, Any],
+        *,
+        bus_live: bool,
+        bus_status: str,
+    ) -> None:
         timestamp = payload.get("timestamp")
         now_monotonic = time.monotonic()
-        waiting_for_anchor = bool(payload.get("waiting_for_anchor", True))
-        anchor_captured = payload.get("quest_anchor_position") is not None
-        freeze_active = bool(payload.get("freeze_active", False))
-        freeze_joint_name = str(payload.get("freeze_joint_name") or "").strip() or None
-        follow_target_enabled = bool(payload.get("follow_target_enabled", False))
-        hand = payload.get("hand_state") or {}
-        grip = float(hand.get("grip", 0.0)) if isinstance(hand, dict) else 0.0
         recording_status = str(payload.get("recording_status") or "").strip() or None
         recording_name = str(payload.get("recording_name") or "").strip() or None
-        state = {
-            "waiting_for_anchor": waiting_for_anchor,
-            "anchor_captured": anchor_captured,
-            "freeze_active": freeze_active,
-            "freeze_joint_name": freeze_joint_name,
-            "follow_target_enabled": follow_target_enabled,
-            "bus_live": bus_live,
-            "bus_status": bus_status,
-            "recording_status": recording_status,
-            "recording_name": recording_name,
+        hand_sources = {
+            "Right": {
+                "waiting_for_anchor": bool(payload.get("waiting_for_anchor", True)),
+                "anchor_captured": payload.get("quest_anchor_position") is not None,
+                "freeze_active": bool(payload.get("freeze_active", False)),
+                "freeze_joint_name": str(payload.get("freeze_joint_name") or "").strip() or None,
+                "follow_target_enabled": bool(payload.get("follow_target_enabled", False)),
+            }
         }
-        previous = self._last_event_state
-        if previous is None:
-            if bus_live:
-                self._bus_stale_since_monotonic = None
-                self._bus_stale_event_logged = False
+        left_waiting_for_anchor = payload.get("left_waiting_for_anchor")
+        left_follow_target_enabled = payload.get("left_follow_target_enabled")
+        left_hand_state = payload.get("left_hand_state")
+        if left_waiting_for_anchor is not None or left_follow_target_enabled is not None or isinstance(left_hand_state, dict):
+            hand_sources["Left"] = {
+                "waiting_for_anchor": bool(left_waiting_for_anchor if left_waiting_for_anchor is not None else True),
+                "anchor_captured": left_follow_target_enabled is not None,
+                "freeze_active": False,
+                "freeze_joint_name": None,
+                "follow_target_enabled": bool(left_follow_target_enabled) if left_follow_target_enabled is not None else False,
+            }
+
+        for hand_label, state in hand_sources.items():
+            previous = self._last_event_state.get(hand_label)
+            source_prefix = f"{hand_label}: "
+            if previous is None:
+                if hand_label == "Right" and bus_live:
+                    self._bus_stale_since_monotonic = None
+                    self._bus_stale_event_logged = False
+                elif hand_label == "Right":
+                    self._bus_stale_since_monotonic = now_monotonic
+                    self._bus_stale_event_logged = False
+                self._push_event(
+                    source_prefix + ("Startup neutral" if state["waiting_for_anchor"] else "Startup live"),
+                    level="info",
+                    timestamp=timestamp,
+                )
             else:
-                self._bus_stale_since_monotonic = now_monotonic
-                self._bus_stale_event_logged = False
-            self._push_event(
-                "Startup neutral" if waiting_for_anchor else "Startup live",
-                level="info",
-                timestamp=timestamp,
-            )
-        else:
-            if waiting_for_anchor and not bool(previous.get("waiting_for_anchor", True)):
-                self._push_event("Going to neutral", level="warn", timestamp=timestamp)
-            elif not waiting_for_anchor and bool(previous.get("waiting_for_anchor", True)):
-                self._push_event("Anchor captured", level="good", timestamp=timestamp)
-            elif anchor_captured and not bool(previous.get("anchor_captured", False)):
-                self._push_event("Anchor captured", level="good", timestamp=timestamp)
+                if state["waiting_for_anchor"] and not bool(previous.get("waiting_for_anchor", True)):
+                    self._push_event(source_prefix + "Going to neutral", level="warn", timestamp=timestamp)
+                elif not state["waiting_for_anchor"] and bool(previous.get("waiting_for_anchor", True)):
+                    self._push_event(source_prefix + "Anchor captured", level="good", timestamp=timestamp)
+                elif state["anchor_captured"] and not bool(previous.get("anchor_captured", False)):
+                    self._push_event(source_prefix + "Anchor captured", level="good", timestamp=timestamp)
 
-            if freeze_active and not bool(previous.get("freeze_active", False)):
-                joint_text = "" if freeze_joint_name is None else f" on {freeze_joint_name}"
-                self._push_event(f"Limit freeze engaged{joint_text}", level="bad", timestamp=timestamp)
-            elif not freeze_active and bool(previous.get("freeze_active", False)):
-                self._push_event("Limit freeze cleared", level="good", timestamp=timestamp)
+                if state["freeze_active"] and not bool(previous.get("freeze_active", False)):
+                    joint_text = "" if state["freeze_joint_name"] is None else f" on {state['freeze_joint_name']}"
+                    self._push_event(source_prefix + f"Limit freeze engaged{joint_text}", level="bad", timestamp=timestamp)
+                elif not state["freeze_active"] and bool(previous.get("freeze_active", False)):
+                    self._push_event(source_prefix + "Limit freeze cleared", level="good", timestamp=timestamp)
 
-            if follow_target_enabled and not bool(previous.get("follow_target_enabled", False)):
-                self._push_event("Motion tracking on", level="good", timestamp=timestamp)
-            elif not follow_target_enabled and bool(previous.get("follow_target_enabled", False)):
-                self._push_event("Motion tracking off", level="warn", timestamp=timestamp)
+                if state["follow_target_enabled"] and not bool(previous.get("follow_target_enabled", False)):
+                    self._push_event(source_prefix + "Motion tracking on", level="good", timestamp=timestamp)
+                elif not state["follow_target_enabled"] and bool(previous.get("follow_target_enabled", False)):
+                    self._push_event(source_prefix + "Motion tracking off", level="warn", timestamp=timestamp)
 
-            stale_was_logged = self._bus_stale_event_logged
-            if bus_live:
-                self._bus_stale_since_monotonic = None
-                self._bus_stale_event_logged = False
-            elif bool(previous.get("bus_live", False)) and self._bus_stale_since_monotonic is None:
-                self._bus_stale_since_monotonic = now_monotonic
+                if hand_label == "Right":
+                    stale_was_logged = self._bus_stale_event_logged
+                    if bus_live:
+                        self._bus_stale_since_monotonic = None
+                        self._bus_stale_event_logged = False
+                    elif bool(previous.get("bus_live", False)) and self._bus_stale_since_monotonic is None:
+                        self._bus_stale_since_monotonic = now_monotonic
 
-            if bus_live and not bool(previous.get("bus_live", False)) and stale_was_logged:
-                self._push_event(f"Bus live ({bus_status})", level="good", timestamp=timestamp)
-            elif (
-                not bus_live
-                and self._bus_stale_since_monotonic is not None
-                and not self._bus_stale_event_logged
-                and (now_monotonic - self._bus_stale_since_monotonic) >= self._BUS_STALE_EVENT_DELAY_S
-            ):
-                self._push_event(f"Bus stale ({bus_status})", level="warn", timestamp=timestamp)
-                self._bus_stale_event_logged = True
+                    if bus_live and not bool(previous.get("bus_live", False)) and stale_was_logged:
+                        self._push_event(source_prefix + f"Bus live ({bus_status})", level="good", timestamp=timestamp)
+                    elif (
+                        not bus_live
+                        and self._bus_stale_since_monotonic is not None
+                        and not self._bus_stale_event_logged
+                        and (now_monotonic - self._bus_stale_since_monotonic) >= self._BUS_STALE_EVENT_DELAY_S
+                    ):
+                        self._push_event(source_prefix + f"Bus stale ({bus_status})", level="warn", timestamp=timestamp)
+                        self._bus_stale_event_logged = True
 
-            if recording_status != previous.get("recording_status"):
-                if recording_status == "recording":
-                    name_text = "" if not recording_name else f" {recording_name}"
-                    self._push_event(f"Recording started{name_text}", level="good", timestamp=timestamp)
-                elif recording_status == "recording_ended":
-                    name_text = "" if not recording_name else f" {recording_name}"
-                    self._push_event(f"Recording stopped{name_text}", level="warn", timestamp=timestamp)
-                elif recording_status == "waiting_for_a" and recording_name:
-                    self._push_event(f"Recording armed {recording_name}", level="info", timestamp=timestamp)
-        self._last_event_state = state
+                if hand_label == "Right" and recording_status != previous.get("recording_status"):
+                    if recording_status == "recording":
+                        name_text = "" if not recording_name else f" {recording_name}"
+                        self._push_event(source_prefix + f"Recording started{name_text}", level="good", timestamp=timestamp)
+                    elif recording_status == "recording_ended":
+                        name_text = "" if not recording_name else f" {recording_name}"
+                        self._push_event(source_prefix + f"Recording stopped{name_text}", level="warn", timestamp=timestamp)
+                    elif recording_status == "waiting_for_a" and recording_name:
+                        self._push_event(source_prefix + f"Recording armed {recording_name}", level="info", timestamp=timestamp)
+            self._last_event_state[hand_label] = state
 
     def _event_style(self, level: str) -> dict[str, int]:
         color = self._TEXT_NEUTRAL

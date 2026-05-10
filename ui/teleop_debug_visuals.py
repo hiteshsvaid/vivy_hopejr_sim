@@ -74,8 +74,13 @@ class TeleopDebugVisuals:
         self._set_translate(prim, sdf, gf, position)
         self._set_order(prim, ["xformOp:translate"])
 
-    def _define_target_cross(self, stage, usd_geom, sdf, gf, sim_target_position, waiting_for_anchor: bool) -> None:
-        root_path = f"{self.teleop_debug_root}/SimTargetCross"
+    def _remove_prim_if_exists(self, stage, prim_path: str) -> None:
+        prim = stage.GetPrimAtPath(prim_path)
+        if prim.IsValid():
+            stage.RemovePrim(prim_path)
+
+    def _define_target_cross(self, stage, usd_geom, sdf, gf, name: str, sim_target_position, waiting_for_anchor: bool) -> None:
+        root_path = f"{self.teleop_debug_root}/{name}"
         root = stage.DefinePrim(root_path, "Xform")
         self._set_translate(root, sdf, gf, sim_target_position)
         self._set_order(root, ["xformOp:translate"])
@@ -379,6 +384,9 @@ class TeleopDebugVisuals:
         quest_current_position: np.ndarray,
         quest_mapped_position: np.ndarray,
         sim_target_position: np.ndarray,
+        left_quest_mapped_position: np.ndarray | None = None,
+        left_sim_target_position: np.ndarray | None = None,
+        left_waiting_for_anchor: bool | None = None,
         reference_position: np.ndarray | None = None,
         actual_end_effector_position: np.ndarray | None = None,
         actual_end_effector_pose: np.ndarray | None = None,
@@ -395,12 +403,41 @@ class TeleopDebugVisuals:
 
         self._ensure_ground_plane(stage, UsdGeom, Sdf, Gf)
         stage.DefinePrim(self.teleop_debug_root, "Xform")
-        sim_target_color = (0.0, 1.0, 0.0) if waiting_for_anchor else (1.0, 0.0, 0.0)
         if reference_position is not None:
             self._define_scene_backdrop(stage, UsdGeom, Sdf, Gf, reference_position)
-        self._define_marker_sphere(stage, UsdGeom, Sdf, Gf, "QuestMapped", quest_mapped_position, (1.0, 0.5, 0.0), 0.0045)
-        self._define_marker_sphere(stage, UsdGeom, Sdf, Gf, "SimTarget", sim_target_position, sim_target_color, 0.0065)
-        self._define_target_cross(stage, UsdGeom, Sdf, Gf, sim_target_position, waiting_for_anchor=waiting_for_anchor)
+        self._remove_prim_if_exists(stage, f"{self.teleop_debug_root}/QuestMapped")
+        self._remove_prim_if_exists(stage, f"{self.teleop_debug_root}/SimTarget")
+        self._remove_prim_if_exists(stage, f"{self.teleop_debug_root}/SimTargetCross")
+        if left_quest_mapped_position is None or left_sim_target_position is None:
+            self._remove_prim_if_exists(stage, f"{self.teleop_debug_root}/LeftQuestMapped")
+            self._remove_prim_if_exists(stage, f"{self.teleop_debug_root}/LeftSimTarget")
+            self._remove_prim_if_exists(stage, f"{self.teleop_debug_root}/LeftSimTargetCross")
+        self._define_marker_sphere(stage, UsdGeom, Sdf, Gf, "RightQuestMapped", quest_mapped_position, (1.0, 0.5, 0.0), 0.0045)
+        self._define_marker_sphere(
+            stage,
+            UsdGeom,
+            Sdf,
+            Gf,
+            "RightSimTarget",
+            sim_target_position,
+            (0.0, 1.0, 0.0) if waiting_for_anchor else (1.0, 0.0, 0.0),
+            0.0065,
+        )
+        self._define_target_cross(stage, UsdGeom, Sdf, Gf, "RightSimTargetCross", sim_target_position, waiting_for_anchor=waiting_for_anchor)
+        if left_quest_mapped_position is not None and left_sim_target_position is not None:
+            left_waiting = bool(waiting_for_anchor if left_waiting_for_anchor is None else left_waiting_for_anchor)
+            self._define_marker_sphere(stage, UsdGeom, Sdf, Gf, "LeftQuestMapped", left_quest_mapped_position, (0.3, 0.7, 1.0), 0.0045)
+            self._define_marker_sphere(
+                stage,
+                UsdGeom,
+                Sdf,
+                Gf,
+                "LeftSimTarget",
+                left_sim_target_position,
+                (0.0, 1.0, 0.0) if left_waiting else (0.1, 0.45, 1.0),
+                0.0065,
+            )
+            self._define_target_cross(stage, UsdGeom, Sdf, Gf, "LeftSimTargetCross", left_sim_target_position, waiting_for_anchor=left_waiting)
         if show_pitch_frames:
             self._define_pitch_frames(stage, UsdGeom, Sdf, Gf, pitch_visual)
         else:

@@ -265,6 +265,29 @@ class HopeJrSimIkController:
             quest_deadband_m=quest_deadband_m,
             make_pose=self.kinematics_module.make_pose,
         )
+        ik_chains = _get_config_section(self.sim_config, "ik_chains")
+        left_chain_config = _get_config_section(ik_chains, "left_arm")
+        left_end_effector_config = _get_config_section(left_chain_config, "end_effector")
+        left_end_effector_path = str(left_end_effector_config.get("frame_path", "/World/JointTest/LeftForearm/EndEffector"))
+        self.left_model = self.kinematics_module.HopeJrArmKinematics.from_json(
+            DEFAULT_SIM_CONFIG_PATH
+            if lerobot_repo == DEFAULT_LEROBOT_REPO
+            else lerobot_repo / "src/lerobot/robots/vivy/vivy_global_config.json",
+            chain_name="left_arm",
+        )
+        self.left_teleop_mapper = QuestTeleopMapper(
+            position_scale=position_scale,
+            world_offset=world_offset,
+            world_rotate_xyz_deg=world_rotate_xyz_deg,
+            quest_position_axes=quest_position_axes,
+            quest_position_signs=quest_position_signs,
+            position_only=position_only,
+            anchor_delay_s=anchor_delay_s,
+            grip_threshold=grip_threshold,
+            quest_deadband_m=quest_deadband_m,
+            make_pose=self.kinematics_module.make_pose,
+            hand_key="left_hand",
+        )
         self.teleop_debug_visuals = TeleopDebugVisuals(teleop_debug_root=self.teleop_debug_root, enabled=self.show_teleop_debug)
         self._a_pressed_last = False
         self.last_hand_state = {}
@@ -272,6 +295,12 @@ class HopeJrSimIkController:
         self.limit_push_freeze_active = False
         self.limit_push_freeze_streak = 0
         self.limit_push_freeze_payload: dict[str, Any] | None = None
+        self.left_stage_io = HopeJrStageIo(
+            articulation_root_path=self.articulation_root_path,
+            joint_root_path=self.joint_root_path,
+            end_effector_path=left_end_effector_path,
+            joint_names=self.left_model.joint_names,
+        )
         self.stage_io = HopeJrStageIo(
             articulation_root_path=self.articulation_root_path,
             joint_root_path=self.joint_root_path,
@@ -335,12 +364,29 @@ class HopeJrSimIkController:
         )
         if map_result is None:
             return None
+        left_map_result = None
+        left_current_joint_targets_deg = None
+        left_stage_end_effector_pose = None
+        if stage is not None:
+            left_current_joint_targets_deg = self.left_stage_io.read_current_joint_targets_deg(stage)
+        if left_current_joint_targets_deg is not None:
+            left_current_sim_pose = self.left_model.forward_kinematics(np.asarray(left_current_joint_targets_deg, dtype=float))
+            left_stage_end_effector_pose = self.left_stage_io.read_stage_end_effector_pose(stage)
+            left_map_result = self.left_teleop_mapper.map_packet(
+                packet,
+                current_sim_pose=left_current_sim_pose,
+                current_stage_pose=left_stage_end_effector_pose,
+                anchor_joint_targets_deg=np.asarray(left_current_joint_targets_deg, dtype=float),
+            )
         if map_result.waiting_for_anchor:
             self._update_teleop_debug_visuals(
                 quest_anchor_position=map_result.quest_current_position,
                 quest_current_position=map_result.quest_current_position,
                 quest_mapped_position=map_result.quest_mapped_position_stage,
                 sim_target_position=map_result.sim_target_position_stage,
+                left_quest_mapped_position=None if left_map_result is None else left_map_result.quest_mapped_position_stage,
+                left_sim_target_position=None if left_map_result is None else left_map_result.sim_target_position_stage,
+                left_waiting_for_anchor=None if left_map_result is None else left_map_result.waiting_for_anchor,
                 actual_end_effector_position=self.stage_io.read_stage_end_effector_position(stage),
                 actual_end_effector_pose=self.stage_io.read_stage_end_effector_pose(stage),
                 waiting_for_anchor=True,
@@ -356,6 +402,9 @@ class HopeJrSimIkController:
             quest_current_position=map_result.quest_current_position,
             quest_mapped_position=map_result.quest_mapped_position_stage,
             sim_target_position=map_result.sim_target_position_stage,
+            left_quest_mapped_position=None if left_map_result is None else left_map_result.quest_mapped_position_stage,
+            left_sim_target_position=None if left_map_result is None else left_map_result.sim_target_position_stage,
+            left_waiting_for_anchor=None if left_map_result is None else left_map_result.waiting_for_anchor,
             actual_end_effector_position=self.stage_io.read_stage_end_effector_position(stage),
             actual_end_effector_pose=self.stage_io.read_stage_end_effector_pose(stage),
         )
@@ -399,6 +448,9 @@ class HopeJrSimIkController:
         quest_current_position: np.ndarray,
         quest_mapped_position: np.ndarray,
         sim_target_position: np.ndarray,
+        left_quest_mapped_position: np.ndarray | None = None,
+        left_sim_target_position: np.ndarray | None = None,
+        left_waiting_for_anchor: bool | None = None,
         actual_end_effector_position: np.ndarray | None = None,
         actual_end_effector_pose: np.ndarray | None = None,
         waiting_for_anchor: bool = False,
@@ -410,6 +462,9 @@ class HopeJrSimIkController:
             quest_current_position=quest_current_position,
             quest_mapped_position=quest_mapped_position,
             sim_target_position=sim_target_position,
+            left_quest_mapped_position=left_quest_mapped_position,
+            left_sim_target_position=left_sim_target_position,
+            left_waiting_for_anchor=waiting_for_anchor if left_waiting_for_anchor is None else bool(left_waiting_for_anchor),
             reference_position=None if self.teleop_mapper.stage_anchor_pose is None else self.teleop_mapper.stage_anchor_pose[:3, 3],
             actual_end_effector_position=actual_end_effector_position,
             actual_end_effector_pose=actual_end_effector_pose,
@@ -419,6 +474,7 @@ class HopeJrSimIkController:
 
     def reset_target_positions(self, target_value_deg: float = 0.0, reset_joint_state: bool = True) -> None:
         self.teleop_mapper.reset()
+        self.left_teleop_mapper.reset()
         self.limit_push_freeze_active = False
         self.limit_push_freeze_streak = 0
         self.limit_push_freeze_payload = None
