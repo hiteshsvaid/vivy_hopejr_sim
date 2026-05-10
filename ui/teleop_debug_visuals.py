@@ -394,9 +394,6 @@ class TeleopDebugVisuals:
             return
 
         self._ensure_ground_plane(stage, UsdGeom, Sdf, Gf)
-        self._ensure_table_asset(stage, Sdf, Gf)
-        self._ensure_table_collider(stage)
-        self._ensure_table_cube(stage)
         stage.DefinePrim(self.teleop_debug_root, "Xform")
         sim_target_color = (0.0, 1.0, 0.0) if waiting_for_anchor else (1.0, 0.0, 0.0)
         if reference_position is not None:

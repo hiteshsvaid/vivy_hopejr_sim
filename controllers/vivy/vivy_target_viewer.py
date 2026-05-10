@@ -21,6 +21,8 @@ VIVY_FLOW_DETAIL_PANEL_PATH = Path("/home/viaan/vivy_hopejr_sim/ui/vivy/vivy_flo
 FLOW_CONTROL_PATH = Path("/tmp/vivy_flow_control.json")
 STAGE_FEEDBACK_PATH = Path("/tmp/vivy_stage_feedback.json")
 REAL_FEEDBACK_PATH = Path("/tmp/vivy_real_feedback.json")
+SIM_WRITE_DEBUG_PATH = Path("/tmp/vivy_sim_write_debug.json")
+SIM_WRITE_EVENTS_PATH = Path("/tmp/vivy_sim_write_events.ndjson")
 
 _ACTIVE_LOOP = None
 
@@ -89,6 +91,19 @@ def _write_stage_feedback(path: Path, payload: dict) -> None:
     tmp_path.replace(path)
 
 
+def _write_sim_write_debug(path: Path, payload: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = path.with_suffix(".tmp")
+    tmp_path.write_text(json.dumps(payload) + "\n", encoding="utf-8")
+    tmp_path.replace(path)
+
+
+def _append_sim_write_event(path: Path, payload: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8") as f:
+        f.write(json.dumps(payload) + "\n")
+
+
 def _load_json_file(path: Path) -> dict | None:
     if not path.exists():
         return None
@@ -114,22 +129,49 @@ class VivyTargetViewer:
 
         self.sim_config = _load_sim_config()
         controller_defaults = dict(self.sim_config.get("controller_defaults") or {})
-        self.end_effector_path = controller_defaults.get("end_effector_path", "/World/JointTest/PalmBody/EndEffector")
+        self.end_effector_path = controller_defaults.get("end_effector_path", "/World/JointTest/RightForearm/EndEffector")
         self.teleop_debug_root = controller_defaults.get("teleop_debug_root", "/World/JointTest/TeleopDebug")
         self.articulation_root_path = controller_defaults.get("articulation_root_path", "/World/JointTest")
         self.joint_root_path = controller_defaults.get("joint_root_path", "/World/JointTest/Joints")
         self.world_offset = np.asarray(controller_defaults.get("world_offset", [0.0, 0.0, 0.0]), dtype=float)
         self.real_feedback_max_age_s = float(controller_defaults.get("packet_stale_timeout_s", 0.75))
-        ik_joint_names = list(self.sim_config["joint_names"])
-        controlled_joint_names = list(self.sim_config.get("controlled_joint_names") or ik_joint_names)
+        default_chain = str(self.sim_config.get("default_ik_chain", "right_arm"))
+        chain_config = (self.sim_config.get("ik_chains") or {}).get(default_chain) or {}
+        ik_joint_names = list(chain_config["joint_names"])
+        controlled_joint_names = list(chain_config["controlled_joint_names"])
         self.ik_joint_names = list(ik_joint_names)
         self.joint_names = list(controlled_joint_names)
+        self.stage_joint_names = list(self.sim_config["joints"].keys())
         neutral_deg = np.asarray([float(self.sim_config["joints"][name]["neutral_deg"]) for name in ik_joint_names], dtype=float)
         self.neutral_joint_positions_deg = np.asarray(
             [float(self.sim_config["joints"][name]["neutral_deg"]) for name in controlled_joint_names],
             dtype=float,
         )
-        self.kinematics = VivyArmKinematics.from_json(SIM_CONFIG_PATH)
+        self.stage_neutral_joint_positions_deg = np.asarray(
+            [float(self.sim_config["joints"][name]["neutral_deg"]) for name in self.stage_joint_names],
+            dtype=float,
+        )
+        self.stage_min_joint_positions_deg = np.asarray(
+            [float(self.sim_config["joints"][name]["min_deg"]) for name in self.stage_joint_names],
+            dtype=float,
+        )
+        self.stage_max_joint_positions_deg = np.asarray(
+            [float(self.sim_config["joints"][name]["max_deg"]) for name in self.stage_joint_names],
+            dtype=float,
+        )
+        self.controlled_min_joint_positions_deg = np.asarray(
+            [float(self.sim_config["joints"][name]["min_deg"]) for name in self.joint_names],
+            dtype=float,
+        )
+        self.controlled_max_joint_positions_deg = np.asarray(
+            [float(self.sim_config["joints"][name]["max_deg"]) for name in self.joint_names],
+            dtype=float,
+        )
+        self._controlled_to_stage_indices = np.asarray(
+            [self.stage_joint_names.index(name) for name in self.joint_names],
+            dtype=np.int64,
+        )
+        self.kinematics = VivyArmKinematics.from_json(SIM_CONFIG_PATH, chain_name=default_chain)
         self.model_neutral_pose = self.kinematics.forward_kinematics(neutral_deg)
         self.model_to_stage_transform = np.eye(4)
         self._anchor_model_to_stage_transform = np.eye(4)
@@ -159,6 +201,7 @@ class VivyTargetViewer:
         self._last_panel_real_feedback_timestamp: float | None = None
         self._last_panel_real_feedback_arrival_time: float | None = None
         self._last_bus_hz: float | None = None
+        self._last_stage_joint_positions_deg: np.ndarray | None = None
 
     def _ensure_panels_created(self) -> None:
         for panel in (self.side_panel, self.flow_panel, self.flow_detail_panel):
@@ -287,19 +330,66 @@ class VivyTargetViewer:
             return None
 
     def _write_sim_joint_positions(self, stage, joint_positions_deg: np.ndarray, *, update_state: bool) -> None:
+        values = np.asarray(joint_positions_deg, dtype=float)
+        input_values = values.copy()
+        if values.shape == (len(self.stage_joint_names),):
+            values = values[self._controlled_to_stage_indices]
+        values = np.clip(np.asarray(values, dtype=float), self.controlled_min_joint_positions_deg, self.controlled_max_joint_positions_deg)
+        debug_payload = {
+            "timestamp": time.time(),
+            "input_joint_count": int(input_values.size),
+            "commanded_joint_count": len(self.joint_names),
+            "commanded_joint_names": list(self.joint_names),
+            "input_joint_positions_deg": [float(value) for value in input_values.reshape(-1)],
+            "commanded_joint_positions_deg": [float(value) for value in np.asarray(values, dtype=float).reshape(-1)],
+            "update_state": bool(update_state),
+        }
         try:
-            self.stage_io.write_joint_targets_deg(stage, joint_positions_deg)
+            self.stage_io.write_joint_targets_deg(stage, values)
             if update_state:
-                self.stage_io.write_joint_state_deg(stage, joint_positions_deg)
+                self.stage_io.write_joint_state_deg(stage, values)
             self._joint_write_ready = True
+            debug_payload["success"] = True
         except Exception as exc:
             exc_text = str(exc)
+            debug_payload["success"] = False
+            debug_payload["error"] = exc_text
             now = time.monotonic()
             if "Articulation unavailable" in exc_text:
                 self._joint_write_ready = False
             elif now - self._last_joint_write_warn_time > 2.0:
                 print(f"Vivy target viewer joint write failed: {exc}")
                 self._last_joint_write_warn_time = now
+        debug_payload["stage_io_debug"] = getattr(self.stage_io, "last_stage_dls_debug", None)
+        try:
+            _write_sim_write_debug(SIM_WRITE_DEBUG_PATH, debug_payload)
+            _append_sim_write_event(SIM_WRITE_EVENTS_PATH, debug_payload)
+        except Exception:
+            pass
+
+    def _read_stage_joint_target_attrs_deg(self, stage) -> np.ndarray | None:
+        if stage is None:
+            return None
+        targets: list[float] = []
+        for joint_name in self.stage_joint_names:
+            prim = stage.GetPrimAtPath(f"{self.joint_root_path}/{joint_name}")
+            if not prim.IsValid():
+                return None
+            attr = prim.GetAttribute("drive:angular:physics:targetPosition")
+            value = attr.Get() if attr.IsValid() else None
+            if value is None:
+                state_attr = prim.GetAttribute("state:angular:physics:position")
+                value = state_attr.Get() if state_attr.IsValid() else None
+            if value is None:
+                return None
+            try:
+                targets.append(float(value))
+            except (TypeError, ValueError):
+                return None
+        arr = np.asarray(targets, dtype=float)
+        if arr.shape != (len(self.stage_joint_names),) or not np.all(np.isfinite(arr)):
+            return None
+        return np.clip(arr, self.stage_min_joint_positions_deg, self.stage_max_joint_positions_deg)
 
     def _read_stage(self):
         import omni.usd
@@ -431,6 +521,8 @@ class VivyTargetViewer:
 
         stage_joint_positions_deg = self.stage_io.read_stage_joint_positions_deg(stage)
         if stage_joint_positions_deg is not None:
+            self._last_stage_joint_positions_deg = np.asarray(stage_joint_positions_deg, dtype=float).copy()
+            controlled_stage_joint_positions_deg = np.asarray(stage_joint_positions_deg, dtype=float)
             try:
                 _write_stage_feedback(
                     STAGE_FEEDBACK_PATH,
@@ -438,7 +530,7 @@ class VivyTargetViewer:
                         "timestamp": time.time(),
                         "joint_names": list(self.joint_names),
                         **{
-                            f"{joint_name}.pos_deg": float(stage_joint_positions_deg[index])
+                            f"{joint_name}.pos_deg": float(controlled_stage_joint_positions_deg[index])
                             for index, joint_name in enumerate(self.joint_names)
                         },
                     },
@@ -452,6 +544,16 @@ class VivyTargetViewer:
             self._anchor_model_to_stage_transform = np.eye(4)
         elif self._stage_anchor_pose is None or self._last_waiting_for_anchor:
             self._stage_anchor_pose = stage_pose.copy()
+            target_pose_model = payload.get("target_pose_model")
+            if target_pose_model is not None:
+                try:
+                    target_pose_model_arr = np.asarray(target_pose_model, dtype=float)
+                    if target_pose_model_arr.shape == (4, 4):
+                        self._anchor_model_to_stage_transform = self._stage_anchor_pose @ np.linalg.inv(
+                            target_pose_model_arr
+                        )
+                except Exception:
+                    self._anchor_model_to_stage_transform = np.eye(4)
         self._last_waiting_for_anchor = waiting_for_anchor
 
         signal_timestamp = self._coerce_timestamp(payload)
@@ -459,18 +561,14 @@ class VivyTargetViewer:
         teleop_changed = signal_timestamp is not None and signal_timestamp != self._last_signal_timestamp
         feedback_changed = feedback_timestamp is not None and feedback_timestamp != self._last_applied_feedback_timestamp
 
-        stage_write_blocked = waiting_for_anchor
-        if stage_write_blocked:
-            if not self._waiting_anchor_neutral_applied:
-                self._write_sim_joint_positions(stage, self.neutral_joint_positions_deg, update_state=True)
-                self._waiting_anchor_neutral_applied = True
-        else:
-            self._waiting_anchor_neutral_applied = False
+        follow_target_enabled = bool(payload.get("follow_target_enabled", False))
+        stage_write_blocked = waiting_for_anchor or not follow_target_enabled
+        self._waiting_anchor_neutral_applied = False
         joint_targets_deg = payload.get("current_joint_targets_deg")
         if not stage_write_blocked:
             if real_joint_positions_deg is not None:
                 if feedback_changed:
-                    self._write_sim_joint_positions(stage, np.asarray(real_joint_positions_deg, dtype=float), update_state=True)
+                    self._write_sim_joint_positions(stage, np.asarray(real_joint_positions_deg, dtype=float), update_state=False)
                     self._last_applied_feedback_timestamp = feedback_timestamp
             elif (
                 teleop_changed
@@ -498,6 +596,16 @@ class VivyTargetViewer:
             quest_mapped_position + self.world_offset,
             dtype=float,
         )
+        target_pose_model = payload.get("target_pose_model")
+        if target_pose_model is not None:
+            try:
+                target_pose_model_arr = np.asarray(target_pose_model, dtype=float)
+                if target_pose_model_arr.shape == (4, 4):
+                    sim_target_position = (
+                        self._anchor_model_to_stage_transform @ target_pose_model_arr
+                    )[:3, 3] + self.world_offset
+            except Exception:
+                pass
         show_pitch_frames = bool(flow_control.get("show_pitch_frames", False))
         pitch_visual = self._build_pitch_visual(stage) if show_pitch_frames else None
         self.visuals.enabled = bool(flow_control.get("sim_view_enabled", True))

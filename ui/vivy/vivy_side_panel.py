@@ -196,7 +196,6 @@ class VivySidePanel:
             "follow_target_enabled": follow_target_enabled,
             "bus_live": bus_live,
             "bus_status": bus_status,
-            "grip_active": grip >= 0.25,
             "recording_status": recording_status,
             "recording_name": recording_name,
         }

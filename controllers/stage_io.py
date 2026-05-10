@@ -124,6 +124,13 @@ class HopeJrStageIo:
                     joint_positions_rad = np.asarray(joint_positions_rad, dtype=float)
                     if joint_positions_rad.ndim == 2:
                         joint_positions_rad = joint_positions_rad[0]
+                    if not np.all(np.isfinite(joint_positions_rad)):
+                        self._set_stage_dls_debug(
+                            reason="joint_positions_nonfinite",
+                            joint_names=list(self.joint_names),
+                            joint_positions_rad=joint_positions_rad.tolist(),
+                        )
+                        raise RuntimeError("Articulation joint positions are nonfinite")
                     return np.rad2deg(joint_positions_rad)
             except Exception:
                 pass
@@ -152,6 +159,13 @@ class HopeJrStageIo:
                     joint_positions_rad = np.asarray(joint_positions_rad, dtype=float)
                     if joint_positions_rad.ndim == 2:
                         joint_positions_rad = joint_positions_rad[0]
+                    if not np.all(np.isfinite(joint_positions_rad)):
+                        self._set_stage_dls_debug(
+                            reason="joint_positions_nonfinite",
+                            joint_names=list(self.joint_names),
+                            joint_positions_rad=joint_positions_rad.tolist(),
+                        )
+                        return None
                     return np.rad2deg(joint_positions_rad)
             except Exception:
                 pass
@@ -169,7 +183,7 @@ class HopeJrStageIo:
             joint_positions.append(float(state_value))
         return np.asarray(joint_positions, dtype=float)
 
-    def compute_end_effector_jacobian(self, stage, *, body_name: str = "PalmBody") -> np.ndarray | None:
+    def compute_end_effector_jacobian(self, stage, *, body_name: str = "RightForearm") -> np.ndarray | None:
         articulation = self._get_articulation()
         joint_indices = self._get_articulation_joint_indices()
         if articulation is None or joint_indices is None:

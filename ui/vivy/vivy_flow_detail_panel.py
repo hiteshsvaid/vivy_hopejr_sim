@@ -277,22 +277,28 @@ class VivyFlowDetailPanel:
 
     def _list_joint_names(self) -> list[str]:
         config = self._read_vivy_config()
-        names = config.get("joint_names")
+        default_chain = str(config.get("default_ik_chain", "right_arm"))
+        chain_config = (config.get("ik_chains") or {}).get(default_chain) or {}
+        names = chain_config.get("joint_names")
         if isinstance(names, list):
             return [str(name) for name in names]
         return []
 
     def _list_controlled_joint_names(self) -> list[str]:
         config = self._read_vivy_config()
-        names = config.get("controlled_joint_names")
+        default_chain = str(config.get("default_ik_chain", "right_arm"))
+        chain_config = (config.get("ik_chains") or {}).get(default_chain) or {}
+        names = chain_config.get("controlled_joint_names")
         if isinstance(names, list):
             return [str(name) for name in names]
         return self._list_joint_names()
 
     def _list_ik_table_joint_names(self) -> list[str]:
         config = self._read_vivy_config()
+        default_chain = str(config.get("default_ik_chain", "right_arm"))
+        chain_config = (config.get("ik_chains") or {}).get(default_chain) or {}
         names = list(self._list_controlled_joint_names())
-        excluded = ((config.get("kinematics") or {}).get("excluded_joints") or [])
+        excluded = chain_config.get("excluded_joints") or []
         for name in excluded:
             name_text = str(name)
             if name_text not in names:
