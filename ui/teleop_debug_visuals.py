@@ -79,19 +79,16 @@ class TeleopDebugVisuals:
         if prim.IsValid():
             stage.RemovePrim(prim_path)
 
-    def _define_target_cross(self, stage, usd_geom, sdf, gf, name: str, sim_target_position, waiting_for_anchor: bool) -> None:
+    def _define_target_cross(self, stage, usd_geom, sdf, gf, name: str, sim_target_position, color) -> None:
         root_path = f"{self.teleop_debug_root}/{name}"
         root = stage.DefinePrim(root_path, "Xform")
         self._set_translate(root, sdf, gf, sim_target_position)
         self._set_order(root, ["xformOp:translate"])
 
-        live_color = (0.9, 0.1, 0.1)
-        wait_color = (0.0, 1.0, 0.0)
-        bar_color = wait_color if waiting_for_anchor else live_color
         bar_specs = [
-            ("XBar", bar_color, Rotation.from_euler("y", 90.0, degrees=True)),
-            ("YBar", bar_color, Rotation.from_euler("x", 90.0, degrees=True)),
-            ("ZBar", bar_color, Rotation.identity()),
+            ("XBar", color, Rotation.from_euler("y", 90.0, degrees=True)),
+            ("YBar", color, Rotation.from_euler("x", 90.0, degrees=True)),
+            ("ZBar", color, Rotation.identity()),
         ]
 
         for name, color, rotation in bar_specs:
@@ -405,28 +402,17 @@ class TeleopDebugVisuals:
         stage.DefinePrim(self.teleop_debug_root, "Xform")
         if reference_position is not None:
             self._define_scene_backdrop(stage, UsdGeom, Sdf, Gf, reference_position)
-        self._remove_prim_if_exists(stage, f"{self.teleop_debug_root}/QuestMapped")
-        self._remove_prim_if_exists(stage, f"{self.teleop_debug_root}/SimTarget")
+        self._remove_prim_if_exists(stage, f"{self.teleop_debug_root}/RightQuestMapped")
+        self._remove_prim_if_exists(stage, f"{self.teleop_debug_root}/RightSimTarget")
         self._remove_prim_if_exists(stage, f"{self.teleop_debug_root}/SimTargetCross")
         if left_quest_mapped_position is None or left_sim_target_position is None:
             self._remove_prim_if_exists(stage, f"{self.teleop_debug_root}/LeftQuestMapped")
             self._remove_prim_if_exists(stage, f"{self.teleop_debug_root}/LeftSimTarget")
             self._remove_prim_if_exists(stage, f"{self.teleop_debug_root}/LeftSimTargetCross")
-        self._define_marker_sphere(stage, UsdGeom, Sdf, Gf, "RightQuestMapped", quest_mapped_position, (1.0, 0.5, 0.0), 0.0045)
-        self._define_marker_sphere(
-            stage,
-            UsdGeom,
-            Sdf,
-            Gf,
-            "RightSimTarget",
-            sim_target_position,
-            (0.0, 1.0, 0.0) if waiting_for_anchor else (1.0, 0.0, 0.0),
-            0.0065,
-        )
-        self._define_target_cross(stage, UsdGeom, Sdf, Gf, "RightSimTargetCross", sim_target_position, waiting_for_anchor=waiting_for_anchor)
+        self._define_target_cross(stage, UsdGeom, Sdf, Gf, "RightSimTargetCross", sim_target_position, (1.0, 0.0, 0.0))
         if left_quest_mapped_position is not None and left_sim_target_position is not None:
             left_waiting = bool(waiting_for_anchor if left_waiting_for_anchor is None else left_waiting_for_anchor)
-            self._define_marker_sphere(stage, UsdGeom, Sdf, Gf, "LeftQuestMapped", left_quest_mapped_position, (0.3, 0.7, 1.0), 0.0045)
+            self._define_marker_sphere(stage, UsdGeom, Sdf, Gf, "LeftQuestMapped", left_quest_mapped_position, (0.0, 1.0, 0.0), 0.0045)
             self._define_marker_sphere(
                 stage,
                 UsdGeom,
@@ -434,10 +420,11 @@ class TeleopDebugVisuals:
                 Gf,
                 "LeftSimTarget",
                 left_sim_target_position,
-                (0.0, 1.0, 0.0) if left_waiting else (0.1, 0.45, 1.0),
+                (0.0, 1.0, 0.0),
                 0.0065,
             )
-            self._define_target_cross(stage, UsdGeom, Sdf, Gf, "LeftSimTargetCross", left_sim_target_position, waiting_for_anchor=left_waiting)
+            self._define_target_cross(stage, UsdGeom, Sdf, Gf, "LeftSimTargetCross", left_sim_target_position, (0.0, 1.0, 0.0))
+
         if show_pitch_frames:
             self._define_pitch_frames(stage, UsdGeom, Sdf, Gf, pitch_visual)
         else:
@@ -461,7 +448,7 @@ class TeleopDebugVisuals:
         shaft_prim = shaft.GetPrim()
         shaft.GetRadiusAttr().Set(0.0028)
         shaft.GetHeightAttr().Set(0.03)
-        self._set_display_color(shaft_prim, Sdf, Gf, (0.1, 0.5, 1.0))
+        self._set_display_color(shaft_prim, Sdf, Gf, (1.0, 0.0, 0.0))
         self._set_translate(shaft_prim, Sdf, Gf, (0.0, 0.0, 0.015))
         self._set_order(shaft_prim, ["xformOp:translate"])
 
@@ -469,6 +456,6 @@ class TeleopDebugVisuals:
         tip_prim = tip.GetPrim()
         tip.GetRadiusAttr().Set(0.005)
         tip.GetHeightAttr().Set(0.014)
-        self._set_display_color(tip_prim, Sdf, Gf, (0.1, 0.5, 1.0))
+        self._set_display_color(tip_prim, Sdf, Gf, (1.0, 0.0, 0.0))
         self._set_translate(tip_prim, Sdf, Gf, (0.0, 0.0, 0.032))
         self._set_order(tip_prim, ["xformOp:translate"])
