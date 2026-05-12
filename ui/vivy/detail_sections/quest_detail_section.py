@@ -33,7 +33,73 @@ class QuestDetailSection:
                 height=28,
                 clicked_fn=lambda: self.panel._save_record_name(),
             )
+            ui.Spacer(height=4)
+            ui.Label("Camera Stream", style=header_style)
+            with ui.VStack(spacing=2):
+                with ui.HStack(height=26, spacing=6):
+                    ui.Label("publish_hz", width=120, style=value_style)
+                    publish_hz_field = ui.StringField(width=90)
+                    self.panel._labels["quest_camera_publish_hz_model"] = publish_hz_field.model
+                ui.Label(
+                    "Camera frame send rate for the sim publisher. Lower values reduce bandwidth and latency pressure.",
+                    style=value_style,
+                    word_wrap=True,
+                )
+                with ui.HStack(height=26, spacing=6):
+                    ui.Label("jpeg_quality", width=120, style=value_style)
+                    jpeg_quality_field = ui.StringField(width=90)
+                    self.panel._labels["quest_camera_jpeg_quality_model"] = jpeg_quality_field.model
+                ui.Label(
+                    "JPEG quality used to compress the sim camera stream before sending it to Quest.",
+                    style=value_style,
+                    word_wrap=True,
+                )
+                with ui.HStack(height=26, spacing=6):
+                    ui.Label("resolution", width=120, style=value_style)
+                    resolution_field = ui.StringField(width=90)
+                    self.panel._labels["quest_camera_resolution_model"] = resolution_field.model
+                ui.Label(
+                    "Camera frame resolution like 320x240. Lower values reduce bandwidth and can reduce latency.",
+                    style=value_style,
+                    word_wrap=True,
+                )
+                with ui.HStack(height=26, spacing=6):
+                    ui.Label("camera diagnostics", width=120, style=value_style)
+                    diagnostics_checkbox = ui.CheckBox(width=24)
+                    self.panel._labels["quest_camera_diagnostics_model"] = diagnostics_checkbox.model
+                ui.Label(
+                    "When enabled, the sim publisher prints camera timing diagnostics to the console.",
+                    style=value_style,
+                    word_wrap=True,
+                )
+            self.panel._labels["quest_camera_save_button"] = ui.Button(
+                "Save Camera Settings",
+                height=28,
+                clicked_fn=lambda: self.panel._save_camera_stream_settings(),
+            )
             self.panel._labels["quest_status"] = ui.Label("", style=value_style, word_wrap=True)
+
+    def load_from_config(self) -> None:
+        config = self.panel._read_vivy_config()
+        controller_defaults = dict(config.get("controller_defaults") or {})
+        try:
+            self.panel._labels["quest_camera_publish_hz_model"].set_value(
+                str(controller_defaults.get("camera_frame_publish_hz", 5.0))
+            )
+            self.panel._labels["quest_camera_jpeg_quality_model"].set_value(
+                str(controller_defaults.get("camera_jpeg_quality", 60))
+            )
+            resolution = controller_defaults.get("camera_frame_resolution", [320, 240])
+            if isinstance(resolution, (list, tuple)) and len(resolution) == 2:
+                resolution_text = f"{int(float(resolution[0]))}x{int(float(resolution[1]))}"
+            else:
+                resolution_text = "320x240"
+            self.panel._labels["quest_camera_resolution_model"].set_value(resolution_text)
+            self.panel._labels["quest_camera_diagnostics_model"].set_value(
+                bool(controller_defaults.get("show_camera_diagnostics", False))
+            )
+        except Exception:
+            pass
 
     def update(self, replay_name: str, record_name: str, recording_name: str, recording_status: str, recording_packet_count: int) -> None:
         names = self.panel._list_recording_names()

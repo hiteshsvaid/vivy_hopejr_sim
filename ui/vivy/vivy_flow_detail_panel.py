@@ -250,6 +250,37 @@ class VivyFlowDetailPanel:
         except Exception as exc:
             self._labels["quest_status"].text = f"Save failed: {exc}"
 
+    def _save_camera_stream_settings(self) -> None:
+        try:
+            config = self._read_vivy_config()
+            controller_defaults = dict(config.get("controller_defaults") or {})
+            camera_frame_publish_hz = float(self._labels["quest_camera_publish_hz_model"].get_value_as_string())
+            camera_jpeg_quality = int(float(self._labels["quest_camera_jpeg_quality_model"].get_value_as_string()))
+            resolution_text = str(self._labels["quest_camera_resolution_model"].get_value_as_string()).strip().lower()
+            if camera_frame_publish_hz <= 0:
+                raise ValueError("publish_hz must be > 0")
+            if camera_jpeg_quality < 1 or camera_jpeg_quality > 100:
+                raise ValueError("jpeg_quality must be between 1 and 100")
+            if "x" not in resolution_text:
+                raise ValueError("resolution must look like 320x240")
+            width_text, height_text = resolution_text.split("x", 1)
+            camera_resolution = [int(float(width_text)), int(float(height_text))]
+            if camera_resolution[0] <= 0 or camera_resolution[1] <= 0:
+                raise ValueError("resolution values must be positive")
+            controller_defaults["camera_frame_publish_hz"] = camera_frame_publish_hz
+            controller_defaults["camera_jpeg_quality"] = camera_jpeg_quality
+            controller_defaults["camera_frame_resolution"] = camera_resolution
+            controller_defaults["show_camera_diagnostics"] = bool(
+                self._labels["quest_camera_diagnostics_model"].get_value_as_bool()
+            )
+            config["controller_defaults"] = controller_defaults
+            self._write_vivy_config(config)
+            self._labels["quest_status"].text = (
+                "Saved camera settings. Applies on the next Isaac Sim launch."
+            )
+        except Exception as exc:
+            self._labels["quest_status"].text = f"Save failed: {exc}"
+
     def _delete_selected_replay(self) -> None:
         try:
             combo_model = self._labels.get("quest_replay_combo_model")
@@ -845,6 +876,8 @@ class VivyFlowDetailPanel:
                 self._ik_section.load_from_config()
             elif selected == "processor":
                 self._mapping_section.load_from_config()
+            elif selected == "quest":
+                self._quest_section.load_from_config()
             self._last_selected = selected
 
         waiting_for_anchor = bool(payload.get("waiting_for_anchor", True))
