@@ -185,6 +185,7 @@ class VivySidePanel:
         head_waiting_for_anchor = payload.get("head_waiting_for_anchor")
         head_follow_target_enabled = payload.get("head_follow_target_enabled")
         head_state = payload.get("head_state")
+        head_armed_by = payload.get("head_armed_by")
         if head_waiting_for_anchor is not None or head_follow_target_enabled is not None or isinstance(head_state, dict):
             hand_sources["Head"] = {
                 "waiting_for_anchor": bool(head_waiting_for_anchor if head_waiting_for_anchor is not None else True),
@@ -192,6 +193,7 @@ class VivySidePanel:
                 "freeze_active": False,
                 "freeze_joint_name": None,
                 "follow_target_enabled": bool(head_follow_target_enabled) if head_follow_target_enabled is not None else False,
+                "armed_by": str(head_armed_by).strip().lower() if isinstance(head_armed_by, str) and str(head_armed_by).strip() else None,
             }
 
         for hand_label, state in hand_sources.items():
@@ -227,6 +229,9 @@ class VivySidePanel:
                     self._push_event(source_prefix + "Motion tracking on", level="good", timestamp=timestamp)
                 elif not state["follow_target_enabled"] and bool(previous.get("follow_target_enabled", False)):
                     self._push_event(source_prefix + "Motion tracking off", level="warn", timestamp=timestamp)
+
+                if hand_label == "Head" and state.get("armed_by") != previous.get("armed_by") and state.get("armed_by") is not None:
+                    self._push_event(source_prefix + f"Armed by {state['armed_by']}", level="info", timestamp=timestamp)
 
                 if hand_label == "Right":
                     stale_was_logged = self._bus_stale_event_logged

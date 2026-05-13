@@ -203,8 +203,13 @@ class VivyTargetViewer:
         self.left_position_scale = float(controller_defaults.get("position_scale", 1.0))
         self.left_world_offset = np.asarray(controller_defaults.get("world_offset", [0.0, 0.0, 0.0]), dtype=float)
         self.left_world_rotate_xyz = np.asarray(controller_defaults.get("world_rotate_xyz", [0.0, 0.0, 0.0]), dtype=float)
-        self.left_quest_position_axes = _parse_position_axes(str(controller_defaults.get("quest_position_axes", "xyz")))
-        self.left_quest_position_signs = np.asarray(controller_defaults.get("quest_position_signs", [1.0, 1.0, 1.0]), dtype=float)
+        self.left_quest_position_axes = _parse_position_axes(
+            str(controller_defaults.get("left_quest_position_axes", controller_defaults.get("quest_position_axes", "xyz")))
+        )
+        self.left_quest_position_signs = np.asarray(
+            controller_defaults.get("left_quest_position_signs", [1.0, 1.0, 1.0]),
+            dtype=float,
+        )
         self.left_teleop_mapper = QuestTeleopMapper(
             position_scale=self.left_position_scale,
             world_offset=self.left_world_offset,
@@ -216,6 +221,22 @@ class VivyTargetViewer:
             quest_deadband_m=float(controller_defaults.get("quest_deadband_m", 0.01)),
             make_pose=make_pose,
             hand_key="left_hand",
+        )
+        self.left_ik_damping = float(controller_defaults.get("ik_damping", 0.02))
+        self.left_ik_max_iteration = int(controller_defaults.get("ik_max_iteration", 80))
+        self.left_ik_max_step_deg = float(controller_defaults.get("ik_max_step_deg", 2.0))
+        self.left_ik_jacobian_mode = str(controller_defaults.get("ik_jacobian_mode", "analytic"))
+        self.left_neutral_joint_positions_deg = np.asarray(
+            [float(self.sim_config["joints"][name]["neutral_deg"]) for name in left_joint_names],
+            dtype=float,
+        )
+        self.left_joint_weights = np.asarray(
+            [float(self.sim_config["joints"][name].get("weight", 1.0)) for name in left_joint_names],
+            dtype=float,
+        )
+        self.left_active_joint_mask = np.asarray(
+            [0.0 if bool(self.sim_config["joints"][name].get("hold_start", False)) else 1.0 for name in left_joint_names],
+            dtype=float,
         )
 
         head_joint_names = ("head_pan", "head_tilt")
@@ -618,6 +639,25 @@ class VivyTargetViewer:
                 f"position={anchor_payload.get('quest_anchor_position')} target={anchor_payload.get('anchor_joint_targets_deg')}"
             )
 
+    def _solve_left_arm_targets(
+        self,
+        *,
+        current_joint_targets_deg: np.ndarray,
+        target_pose_model: np.ndarray,
+    ) -> np.ndarray:
+        return self.left_kinematics.inverse_kinematics(
+            np.asarray(current_joint_targets_deg, dtype=float),
+            np.asarray(target_pose_model, dtype=float),
+            ik_max_iteration=self.left_ik_max_iteration,
+            damping=self.left_ik_damping,
+            max_step_deg=self.left_ik_max_step_deg,
+            orientation_weight=0.0,
+            active_joint_mask=self.left_active_joint_mask,
+            joint_weights=self.left_joint_weights,
+            neutral_positions_deg=self.left_neutral_joint_positions_deg,
+            jacobian_mode=self.left_ik_jacobian_mode,
+        )
+
     def _log_head_mapping(self, head_map_result, head_state: dict) -> None:
         current = getattr(head_map_result, "head_current_degrees", None)
         anchor = getattr(head_map_result, "head_anchor_degrees", None)
@@ -810,6 +850,30 @@ class VivyTargetViewer:
                         current_stage_pose=left_stage_pose,
                         anchor_joint_targets_deg=np.asarray(left_joint_targets_deg, dtype=float),
                     )
+                    if left_map_result is not None:
+                        left_write_event = {
+                            "timestamp": time.time(),
+                            "type": "left_write",
+                            "tracked": bool(getattr(left_map_result, "tracked", False)),
+                            "follow_target_enabled": bool(getattr(left_map_result, "follow_target_enabled", False)),
+                            "waiting_for_anchor": bool(getattr(left_map_result, "waiting_for_anchor", False)),
+                        }
+                        try:
+                            left_targets = self._solve_left_arm_targets(
+                                current_joint_targets_deg=np.asarray(left_joint_targets_deg, dtype=float),
+                                target_pose_model=np.asarray(left_map_result.target_pose, dtype=float),
+                            )
+                            self.left_stage_io.write_joint_targets_deg(stage, left_targets)
+                            left_write_event["success"] = True
+                            left_write_event["left_joint_names"] = list(self.left_stage_io.joint_names)
+                            left_write_event["left_joint_targets_deg"] = [float(value) for value in left_targets.tolist()]
+                        except Exception as exc:
+                            left_write_event["success"] = False
+                            left_write_event["error"] = str(exc)
+                        try:
+                            _append_sim_write_event(SIM_WRITE_EVENTS_PATH, left_write_event)
+                        except Exception:
+                            pass
                     self._log_left_mapping(left_map_result, left_hand)
         payload["left_hand_state"] = left_hand_payload
         payload["left_follow_target_enabled"] = None if left_map_result is None else left_map_result.follow_target_enabled
@@ -837,6 +901,7 @@ class VivyTargetViewer:
                         "tracked": bool(getattr(head_map_result, "tracked", False)),
                         "follow_target_enabled": bool(getattr(head_map_result, "follow_target_enabled", False)),
                         "waiting_for_anchor": bool(getattr(head_map_result, "waiting_for_anchor", False)),
+                        "armed_by": getattr(head_map_result, "armed_by", None),
                     }
                     try:
                         head_targets = np.asarray(head_map_result.target_joint_targets_deg, dtype=float)
@@ -861,10 +926,12 @@ class VivyTargetViewer:
         payload["head_follow_target_enabled"] = None if head_map_result is None else head_map_result.follow_target_enabled
         payload["head_waiting_for_anchor"] = None if head_map_result is None else head_map_result.waiting_for_anchor
         payload["head_anchor_degrees"] = None if head_map_result is None else head_map_result.head_anchor_degrees.tolist() if head_map_result.head_anchor_degrees is not None else None
+        payload["head_armed_by"] = None if head_map_result is None else head_map_result.armed_by
         panel_payload["head_state"] = head_state
         panel_payload["head_follow_target_enabled"] = None if head_map_result is None else head_map_result.follow_target_enabled
         panel_payload["head_waiting_for_anchor"] = None if head_map_result is None else head_map_result.waiting_for_anchor
         panel_payload["head_anchor_degrees"] = None if head_map_result is None else head_map_result.head_anchor_degrees.tolist() if head_map_result.head_anchor_degrees is not None else None
+        panel_payload["head_armed_by"] = None if head_map_result is None else head_map_result.armed_by
         try:
             self.side_panel.update(panel_payload)
         except Exception:

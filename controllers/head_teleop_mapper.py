@@ -16,6 +16,7 @@ class HeadTeleopMapperResult:
     waiting_for_anchor: bool
     tracking_lost: bool
     follow_target_enabled: bool
+    armed_by: str | None
     head_current_degrees: np.ndarray
     head_anchor_degrees: np.ndarray | None
     target_joint_targets_deg: np.ndarray
@@ -66,7 +67,9 @@ class HeadTeleopMapper:
         self._head_anchor_degrees: np.ndarray | None = None
         self._tracking_lost = False
         self._follow_target_enabled = False
-        self._thumbstick_click_last = False
+        self._right_thumbstick_click_last = False
+        self._left_thumbstick_click_last = False
+        self._armed_by: str | None = None
         self._current_joint_targets_deg = self.neutral_joint_targets_deg.copy()
         self._previous_joint_targets_deg = self.neutral_joint_targets_deg.copy()
         self._last_head_state: dict[str, Any] = {}
@@ -90,6 +93,9 @@ class HeadTeleopMapper:
         right_hand = packet.get("normalized", {}).get("right_hand") if isinstance(packet.get("normalized"), dict) else None
         if not isinstance(right_hand, dict):
             right_hand = {}
+        left_hand = packet.get("normalized", {}).get("left_hand") if isinstance(packet.get("normalized"), dict) else None
+        if not isinstance(left_hand, dict):
+            left_hand = {}
         head = self._normalize_head_state(head)
         tracked = bool(head.get("is_tracked", False))
         pan_degrees = float(head.get("pan_degrees", 0.0))
@@ -97,13 +103,22 @@ class HeadTeleopMapper:
         head_current_degrees = np.asarray([pan_degrees, tilt_degrees], dtype=float)
         self._last_head_state = dict(head)
 
-        thumbstick_click = bool(right_hand.get("thumbstick_click", False))
-        click_rising = thumbstick_click and not self._thumbstick_click_last
-        self._thumbstick_click_last = thumbstick_click
+        right_thumbstick_click = bool(right_hand.get("thumbstick_click", False))
+        left_thumbstick_click = bool(left_hand.get("thumbstick_click", False))
+        right_click_rising = right_thumbstick_click and not self._right_thumbstick_click_last
+        left_click_rising = left_thumbstick_click and not self._left_thumbstick_click_last
+        self._right_thumbstick_click_last = right_thumbstick_click
+        self._left_thumbstick_click_last = left_thumbstick_click
 
         if not self._follow_target_enabled:
-            if click_rising and tracked:
+            armed_by = None
+            if right_click_rising:
+                armed_by = "right"
+            elif left_click_rising:
+                armed_by = "left"
+            if armed_by is not None and tracked:
                 self._follow_target_enabled = True
+                self._armed_by = armed_by
                 anchor_captured_payload = self._capture_anchor(head_current_degrees)
                 return HeadTeleopMapperResult(
                     head_state=dict(head),
@@ -111,6 +126,7 @@ class HeadTeleopMapper:
                     waiting_for_anchor=False,
                     tracking_lost=False,
                     follow_target_enabled=True,
+                    armed_by=self._armed_by,
                     head_current_degrees=head_current_degrees,
                     head_anchor_degrees=self._head_anchor_degrees.copy(),
                     target_joint_targets_deg=self._current_joint_targets_deg.copy(),
@@ -123,19 +139,26 @@ class HeadTeleopMapper:
                 waiting_for_anchor=True,
                 tracking_lost=not tracked,
                 follow_target_enabled=False,
+                armed_by=self._armed_by,
                 head_current_degrees=head_current_degrees,
                 head_anchor_degrees=None if self._head_anchor_degrees is None else self._head_anchor_degrees.copy(),
                 target_joint_targets_deg=self._current_joint_targets_deg.copy(),
             )
 
-        if click_rising:
+        disarm_requested = (
+            (self._armed_by == "right" and right_click_rising)
+            or (self._armed_by == "left" and left_click_rising)
+        )
+        if disarm_requested:
             self._follow_target_enabled = False
+            self._armed_by = None
             return HeadTeleopMapperResult(
                 head_state=dict(head),
                 tracked=tracked,
                 waiting_for_anchor=True,
                 tracking_lost=False,
                 follow_target_enabled=False,
+                armed_by=self._armed_by,
                 head_current_degrees=head_current_degrees,
                 head_anchor_degrees=None if self._head_anchor_degrees is None else self._head_anchor_degrees.copy(),
                 target_joint_targets_deg=self._current_joint_targets_deg.copy(),
@@ -144,12 +167,14 @@ class HeadTeleopMapper:
         if not tracked:
             self._tracking_lost = True
             self._follow_target_enabled = False
+            self._armed_by = None
             return HeadTeleopMapperResult(
                 head_state=dict(head),
                 tracked=False,
                 waiting_for_anchor=True,
                 tracking_lost=True,
                 follow_target_enabled=False,
+                armed_by=self._armed_by,
                 head_current_degrees=head_current_degrees,
                 head_anchor_degrees=None if self._head_anchor_degrees is None else self._head_anchor_degrees.copy(),
                 target_joint_targets_deg=self._current_joint_targets_deg.copy(),
@@ -183,6 +208,7 @@ class HeadTeleopMapper:
             waiting_for_anchor=False,
             tracking_lost=False,
             follow_target_enabled=True,
+            armed_by=self._armed_by,
             head_current_degrees=head_current_degrees,
             head_anchor_degrees=self._head_anchor_degrees.copy(),
             target_joint_targets_deg=self._current_joint_targets_deg.copy(),
