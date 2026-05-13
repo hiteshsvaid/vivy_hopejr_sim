@@ -315,29 +315,43 @@ class VivyFlowDetailPanel:
             return [str(name) for name in names]
         return []
 
-    def _list_controlled_joint_names(self) -> list[str]:
+    def _list_chain_joint_names(self, chain_name: str) -> list[str]:
         config = self._read_vivy_config()
-        default_chain = str(config.get("default_ik_chain", "right_arm"))
-        chain_config = (config.get("ik_chains") or {}).get(default_chain) or {}
+        chain_config = (config.get("ik_chains") or {}).get(chain_name) or {}
         names = chain_config.get("controlled_joint_names")
         if isinstance(names, list):
             return [str(name) for name in names]
-        return self._list_joint_names()
+        return []
+
+    def _list_controlled_joint_names(self) -> list[str]:
+        return self._list_chain_joint_names(str(self._read_vivy_config().get("default_ik_chain", "right_arm")))
+
+    def _list_solve_joint_names(self) -> list[str]:
+        config = self._read_vivy_config()
+        names: list[str] = []
+        for chain_name in ("right_arm", "left_arm"):
+            for joint_name in self._list_chain_joint_names(chain_name):
+                if joint_name not in names:
+                    names.append(joint_name)
+        return names
 
     def _list_ik_table_joint_names(self) -> list[str]:
         config = self._read_vivy_config()
-        default_chain = str(config.get("default_ik_chain", "right_arm"))
-        chain_config = (config.get("ik_chains") or {}).get(default_chain) or {}
-        names = list(self._list_controlled_joint_names())
-        excluded = chain_config.get("excluded_joints") or []
-        for name in excluded:
-            name_text = str(name)
-            if name_text not in names:
-                names.append(name_text)
+        names = list(self._list_solve_joint_names())
+        right_chain = (config.get("ik_chains") or {}).get("right_arm") or {}
+        left_chain = (config.get("ik_chains") or {}).get("left_arm") or {}
+        for excluded in (right_chain.get("excluded_joints") or [], left_chain.get("excluded_joints") or []):
+            for name in excluded:
+                name_text = str(name)
+                if name_text not in names:
+                    names.append(name_text)
+        for name in ("head_pan", "head_tilt"):
+            if name in dict(config.get("joints") or {}) and name not in names:
+                names.append(name)
         return names
 
     def _is_ik_joint(self, joint_name: str) -> bool:
-        return joint_name in set(self._list_joint_names())
+        return joint_name in set(self._list_solve_joint_names())
 
     def _joint_axis_map(self) -> dict[str, str]:
         config = self._read_vivy_config()
@@ -582,7 +596,7 @@ class VivyFlowDetailPanel:
         joints = dict(config.get("joints") or {})
         controller_defaults = dict(config.get("controller_defaults") or {})
         default_output_delta = float(controller_defaults.get("output_max_delta_deg_per_tick", 2.0))
-        ik_joint_names = set(self._list_joint_names())
+        ik_joint_names = set(self._list_solve_joint_names())
         direct_inputs = {
             joint_name: self._joint_direct_input_config(joint_name, controller_defaults) for joint_name in names
         }
@@ -628,11 +642,14 @@ class VivyFlowDetailPanel:
                 is_ik_joint = joint_name in ik_joint_names
                 direct_input = direct_inputs[joint_name]
                 current_axis = str(axis_map.get(joint_name, "Y"))
-                current_mode = str(
-                    rows.get(joint_name, {}).get("mode")
-                    or joint_entry.get("ik_mode")
-                    or ("hold" if bool(joint_entry.get("hold_start", False)) else "solve")
-                )
+                if joint_name in {"head_pan", "head_tilt"}:
+                    current_mode = "direct"
+                else:
+                    current_mode = str(
+                        rows.get(joint_name, {}).get("mode")
+                        or joint_entry.get("ik_mode")
+                        or ("hold" if bool(joint_entry.get("hold_start", False)) else "solve")
+                    )
                 current_weight = float(dict(joints.get(joint_name) or {}).get("weight", 1.0))
                 current_neutral_bias = float(dict(joints.get(joint_name) or {}).get("neutral_bias_weight", 0.0))
                 current_output_delta = float(joint_entry.get("output_max_delta_deg_per_tick", default_output_delta))
@@ -761,10 +778,16 @@ class VivyFlowDetailPanel:
                         )
                         ui.Label("n/a", width=70, style={"color": self._TEXT_NEUTRAL, "font_size": 12})
                     else:
-                        ui.Label("none", width=105, style={"color": self._TEXT_NEUTRAL, "font_size": 12})
-                        ui.Label("n/a", width=75, style={"color": self._TEXT_NEUTRAL, "font_size": 12})
-                        ui.Label("n/a", width=60, style={"color": self._TEXT_NEUTRAL, "font_size": 12})
-                        ui.Label("n/a", width=70, style={"color": self._TEXT_NEUTRAL, "font_size": 12})
+                        if joint_name in {"head_pan", "head_tilt"}:
+                            ui.Label("n/a", width=105, style={"color": self._TEXT_NEUTRAL, "font_size": 12})
+                            ui.Label("n/a", width=75, style={"color": self._TEXT_NEUTRAL, "font_size": 12})
+                            ui.Label("n/a", width=60, style={"color": self._TEXT_NEUTRAL, "font_size": 12})
+                            ui.Label("n/a", width=70, style={"color": self._TEXT_NEUTRAL, "font_size": 12})
+                        else:
+                            ui.Label("none", width=105, style={"color": self._TEXT_NEUTRAL, "font_size": 12})
+                            ui.Label("n/a", width=75, style={"color": self._TEXT_NEUTRAL, "font_size": 12})
+                            ui.Label("n/a", width=60, style={"color": self._TEXT_NEUTRAL, "font_size": 12})
+                            ui.Label("n/a", width=70, style={"color": self._TEXT_NEUTRAL, "font_size": 12})
 
     def _save_ik_tuning(self) -> None:
         try:

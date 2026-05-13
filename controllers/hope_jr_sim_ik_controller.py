@@ -16,6 +16,7 @@ if str(REPO_ROOT) not in sys.path:
 
 from ui.hope_jr_teleop_status_ui import HopeJrTeleopStatusUi
 from ui.teleop_debug_visuals import TeleopDebugVisuals
+from controllers.head_teleop_mapper import HeadTeleopMapper
 from controllers.quest_teleop_mapper import QuestTeleopMapper
 from controllers.joint_control_policy import (
     DEFAULT_POSITION_ONLY_JOINT_CONTROL_PROFILE,
@@ -288,6 +289,46 @@ class HopeJrSimIkController:
             make_pose=self.kinematics_module.make_pose,
             hand_key="left_hand",
         )
+        head_joint_names = [name for name in ("head_pan", "head_tilt") if name in self.sim_config.get("joints", {})]
+        self.head_teleop_mapper = HeadTeleopMapper(
+            head_joint_names=tuple(head_joint_names),
+            neutral_joint_targets_deg=np.asarray(
+                [
+                    float(self.sim_config["joints"]["head_pan"]["neutral_deg"]),
+                    float(self.sim_config["joints"]["head_tilt"]["neutral_deg"]),
+                ],
+                dtype=float,
+            ),
+            lower_joint_limits_deg=np.asarray(
+                [
+                    float(self.sim_config["joints"]["head_pan"]["min_deg"]),
+                    float(self.sim_config["joints"]["head_tilt"]["min_deg"]),
+                ],
+                dtype=float,
+            ),
+            upper_joint_limits_deg=np.asarray(
+                [
+                    float(self.sim_config["joints"]["head_pan"]["max_deg"]),
+                    float(self.sim_config["joints"]["head_tilt"]["max_deg"]),
+                ],
+                dtype=float,
+            ),
+            pan_input_clamp_deg=float(controller_defaults.get("head_pan_input_clamp_deg", 60.0)),
+            tilt_input_clamp_deg=float(controller_defaults.get("head_tilt_input_clamp_deg", 30.0)),
+            max_delta_deg_per_tick=np.asarray(
+                [
+                    float(self.sim_config["joints"]["head_pan"].get("output_max_delta_deg_per_tick", controller_defaults.get("output_max_delta_deg_per_tick", 2.0))),
+                    float(self.sim_config["joints"]["head_tilt"].get("output_max_delta_deg_per_tick", controller_defaults.get("output_max_delta_deg_per_tick", 2.0))),
+                ],
+                dtype=float,
+            ),
+        )
+        self.head_stage_io = HopeJrStageIo(
+            articulation_root_path=self.articulation_root_path,
+            joint_root_path=self.joint_root_path,
+            end_effector_path=self.end_effector_path,
+            joint_names=head_joint_names,
+        )
         self.teleop_debug_visuals = TeleopDebugVisuals(teleop_debug_root=self.teleop_debug_root, enabled=self.show_teleop_debug)
         self._a_pressed_last = False
         self.last_hand_state = {}
@@ -356,6 +397,7 @@ class HopeJrSimIkController:
         current_sim_pose = self.model.forward_kinematics(anchor_joint_targets_deg)
         stage = self.stage_io.get_stage()
         current_stage_pose = self.stage_io.read_stage_end_effector_pose(stage)
+        head_map_result = self._apply_head_mapping(packet, stage=stage)
         map_result = self.teleop_mapper.map_packet(
             packet,
             current_sim_pose=current_sim_pose,
@@ -363,6 +405,11 @@ class HopeJrSimIkController:
             anchor_joint_targets_deg=anchor_joint_targets_deg,
         )
         if map_result is None:
+            if head_map_result is not None:
+                self._write_debug({
+                    "status": "head_applied_without_arm",
+                    "head_control": head_map_result,
+                })
             return None
         left_map_result = None
         left_current_joint_targets_deg = None
@@ -472,9 +519,37 @@ class HopeJrSimIkController:
         )
 
 
+
+
+    def _apply_head_mapping(
+        self,
+        packet: dict[str, Any],
+        *,
+        stage,
+    ) -> dict[str, Any] | None:
+        head_map_result = self.head_teleop_mapper.map_packet(packet)
+        if head_map_result is None:
+            return None
+        if stage is not None and self.head_stage_io.joint_names:
+            head_targets_deg = np.asarray(head_map_result.target_joint_targets_deg, dtype=float)
+            self.head_stage_io.write_joint_targets_deg(stage, head_targets_deg)
+            if self.write_joint_state_directly:
+                self.head_stage_io.write_joint_state_deg(stage, head_targets_deg)
+        return {
+            "head_state": dict(head_map_result.head_state),
+            "tracked": bool(head_map_result.tracked),
+            "waiting_for_anchor": bool(head_map_result.waiting_for_anchor),
+            "tracking_lost": bool(head_map_result.tracking_lost),
+            "head_current_degrees": head_map_result.head_current_degrees.tolist(),
+            "head_anchor_degrees": None if head_map_result.head_anchor_degrees is None else head_map_result.head_anchor_degrees.tolist(),
+            "target_joint_targets_deg": head_map_result.target_joint_targets_deg.tolist(),
+            "anchor_captured_payload": head_map_result.anchor_captured_payload,
+        }
+
     def reset_target_positions(self, target_value_deg: float = 0.0, reset_joint_state: bool = True) -> None:
         self.teleop_mapper.reset()
         self.left_teleop_mapper.reset()
+        self.head_teleop_mapper.reset()
         self.limit_push_freeze_active = False
         self.limit_push_freeze_streak = 0
         self.limit_push_freeze_payload = None
@@ -488,6 +563,11 @@ class HopeJrSimIkController:
         self.stage_io.write_joint_targets_deg(stage, target_values)
         if reset_joint_state:
             self.stage_io.write_joint_state_deg(stage, target_values)
+        head_targets = np.asarray(self.head_teleop_mapper.neutral_joint_targets_deg, dtype=float)
+        if self.head_stage_io.joint_names:
+            self.head_stage_io.write_joint_targets_deg(stage, head_targets)
+            if reset_joint_state:
+                self.head_stage_io.write_joint_state_deg(stage, head_targets)
         self.last_joint_targets_deg = self.stage_io.stage_to_model_joint_positions_deg(target_values)
         self.last_commanded_stage_joint_targets_deg = np.asarray(target_values, dtype=float).copy()
         self.start_stage_joint_positions_deg = np.asarray(target_values, dtype=float).copy()
@@ -877,6 +957,7 @@ class HopeJrSimIkController:
                 "unclipped_joint_targets_deg": conditioning_result.unclipped_targets_deg.tolist(),
                 "conditioned_joint_targets_deg": conditioning_result.conditioned_targets_deg.tolist(),
             },
+            "head_control": head_map_result,
             "output_freeze": limit_push_freeze,
             "joint_control_profile": self.position_only_joint_control_profile if self.position_only else "all_solve_v1",
             "joint_control_modes": joint_control_modes,
@@ -903,22 +984,23 @@ class HopeJrSimIkController:
         hand_position = np.asarray(hand_state.get("position", [0.0, 0.0, 0.0]), dtype=float)
         event_payload = {
             "status": "frozen" if self.limit_push_freeze_active else ("applied" if stage is not None else "solved"),
-                "packet_timestamp": packet_timestamp,
-                "position_only": self.position_only,
-                "quest_position_axes": list(self.teleop_mapper.quest_position_axes),
-                "quest_position_signs": self.teleop_mapper.quest_position_signs.tolist(),
-                "raw_hand_position": hand_state.get("position"),
-                "raw_hand_orientation_xyzw": hand_state.get("orientation_xyzw"),
-                "quest_anchor_position": None if map_result.quest_anchor_position is None else map_result.quest_anchor_position.tolist(),
-                "sim_anchor_position": None if self.teleop_mapper.sim_anchor_pose is None else self.teleop_mapper.sim_anchor_pose[:3, 3].tolist(),
-                "quest_delta": None if map_result.quest_delta is None else map_result.quest_delta.tolist(),
-                "mapped_delta": None if map_result.mapped_delta_model is None else map_result.mapped_delta_model.tolist(),
-                "current_joint_targets_deg": current_joint_targets_deg.tolist(),
-                    "stage_error_score": stage_error_score,
-                "output_freeze": limit_push_freeze,
-                "teleop_safety_advisory": teleop_safety_advisory,
-                "result": result,
-            }
+            "packet_timestamp": packet_timestamp,
+            "position_only": self.position_only,
+            "quest_position_axes": list(self.teleop_mapper.quest_position_axes),
+            "quest_position_signs": self.teleop_mapper.quest_position_signs.tolist(),
+            "raw_hand_position": hand_state.get("position"),
+            "raw_hand_orientation_xyzw": hand_state.get("orientation_xyzw"),
+            "quest_anchor_position": None if map_result.quest_anchor_position is None else map_result.quest_anchor_position.tolist(),
+            "sim_anchor_position": None if self.teleop_mapper.sim_anchor_pose is None else self.teleop_mapper.sim_anchor_pose[:3, 3].tolist(),
+            "quest_delta": None if map_result.quest_delta is None else map_result.quest_delta.tolist(),
+            "mapped_delta": None if map_result.mapped_delta_model is None else map_result.mapped_delta_model.tolist(),
+            "current_joint_targets_deg": current_joint_targets_deg.tolist(),
+            "stage_error_score": stage_error_score,
+            "output_freeze": limit_push_freeze,
+            "teleop_safety_advisory": teleop_safety_advisory,
+            "head_control": head_map_result,
+            "result": result,
+        }
         self._append_event(event_payload, dedupe_key=(event_payload["status"], packet_timestamp))
         self._write_debug(event_payload)
         return result
