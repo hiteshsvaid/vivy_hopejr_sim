@@ -25,7 +25,7 @@ class HopeJrControlProfilePanel:
                 or workspace.get_window("Stage")
             )
             if bottom_target is not None:
-                ui_module.Workspace.show_window("Hope Jr Bottom", True)
+                ui_module.Workspace.show_window("Vivy Bottom", True)
                 self._window.dock_in(bottom_target, ui_module.DockPosition.SAME)
                 self._docked = True
         except Exception:
@@ -39,7 +39,7 @@ class HopeJrControlProfilePanel:
         except ImportError:
             return
 
-        self._window = ui.Window("Hope Jr Bottom", width=self.width, height=self.height)
+        self._window = ui.Window("Vivy Bottom", width=self.width, height=self.height)
         with self._window.frame:
             with ui.VStack(spacing=4):
                 header_style = {"color": 0xFFD8D8D8, "font_size": 13}

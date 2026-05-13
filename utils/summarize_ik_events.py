@@ -50,7 +50,7 @@ def summarize(rows: list[dict]) -> None:
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Summarize Hope Jr IK event log error")
+    parser = argparse.ArgumentParser(description="Summarize Vivy IK event log error")
     parser.add_argument("--path", type=Path, default=Path("/tmp/hope_jr_sim_ik_events.ndjson"))
     return parser.parse_args()
 

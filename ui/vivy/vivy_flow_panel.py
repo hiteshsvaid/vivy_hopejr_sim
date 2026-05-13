@@ -117,7 +117,7 @@ class VivyFlowPanel:
             return
         try:
             workspace = ui_module.Workspace
-            right_target = workspace.get_window("Vivy Quest") or workspace.get_window("Hope Jr Side") or workspace.get_window("Stage")
+            right_target = workspace.get_window("Vivy Quest") or workspace.get_window("Vivy Side") or workspace.get_window("Stage")
             if right_target is not None:
                 ui_module.Workspace.show_window("Vivy Flow", True)
                 self._window.dock_in(right_target, ui_module.DockPosition.SAME)

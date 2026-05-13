@@ -55,7 +55,7 @@ class HopeJrTeleopSidePanel:
         except ImportError:
             return
 
-        self._window = ui.Window("Hope Jr Side", width=self.width, height=self.height)
+        self._window = ui.Window("Vivy Side", width=self.width, height=self.height)
         try:
             self._window.focus()
         except Exception:

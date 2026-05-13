@@ -14,7 +14,7 @@ REPO_ROOT = SCRIPT_DIR.parent
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from ui.hope_jr_teleop_status_ui import HopeJrTeleopStatusUi
+from ui.vivy_teleop_status_ui import HopeJrTeleopStatusUi
 from ui.teleop_debug_visuals import TeleopDebugVisuals
 from controllers.head_teleop_mapper import HeadTeleopMapper
 from controllers.quest_teleop_mapper import QuestTeleopMapper
@@ -41,12 +41,12 @@ DEFAULT_ARTICULATION_ROOT_PATH = "/World/JointTest"
 DEFAULT_JOINT_ROOT_PATH = "/World/JointTest/Joints"
 DEFAULT_UDP_LISTEN_HOST = "127.0.0.1"
 DEFAULT_UDP_LISTEN_PORT = 8766
-DEFAULT_DEBUG_PATH = Path("/tmp/hope_jr_sim_ik_debug.json")
+DEFAULT_DEBUG_PATH = Path("/tmp/vivy_sim_ik_debug.json")
 DEFAULT_TELEOP_DEBUG_ROOT = "/World/JointTest/TeleopDebug"
 DEFAULT_END_EFFECTOR_PATH = "/World/JointTest/RightForearm/EndEffector"
-DEFAULT_EVENT_LOG_PATH = Path("/tmp/hope_jr_sim_ik_events.ndjson")
+DEFAULT_EVENT_LOG_PATH = Path("/tmp/vivy_sim_ik_events.ndjson")
 DEFAULT_PACKET_STALE_TIMEOUT_S = 0.75
-DEFAULT_SIM_PLAY_STATE_PATH = Path("/tmp/hope_jr_sim_play_state.json")
+DEFAULT_SIM_PLAY_STATE_PATH = Path("/tmp/vivy_sim_play_state.json")
 DEFAULT_STOP_TARGETS_DEG = {}
 DEFAULT_STAGE_DLS_LAMBDA = 0.01
 DEFAULT_STAGE_DLS_MAX_STEP_DEG = 8.0
@@ -149,7 +149,7 @@ def _build_run_log_path(base_path: Path, run_id: str) -> Path:
     return base_path.with_name(f"{base_path.stem}_{run_id}{base_path.suffix}")
 
 
-class HopeJrSimIkController:
+class VivySimIkController:
     def __init__(
         self,
         *,
@@ -254,6 +254,7 @@ class HopeJrSimIkController:
         self.minimum_packet_timestamp = None
         self.last_debug_payload = None
         self._last_event_key = None
+        self._last_head_log_signature = None
         self.teleop_mapper = QuestTeleopMapper(
             position_scale=position_scale,
             world_offset=world_offset,
@@ -350,9 +351,9 @@ class HopeJrSimIkController:
         )
 
     def _load_kinematics_module(self, module_path: Path):
-        spec = importlib.util.spec_from_file_location("hope_jr_arm_kinematics", module_path)
+        spec = importlib.util.spec_from_file_location("vivy_arm_kinematics", module_path)
         if spec is None or spec.loader is None:
-            raise RuntimeError(f"Failed to load Hope Jr kinematics module from {module_path}")
+            raise RuntimeError(f"Failed to load Vivy kinematics module from {module_path}")
         module = importlib.util.module_from_spec(spec)
         sys.modules[spec.name] = module
         spec.loader.exec_module(module)
@@ -521,6 +522,43 @@ class HopeJrSimIkController:
 
 
 
+    def _log_head_mapping(self, head_map_result: dict[str, Any], *, stage_written: bool) -> None:
+        current = head_map_result.get("head_current_degrees")
+        anchor = head_map_result.get("head_anchor_degrees")
+        target = head_map_result.get("target_joint_targets_deg")
+        signature = (
+            bool(head_map_result.get("tracked", False)),
+            bool(head_map_result.get("waiting_for_anchor", False)),
+            bool(head_map_result.get("tracking_lost", False)),
+            tuple(np.round(np.asarray(current, dtype=float), 3)) if current is not None else None,
+            tuple(np.round(np.asarray(anchor, dtype=float), 3)) if anchor is not None else None,
+            tuple(np.round(np.asarray(target, dtype=float), 3)) if target is not None else None,
+            bool(stage_written),
+            head_map_result.get("anchor_captured_payload") is not None,
+        )
+        if signature == self._last_head_log_signature:
+            return
+        self._last_head_log_signature = signature
+        current_text = "n/a" if current is None else np.array2string(np.asarray(current, dtype=float), precision=2, separator=", ")
+        anchor_text = "n/a" if anchor is None else np.array2string(np.asarray(anchor, dtype=float), precision=2, separator=", ")
+        target_text = "n/a" if target is None else np.array2string(np.asarray(target, dtype=float), precision=2, separator=", ")
+        state = "tracked" if head_map_result.get("tracked", False) else "untracked"
+        if head_map_result.get("waiting_for_anchor", False):
+            state = f"{state}/waiting"
+        if head_map_result.get("tracking_lost", False):
+            state = f"{state}/lost"
+        stage_text = "stage=written" if stage_written else "stage=skipped"
+        print(f"Vivy head: {state} current={current_text} anchor={anchor_text} target={target_text} {stage_text}")
+        anchor_payload = head_map_result.get("anchor_captured_payload")
+        if isinstance(anchor_payload, dict):
+            anchor_pan = anchor_payload.get("head_anchor_pan_degrees")
+            anchor_tilt = anchor_payload.get("head_anchor_tilt_degrees")
+            target_payload = anchor_payload.get("head_target_joint_targets_deg")
+            print(
+                "Vivy head: anchor captured "
+                f"pan={anchor_pan} tilt={anchor_tilt} target={target_payload}"
+            )
+
     def _apply_head_mapping(
         self,
         packet: dict[str, Any],
@@ -530,12 +568,14 @@ class HopeJrSimIkController:
         head_map_result = self.head_teleop_mapper.map_packet(packet)
         if head_map_result is None:
             return None
+        stage_written = False
         if stage is not None and self.head_stage_io.joint_names:
             head_targets_deg = np.asarray(head_map_result.target_joint_targets_deg, dtype=float)
             self.head_stage_io.write_joint_targets_deg(stage, head_targets_deg)
+            stage_written = True
             if self.write_joint_state_directly:
                 self.head_stage_io.write_joint_state_deg(stage, head_targets_deg)
-        return {
+        head_map_payload = {
             "head_state": dict(head_map_result.head_state),
             "tracked": bool(head_map_result.tracked),
             "waiting_for_anchor": bool(head_map_result.waiting_for_anchor),
@@ -545,6 +585,8 @@ class HopeJrSimIkController:
             "target_joint_targets_deg": head_map_result.target_joint_targets_deg.tolist(),
             "anchor_captured_payload": head_map_result.anchor_captured_payload,
         }
+        self._log_head_mapping(head_map_payload, stage_written=stage_written)
+        return head_map_payload
 
     def reset_target_positions(self, target_value_deg: float = 0.0, reset_joint_state: bool = True) -> None:
         self.teleop_mapper.reset()
@@ -1009,7 +1051,7 @@ class HopeJrSimIkController:
 class HopeJrIsaacUpdateLoop:
     def __init__(
         self,
-        controller: HopeJrSimIkController,
+        controller: VivySimIkController,
         *,
         apply_to_stage: bool,
         interval_s: float,
@@ -1061,7 +1103,7 @@ class HopeJrIsaacUpdateLoop:
                 remaining = max(0.0, float(debug_payload.get("anchor_ready_time", 0.0)) - float(debug_payload.get("now", 0.0)))
                 remaining_seconds = int(remaining + 0.999)
                 if self._last_status != status or self._last_wait_seconds != remaining_seconds:
-                    print(f"Hope Jr teleop: capture starts in {remaining_seconds}s")
+                    print(f"Vivy teleop: capture starts in {remaining_seconds}s")
                 self._last_status = status
                 self._last_wait_seconds = remaining_seconds
                 return
@@ -1070,19 +1112,19 @@ class HopeJrIsaacUpdateLoop:
                 if status == "frozen":
                     joint_name = ((debug_payload.get("output_freeze") or {}).get("joint_name") or "?")
                     if self._last_status != "frozen":
-                        print(f"Hope Jr teleop: output frozen on {joint_name}; press A to reset")
+                        print(f"Vivy teleop: output frozen on {joint_name}; press A to reset")
                     self._last_status = "frozen"
                     self._last_wait_seconds = None
                     return
                 if result.get("status") == "reset_to_neutral":
-                    print("Hope Jr teleop: reset to neutral")
+                    print("Vivy teleop: reset to neutral")
                     self._last_status = "reset_to_neutral"
                     self._last_wait_seconds = None
                     return
                 if self._last_status == "waiting_for_anchor":
-                    print("Hope Jr teleop: anchor captured, teleop live")
+                    print("Vivy teleop: anchor captured, teleop live")
                 elif self._last_status != "applied":
-                    print("Hope Jr teleop: receiving packets")
+                    print("Vivy teleop: receiving packets")
                 self._last_status = "applied"
                 self._last_wait_seconds = None
                 return
@@ -1093,16 +1135,16 @@ class HopeJrIsaacUpdateLoop:
                 grip_threshold = debug_payload.get("grip_threshold")
                 if reason == "packet_not_usable" and grip is not None and grip_threshold is not None and float(grip) < float(grip_threshold):
                     if self._last_status != "ignored:grip_threshold":
-                        print(f"Hope Jr teleop: hold grip to move (current={grip:.2f}, required={grip_threshold:.2f})")
+                        print(f"Vivy teleop: hold grip to move (current={grip:.2f}, required={grip_threshold:.2f})")
                     self._last_status = "ignored:grip_threshold"
                     self._last_wait_seconds = None
                     return
                 if self._last_status != f"ignored:{reason}":
-                    print(f"Hope Jr teleop: waiting for usable packet ({reason})")
+                    print(f"Vivy teleop: waiting for usable packet ({reason})")
                 self._last_status = f"ignored:{reason}"
                 self._last_wait_seconds = None
         except Exception as exc:
-            print(f"Hope Jr IK update error: {exc}")
+            print(f"Vivy IK update error: {exc}")
 
     def start(self) -> "HopeJrIsaacUpdateLoop":
         import omni.kit.app
@@ -1110,10 +1152,10 @@ class HopeJrIsaacUpdateLoop:
         app = omni.kit.app.get_app()
         self._subscription = app.get_update_event_stream().create_subscription_to_pop(
             self._on_update,
-            name="HopeJrSimIkController",
+            name="VivySimIkController",
         )
         self._write_play_state(True)
-        print(f"Hope Jr IK controller subscribed to Isaac update stream at {self.interval_s:.3f}s interval")
+        print(f"Vivy IK controller subscribed to Isaac update stream at {self.interval_s:.3f}s interval")
         return self
 
     def stop(self) -> None:
@@ -1123,8 +1165,8 @@ class HopeJrIsaacUpdateLoop:
             try:
                 self.controller.reset_target_positions(self.reset_target_value_deg, reset_joint_state=True)
             except Exception as exc:
-                print(f"Hope Jr IK controller target reset error: {exc}")
-        print("Hope Jr IK controller unsubscribed from Isaac update stream")
+                print(f"Vivy IK controller target reset error: {exc}")
+        print("Vivy IK controller unsubscribed from Isaac update stream")
 
 
 def _parse_position_axes(value: str) -> tuple[int, int, int]:
@@ -1135,8 +1177,8 @@ def _parse_position_axes(value: str) -> tuple[int, int, int]:
     return tuple(axis_map[ch] for ch in cleaned)
 
 
-def build_controller_from_args(args: argparse.Namespace) -> HopeJrSimIkController:
-    return HopeJrSimIkController(
+def build_controller_from_args(args: argparse.Namespace) -> VivySimIkController:
+    return VivySimIkController(
         lerobot_repo=args.lerobot_repo,
         joint_root_path=args.joint_root_path,
         position_scale=args.position_scale,
@@ -1226,7 +1268,7 @@ def start_script_editor_loop(
     run_debug_path = _build_run_log_path(latest_debug_path, run_id)
     run_event_log_path = _build_run_log_path(latest_event_log_path, run_id)
 
-    controller = HopeJrSimIkController(
+    controller = VivySimIkController(
         lerobot_repo=Path(lerobot_repo),
         joint_root_path=joint_root_path,
         position_scale=position_scale,
@@ -1256,8 +1298,8 @@ def start_script_editor_loop(
         controller.latest_debug_path.unlink(missing_ok=True)
     except Exception:
         pass
-    print(f"Hope Jr IK run log: {controller.event_log_path}")
-    print(f"Hope Jr IK run debug: {controller.debug_path}")
+    print(f"Vivy IK run log: {controller.event_log_path}")
+    print(f"Vivy IK run debug: {controller.debug_path}")
     if consume_only_new:
         controller.minimum_packet_timestamp = time.time()
     _ACTIVE_LOOP = HopeJrIsaacUpdateLoop(
@@ -1280,7 +1322,7 @@ def stop_script_editor_loop() -> None:
 def parse_args() -> argparse.Namespace:
     config = _load_repo_sim_config(DEFAULT_LEROBOT_REPO)
     controller_defaults = _get_config_section(config, "controller_defaults")
-    parser = argparse.ArgumentParser(description="First-pass Hope Jr Quest -> Sim IK controller")
+    parser = argparse.ArgumentParser(description="Vivy Quest -> Sim IK controller")
     parser.add_argument("--lerobot-repo", type=Path, default=DEFAULT_LEROBOT_REPO)
     parser.add_argument("--joint-root-path", default=controller_defaults.get("joint_root_path", DEFAULT_JOINT_ROOT_PATH))
     parser.add_argument("--position-scale", type=float, default=float(controller_defaults.get("position_scale", 1.0)))

@@ -11,7 +11,7 @@ import numpy as np
 
 DEFAULT_LEROBOT_REPO = Path('/home/viaan/huggingface/lerobot')
 DEFAULT_SIM_CONTROLLER_PATH = Path('/home/viaan/vivy_hopejr_sim/controllers/hope_jr_sim_ik_controller.py')
-DEFAULT_OUTPUT_PATH = Path('/tmp/hope_jr_shoulder_probe.json')
+DEFAULT_OUTPUT_PATH = Path('/tmp/vivy_shoulder_probe.json')
 DEFAULT_DELTA_DEG = 5.0
 DEFAULT_SETTLE_S = 0.5
 
@@ -19,7 +19,7 @@ _ACTIVE_PROBE = None
 
 
 def _load_sim_controller_module(module_path: Path):
-    spec = importlib.util.spec_from_file_location('hope_jr_sim_ik_controller', module_path)
+    spec = importlib.util.spec_from_file_location('vivy_sim_ik_controller', module_path)
     if spec is None or spec.loader is None:
         raise RuntimeError(f'Failed to load sim controller module from {module_path}')
     module = importlib.util.module_from_spec(spec)
@@ -42,7 +42,7 @@ class HopeJrShoulderProbeRunner:
         self.settle_s = float(settle_s)
         self.interval_s = float(interval_s)
         self.sim_module = _load_sim_controller_module(sim_controller_path)
-        self.controller = self.sim_module.HopeJrSimIkController(
+        self.controller = self.sim_module.VivySimIkController(
             lerobot_repo=lerobot_repo,
             packet_path=self.sim_module.DEFAULT_PACKET_PATH,
             joint_root_path=self.sim_module.DEFAULT_JOINT_ROOT_PATH,
@@ -134,7 +134,7 @@ class HopeJrShoulderProbeRunner:
         tmp_path = self.output_path.with_suffix('.tmp')
         tmp_path.write_text(json.dumps(payload, indent=2) + '\n', encoding='utf-8')
         tmp_path.replace(self.output_path)
-        print(f'Hope Jr shoulder probe: wrote {self.output_path}')
+        print(f'Vivy shoulder probe: wrote {self.output_path}')
 
     def _record_current_joint(self):
         joint_name = self.JOINT_NAMES[self._joint_index]
@@ -149,7 +149,7 @@ class HopeJrShoulderProbeRunner:
         }
         self.results.append(result)
         print(
-            f"Hope Jr shoulder probe: {joint_name} upper_arm_delta="
+            f"Vivy shoulder probe: {joint_name} upper_arm_delta="
             f"{np.array2string(np.asarray(result['upper_arm_body']['delta_position']), precision=4, suppress_small=True)} "
             f"ee_delta={np.array2string(np.asarray(result['end_effector']['delta_position']), precision=4, suppress_small=True)}"
         )
@@ -159,7 +159,7 @@ class HopeJrShoulderProbeRunner:
             articulation = self.controller._get_articulation()
             if articulation is None:
                 return
-            print('Hope Jr shoulder probe: resetting to neutral pose')
+            print('Vivy shoulder probe: resetting to neutral pose')
             self._set_stage_to_model_joint_positions(self.baseline_model_deg)
             self._phase = 'capture_baseline'
             return
@@ -182,7 +182,7 @@ class HopeJrShoulderProbeRunner:
             joint_model_index = self.controller.model.joint_names.index(joint_name)
             self._current_probe_model_deg = self.baseline_model_deg.copy()
             self._current_probe_model_deg[joint_model_index] += self.delta_deg
-            print(f'Hope Jr shoulder probe: applying {joint_name} +{self.delta_deg:.1f} deg')
+            print(f'Vivy shoulder probe: applying {joint_name} +{self.delta_deg:.1f} deg')
             self._set_stage_to_model_joint_positions(self._current_probe_model_deg)
             self._phase = 'sample_joint'
             return
@@ -206,19 +206,19 @@ class HopeJrShoulderProbeRunner:
         try:
             self._advance()
         except Exception as exc:
-            print(f'Hope Jr shoulder probe error: {exc}')
+            print(f'Vivy shoulder probe error: {exc}')
             self.stop()
 
     def start(self):
         import omni.kit.app
         app = omni.kit.app.get_app()
         self._subscription = app.get_update_event_stream().create_subscription_to_pop(self._on_update, name='HopeJrShoulderProbe')
-        print(f'Hope Jr shoulder probe subscribed to Isaac update stream at {self.interval_s:.3f}s interval')
+        print(f'Vivy shoulder probe subscribed to Isaac update stream at {self.interval_s:.3f}s interval')
         return self
 
     def stop(self) -> None:
         self._subscription = None
-        print('Hope Jr shoulder probe unsubscribed from Isaac update stream')
+        print('Vivy shoulder probe unsubscribed from Isaac update stream')
 
 
 def start_shoulder_probe(*, lerobot_repo: str | Path = DEFAULT_LEROBOT_REPO, sim_controller_path: str | Path = DEFAULT_SIM_CONTROLLER_PATH, output_path: str | Path = DEFAULT_OUTPUT_PATH, delta_deg: float = DEFAULT_DELTA_DEG, settle_s: float = DEFAULT_SETTLE_S, interval_s: float = 0.05):
