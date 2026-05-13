@@ -15,6 +15,7 @@ class HeadTeleopMapperResult:
     tracked: bool
     waiting_for_anchor: bool
     tracking_lost: bool
+    follow_target_enabled: bool
     head_current_degrees: np.ndarray
     head_anchor_degrees: np.ndarray | None
     target_joint_targets_deg: np.ndarray
@@ -64,6 +65,8 @@ class HeadTeleopMapper:
     def reset(self) -> None:
         self._head_anchor_degrees: np.ndarray | None = None
         self._tracking_lost = False
+        self._follow_target_enabled = False
+        self._thumbstick_click_last = False
         self._current_joint_targets_deg = self.neutral_joint_targets_deg.copy()
         self._previous_joint_targets_deg = self.neutral_joint_targets_deg.copy()
         self._last_head_state: dict[str, Any] = {}
@@ -84,6 +87,9 @@ class HeadTeleopMapper:
         head = packet.get("head")
         if not isinstance(head, dict):
             return None
+        right_hand = packet.get("normalized", {}).get("right_hand") if isinstance(packet.get("normalized"), dict) else None
+        if not isinstance(right_hand, dict):
+            right_hand = {}
         head = self._normalize_head_state(head)
         tracked = bool(head.get("is_tracked", False))
         pan_degrees = float(head.get("pan_degrees", 0.0))
@@ -91,13 +97,59 @@ class HeadTeleopMapper:
         head_current_degrees = np.asarray([pan_degrees, tilt_degrees], dtype=float)
         self._last_head_state = dict(head)
 
+        thumbstick_click = bool(right_hand.get("thumbstick_click", False))
+        click_rising = thumbstick_click and not self._thumbstick_click_last
+        self._thumbstick_click_last = thumbstick_click
+
+        if not self._follow_target_enabled:
+            if click_rising and tracked:
+                self._follow_target_enabled = True
+                anchor_captured_payload = self._capture_anchor(head_current_degrees)
+                return HeadTeleopMapperResult(
+                    head_state=dict(head),
+                    tracked=True,
+                    waiting_for_anchor=False,
+                    tracking_lost=False,
+                    follow_target_enabled=True,
+                    head_current_degrees=head_current_degrees,
+                    head_anchor_degrees=self._head_anchor_degrees.copy(),
+                    target_joint_targets_deg=self._current_joint_targets_deg.copy(),
+                    anchor_captured_payload=anchor_captured_payload,
+                )
+            self._tracking_lost = False if tracked else True
+            return HeadTeleopMapperResult(
+                head_state=dict(head),
+                tracked=tracked,
+                waiting_for_anchor=True,
+                tracking_lost=not tracked,
+                follow_target_enabled=False,
+                head_current_degrees=head_current_degrees,
+                head_anchor_degrees=None if self._head_anchor_degrees is None else self._head_anchor_degrees.copy(),
+                target_joint_targets_deg=self._current_joint_targets_deg.copy(),
+            )
+
+        if click_rising:
+            self._follow_target_enabled = False
+            return HeadTeleopMapperResult(
+                head_state=dict(head),
+                tracked=tracked,
+                waiting_for_anchor=True,
+                tracking_lost=False,
+                follow_target_enabled=False,
+                head_current_degrees=head_current_degrees,
+                head_anchor_degrees=None if self._head_anchor_degrees is None else self._head_anchor_degrees.copy(),
+                target_joint_targets_deg=self._current_joint_targets_deg.copy(),
+            )
+
         if not tracked:
             self._tracking_lost = True
+            self._follow_target_enabled = False
             return HeadTeleopMapperResult(
                 head_state=dict(head),
                 tracked=False,
-                waiting_for_anchor=False,
+                waiting_for_anchor=True,
                 tracking_lost=True,
+                follow_target_enabled=False,
                 head_current_degrees=head_current_degrees,
                 head_anchor_degrees=None if self._head_anchor_degrees is None else self._head_anchor_degrees.copy(),
                 target_joint_targets_deg=self._current_joint_targets_deg.copy(),
@@ -105,13 +157,14 @@ class HeadTeleopMapper:
 
         anchor_captured_payload = None
         if self._head_anchor_degrees is None or self._tracking_lost:
+            self._follow_target_enabled = True
             anchor_captured_payload = self._capture_anchor(head_current_degrees)
 
         assert self._head_anchor_degrees is not None
         head_delta = head_current_degrees - self._head_anchor_degrees
         head_delta = np.asarray(
             [
-                float(np.clip(head_delta[0], -self.pan_input_clamp_deg, self.pan_input_clamp_deg)),
+                float(np.clip(-head_delta[0], -self.pan_input_clamp_deg, self.pan_input_clamp_deg)),
                 float(np.clip(head_delta[1], -self.tilt_input_clamp_deg, self.tilt_input_clamp_deg)),
             ],
             dtype=float,
@@ -129,6 +182,7 @@ class HeadTeleopMapper:
             tracked=True,
             waiting_for_anchor=False,
             tracking_lost=False,
+            follow_target_enabled=True,
             head_current_degrees=head_current_degrees,
             head_anchor_degrees=self._head_anchor_degrees.copy(),
             target_joint_targets_deg=self._current_joint_targets_deg.copy(),

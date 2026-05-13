@@ -182,6 +182,18 @@ class VivySidePanel:
                 "follow_target_enabled": bool(left_follow_target_enabled) if left_follow_target_enabled is not None else False,
             }
 
+        head_waiting_for_anchor = payload.get("head_waiting_for_anchor")
+        head_follow_target_enabled = payload.get("head_follow_target_enabled")
+        head_state = payload.get("head_state")
+        if head_waiting_for_anchor is not None or head_follow_target_enabled is not None or isinstance(head_state, dict):
+            hand_sources["Head"] = {
+                "waiting_for_anchor": bool(head_waiting_for_anchor if head_waiting_for_anchor is not None else True),
+                "anchor_captured": head_follow_target_enabled is not None,
+                "freeze_active": False,
+                "freeze_joint_name": None,
+                "follow_target_enabled": bool(head_follow_target_enabled) if head_follow_target_enabled is not None else False,
+            }
+
         for hand_label, state in hand_sources.items():
             previous = self._last_event_state.get(hand_label)
             source_prefix = f"{hand_label}: "
