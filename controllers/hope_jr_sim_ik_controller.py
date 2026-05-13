@@ -543,8 +543,10 @@ class VivySimIkController:
         anchor_text = "n/a" if anchor is None else np.array2string(np.asarray(anchor, dtype=float), precision=2, separator=", ")
         target_text = "n/a" if target is None else np.array2string(np.asarray(target, dtype=float), precision=2, separator=", ")
         state = "tracked" if head_map_result.get("tracked", False) else "untracked"
-        if head_map_result.get("waiting_for_anchor", False):
-            state = f"{state}/waiting"
+        if head_map_result.get("follow_target_enabled", False):
+            state = f"{state}/armed"
+        elif head_map_result.get("waiting_for_anchor", False):
+            state = f"{state}/waiting_right_thumbclick"
         if head_map_result.get("tracking_lost", False):
             state = f"{state}/lost"
         stage_text = "stage=written" if stage_written else "stage=skipped"
@@ -555,7 +557,7 @@ class VivySimIkController:
             anchor_tilt = anchor_payload.get("head_anchor_tilt_degrees")
             target_payload = anchor_payload.get("head_target_joint_targets_deg")
             print(
-                "Vivy head: anchor captured "
+                "Vivy head: right-thumbclick armed anchor captured "
                 f"pan={anchor_pan} tilt={anchor_tilt} target={target_payload}"
             )
 
@@ -580,6 +582,7 @@ class VivySimIkController:
             "tracked": bool(head_map_result.tracked),
             "waiting_for_anchor": bool(head_map_result.waiting_for_anchor),
             "tracking_lost": bool(head_map_result.tracking_lost),
+            "follow_target_enabled": bool(head_map_result.follow_target_enabled),
             "head_current_degrees": head_map_result.head_current_degrees.tolist(),
             "head_anchor_degrees": None if head_map_result.head_anchor_degrees is None else head_map_result.head_anchor_degrees.tolist(),
             "target_joint_targets_deg": head_map_result.target_joint_targets_deg.tolist(),
