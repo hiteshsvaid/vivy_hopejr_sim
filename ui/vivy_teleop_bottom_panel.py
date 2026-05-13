@@ -3,7 +3,7 @@
 from typing import Any
 
 
-class HopeJrControlProfilePanel:
+class VivyControlProfilePanel:
     _TEXT_NEUTRAL = 0xFFB8B8B8
 
     def __init__(self, *, width: int = 680, height: int = 88):

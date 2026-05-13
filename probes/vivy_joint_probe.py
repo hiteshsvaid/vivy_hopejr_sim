@@ -11,7 +11,7 @@ import numpy as np
 
 
 DEFAULT_LEROBOT_REPO = Path("/home/viaan/huggingface/lerobot")
-DEFAULT_SIM_CONTROLLER_PATH = Path("/home/viaan/vivy_hopejr_sim/controllers/hope_jr_sim_ik_controller.py")
+DEFAULT_SIM_CONTROLLER_PATH = Path("/home/viaan/vivy_hopejr_sim/controllers/vivy_sim_ik_controller.py")
 DEFAULT_OUTPUT_PATH = Path("/tmp/vivy_joint_probe.json")
 DEFAULT_DELTA_DEG = 5.0
 DEFAULT_SETTLE_S = 0.5

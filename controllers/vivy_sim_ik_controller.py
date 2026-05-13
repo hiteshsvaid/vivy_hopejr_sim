@@ -14,7 +14,7 @@ REPO_ROOT = SCRIPT_DIR.parent
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from ui.vivy_teleop_status_ui import HopeJrTeleopStatusUi
+from ui.vivy_teleop_status_ui import VivyTeleopStatusUi
 from ui.teleop_debug_visuals import TeleopDebugVisuals
 from controllers.head_teleop_mapper import HeadTeleopMapper
 from controllers.quest_teleop_mapper import QuestTeleopMapper
@@ -1070,7 +1070,7 @@ class HopeJrIsaacUpdateLoop:
         self._last_tick_time = 0.0
         self._last_status = None
         self._last_wait_seconds = None
-        self._status_ui = HopeJrTeleopStatusUi()
+        self._status_ui = VivyTeleopStatusUi()
         self._last_playing_state = None
         self._play_state_path = DEFAULT_SIM_PLAY_STATE_PATH
 

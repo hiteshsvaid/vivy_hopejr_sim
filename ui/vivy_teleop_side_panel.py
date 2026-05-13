@@ -4,7 +4,7 @@ import time
 from typing import Any
 
 
-class HopeJrTeleopSidePanel:
+class VivyTeleopSidePanel:
     _TEXT_NEUTRAL = 0xFFB8B8B8
     _TEXT_DIM = 0xFF8E8E8E
     _TEXT_CRITICAL = 0xFFFF5A5A
