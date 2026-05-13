@@ -484,13 +484,19 @@ class VivyFlowDetailPanel:
         }
         return label_map.get(cleaned, cleaned)
 
-    def _joint_direct_input_config(self, joint_name: str, controller_defaults: dict[str, Any]) -> dict[str, Any]:
-        if joint_name == "right_forearm_twist":
-            enabled = bool(controller_defaults.get("forearm_twist_from_controller_rotation", False))
+    def _joint_direct_input_config(
+        self,
+        joint_name: str,
+        controller_defaults: dict[str, Any],
+        joints: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        if joint_name in {"right_forearm_twist", "left_forearm_twist"}:
+            joint_entry = dict((joints or {}).get(joint_name) or {})
+            direct_input = dict(joint_entry.get("direct_input") or {})
             return {
-                "source": "rotation" if enabled else "none",
-                "axis": str(controller_defaults.get("forearm_twist_controller_axis", "z")).lower(),
-                "sign": float(controller_defaults.get("forearm_twist_controller_sign", 1.0)),
+                "source": str(direct_input.get("source", "none")).lower(),
+                "axis": str(direct_input.get("axis", "z")).lower(),
+                "sign": float(direct_input.get("sign", 1.0)),
                 "scale": None,
                 "deadband": None,
             }
@@ -542,18 +548,23 @@ class VivyFlowDetailPanel:
         try:
             config = self._read_vivy_config()
             controller_defaults = dict(config.get("controller_defaults") or {})
-            if joint_name == "right_forearm_twist":
+            joints = dict(config.get("joints") or {})
+            if joint_name in {"right_forearm_twist", "left_forearm_twist"}:
+                joint_entry = dict(joints.get(joint_name) or {})
+                direct_input = dict(joint_entry.get("direct_input") or {})
                 if source is not None:
                     if source not in {"none", "rotation"}:
                         raise ValueError("forearm input source must be none or rotation")
-                    controller_defaults["forearm_twist_from_controller_rotation"] = source == "rotation"
+                    direct_input["source"] = source
                 if input_axis is not None:
                     input_axis = input_axis.strip().lower()
                     if input_axis not in {"x", "y", "z"}:
                         raise ValueError("forearm input axis must be x, y, or z")
-                    controller_defaults["forearm_twist_controller_axis"] = input_axis
+                    direct_input["axis"] = input_axis
                 if sign is not None:
-                    controller_defaults["forearm_twist_controller_sign"] = float(sign)
+                    direct_input["sign"] = float(sign)
+                joint_entry["direct_input"] = direct_input
+                joints[joint_name] = joint_entry
             elif joint_name == "right_wrist":
                 if sign is not None:
                     controller_defaults["right_wrist_thumbstick_sign"] = float(sign)
@@ -571,8 +582,9 @@ class VivyFlowDetailPanel:
                 self._labels["ik_status"].text = f"Ignored {joint_name}: no direct input mapping."
                 return
             config["controller_defaults"] = controller_defaults
+            config["joints"] = joints
             self._write_vivy_config(config)
-            direct = self._joint_direct_input_config(joint_name, controller_defaults)
+            direct = self._joint_direct_input_config(joint_name, controller_defaults, joints)
             self._last_ik_table_signature = None
             self._labels["ik_status"].text = (
                 f"Saved {joint_name} direct input: source={direct['source']} axis={direct['axis']} "
@@ -598,7 +610,7 @@ class VivyFlowDetailPanel:
         default_output_delta = float(controller_defaults.get("output_max_delta_deg_per_tick", 2.0))
         ik_joint_names = set(self._list_solve_joint_names())
         direct_inputs = {
-            joint_name: self._joint_direct_input_config(joint_name, controller_defaults) for joint_name in names
+            joint_name: self._joint_direct_input_config(joint_name, controller_defaults, joints) for joint_name in names
         }
         signature = tuple(
             (
@@ -711,7 +723,7 @@ class VivyFlowDetailPanel:
                             width=90,
                             style={"color": self._TEXT_NEUTRAL, "font_size": 12},
                         )
-                    if joint_name == "right_forearm_twist":
+                    if joint_name in {"right_forearm_twist", "left_forearm_twist"}:
                         source_options = ["none", "rotation"]
                         source_index = (
                             source_options.index(str(direct_input["source"]))

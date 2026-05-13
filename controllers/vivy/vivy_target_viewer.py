@@ -138,6 +138,14 @@ def _parse_position_axes(value: str) -> tuple[int, int, int]:
     return tuple(axis_map[ch] for ch in cleaned)
 
 
+def _parse_rotation_axis(value: object) -> int:
+    axis = str(value).strip().lower()
+    axis_map = {"x": 0, "y": 1, "z": 2}
+    if axis not in axis_map:
+        raise ValueError(f"unsupported rotation axis: {value!r}")
+    return axis_map[axis]
+
+
 class VivyTargetViewer:
     def __init__(self, *, signal_path: str | Path | None = None, interval_s: float = 0.05):
         default_signal_path, read_teleop_state = _load_shared_signal_helpers()
@@ -658,6 +666,42 @@ class VivyTargetViewer:
             jacobian_mode=self.left_ik_jacobian_mode,
         )
 
+    def _apply_rotation_direct_overrides(
+        self,
+        *,
+        joint_names: list[str],
+        joint_targets_deg: np.ndarray,
+        hand_state: dict[str, object] | None,
+        quest_anchor_rotation: np.ndarray | None,
+    ) -> np.ndarray:
+        result = np.asarray(joint_targets_deg, dtype=float).copy()
+        if not isinstance(hand_state, dict) or quest_anchor_rotation is None:
+            return result
+        orientation_xyzw = hand_state.get("orientation_xyzw")
+        if orientation_xyzw is None:
+            return result
+        try:
+            current_rotation = Rotation.from_quat(np.asarray(orientation_xyzw, dtype=float)).as_matrix()
+            relative_rotation = current_rotation @ np.asarray(quest_anchor_rotation, dtype=float).T
+            relative_rotvec_deg = Rotation.from_matrix(relative_rotation).as_rotvec(degrees=True)
+        except Exception:
+            return result
+        joints = dict(self.sim_config.get("joints") or {})
+        for index, joint_name in enumerate(joint_names):
+            joint_entry = dict(joints.get(joint_name) or {})
+            direct_input = dict(joint_entry.get("direct_input") or {})
+            if str(direct_input.get("source", "none")).strip().lower() != "rotation":
+                continue
+            try:
+                axis_index = _parse_rotation_axis(direct_input.get("axis", "z"))
+                sign = float(direct_input.get("sign", 1.0))
+                lower = float(joint_entry.get("min_deg", result[index]))
+                upper = float(joint_entry.get("max_deg", result[index]))
+            except (TypeError, ValueError):
+                continue
+            result[index] = float(np.clip(relative_rotvec_deg[axis_index] * sign, lower, upper))
+        return result
+
     def _log_head_mapping(self, head_map_result, head_state: dict) -> None:
         current = getattr(head_map_result, "head_current_degrees", None)
         anchor = getattr(head_map_result, "head_anchor_degrees", None)
@@ -862,6 +906,12 @@ class VivyTargetViewer:
                             left_targets = self._solve_left_arm_targets(
                                 current_joint_targets_deg=np.asarray(left_joint_targets_deg, dtype=float),
                                 target_pose_model=np.asarray(left_map_result.target_pose, dtype=float),
+                            )
+                            left_targets = self._apply_rotation_direct_overrides(
+                                joint_names=list(self.left_stage_io.joint_names),
+                                joint_targets_deg=left_targets,
+                                hand_state=getattr(left_map_result, "hand_state", None),
+                                quest_anchor_rotation=self.left_teleop_mapper.quest_anchor_rotation,
                             )
                             self.left_stage_io.write_joint_targets_deg(stage, left_targets)
                             left_write_event["success"] = True
