@@ -71,7 +71,7 @@ class HopeJrJointProbeRunner:
         )
         self.stage = self.controller._get_stage()
         if self.stage is None:
-            raise RuntimeError("Isaac stage is not available; open joint_test.usda in Isaac Sim first.")
+            raise RuntimeError("Isaac stage is not available; open vivy_stage.usda in Isaac Sim first.")
         self.articulation = None
         self.baseline_model_deg = np.array(
             [

@@ -3,6 +3,7 @@
 ## Layout
 - Core runtime: `controllers/`, `ui/`, `utils/`
 - Robot asset: `joint_test.usda`
+- Launch stage: `vivy_stage.usda`
 - Temporary probes: `probes/`
 
 ## Teleop Source Of Truth
