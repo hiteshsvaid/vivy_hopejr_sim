@@ -41,7 +41,7 @@ class QuestDetailSection:
                     publish_hz_field = ui.StringField(width=90)
                     self.panel._labels["quest_camera_publish_hz_model"] = publish_hz_field.model
                 ui.Label(
-                    "Camera frame send rate for the sim publisher. Lower values reduce bandwidth and latency pressure.",
+                    "Camera frame send rate for the active publisher. Lower values reduce bandwidth and latency pressure.",
                     style=value_style,
                     word_wrap=True,
                 )
@@ -50,7 +50,7 @@ class QuestDetailSection:
                     jpeg_quality_field = ui.StringField(width=90)
                     self.panel._labels["quest_camera_jpeg_quality_model"] = jpeg_quality_field.model
                 ui.Label(
-                    "JPEG quality used to compress the sim camera stream before sending it to Quest.",
+                    "JPEG quality used to compress the camera stream before sending it to Quest.",
                     style=value_style,
                     word_wrap=True,
                 )
@@ -68,7 +68,7 @@ class QuestDetailSection:
                     diagnostics_checkbox = ui.CheckBox(width=24)
                     self.panel._labels["quest_camera_diagnostics_model"] = diagnostics_checkbox.model
                 ui.Label(
-                    "When enabled, the sim publisher prints camera timing diagnostics to the console.",
+                    "When enabled, the camera publisher prints timing diagnostics to the console.",
                     style=value_style,
                     word_wrap=True,
                 )
@@ -82,21 +82,23 @@ class QuestDetailSection:
     def load_from_config(self) -> None:
         config = self.panel._read_vivy_config()
         controller_defaults = dict(config.get("controller_defaults") or {})
+        camera_config = dict(controller_defaults.get("camera") or {})
+        stream_config = dict(camera_config.get("stream") or {})
         try:
             self.panel._labels["quest_camera_publish_hz_model"].set_value(
-                str(controller_defaults.get("camera_frame_publish_hz", 5.0))
+                str(stream_config.get("publish_hz", 5.0))
             )
             self.panel._labels["quest_camera_jpeg_quality_model"].set_value(
-                str(controller_defaults.get("camera_jpeg_quality", 60))
+                str(stream_config.get("jpeg_quality", 60))
             )
-            resolution = controller_defaults.get("camera_frame_resolution", [320, 240])
+            resolution = stream_config.get("resolution", [320, 240])
             if isinstance(resolution, (list, tuple)) and len(resolution) == 2:
                 resolution_text = f"{int(float(resolution[0]))}x{int(float(resolution[1]))}"
             else:
                 resolution_text = "320x240"
             self.panel._labels["quest_camera_resolution_model"].set_value(resolution_text)
             self.panel._labels["quest_camera_diagnostics_model"].set_value(
-                bool(controller_defaults.get("show_camera_diagnostics", False))
+                bool(stream_config.get("show_diagnostics", False))
             )
         except Exception:
             pass

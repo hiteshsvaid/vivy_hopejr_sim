@@ -267,12 +267,16 @@ class VivyFlowDetailPanel:
             camera_resolution = [int(float(width_text)), int(float(height_text))]
             if camera_resolution[0] <= 0 or camera_resolution[1] <= 0:
                 raise ValueError("resolution values must be positive")
-            controller_defaults["camera_frame_publish_hz"] = camera_frame_publish_hz
-            controller_defaults["camera_jpeg_quality"] = camera_jpeg_quality
-            controller_defaults["camera_frame_resolution"] = camera_resolution
-            controller_defaults["show_camera_diagnostics"] = bool(
+            camera_config = dict(controller_defaults.get("camera") or {})
+            stream_config = dict(camera_config.get("stream") or {})
+            stream_config["publish_hz"] = camera_frame_publish_hz
+            stream_config["jpeg_quality"] = camera_jpeg_quality
+            stream_config["resolution"] = camera_resolution
+            stream_config["show_diagnostics"] = bool(
                 self._labels["quest_camera_diagnostics_model"].get_value_as_bool()
             )
+            camera_config["stream"] = stream_config
+            controller_defaults["camera"] = camera_config
             config["controller_defaults"] = controller_defaults
             self._write_vivy_config(config)
             self._labels["quest_status"].text = (
