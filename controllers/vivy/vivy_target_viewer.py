@@ -146,6 +146,27 @@ def _parse_rotation_axis(value: object) -> int:
     return axis_map[axis]
 
 
+def _parse_button_or_axis_input_source(value: object) -> str:
+    source = str(value or "none").strip().lower()
+    alias_map = {
+        "a": "a_pressed",
+        "b": "b_pressed",
+        "x": "x_pressed",
+        "y": "y_pressed",
+        "primary_button": "a_pressed",
+        "secondary_button": "b_pressed",
+    }
+    return alias_map.get(source, source)
+
+
+def _read_direct_input_source(hand_state: dict[str, object], source: str) -> float:
+    if source == "none":
+        return 0.0
+    if source in {"grip", "trigger"}:
+        return max(0.0, float(hand_state.get(source, 0.0)))
+    return 1.0 if bool(hand_state.get(source, False)) else 0.0
+
+
 class VivyTargetViewer:
     def __init__(self, *, signal_path: str | Path | None = None, interval_s: float = 0.05):
         default_signal_path, read_teleop_state = _load_shared_signal_helpers()
@@ -204,9 +225,16 @@ class VivyTargetViewer:
         left_chain_config = dict(ik_chains.get("left_arm") or {})
         left_end_effector_config = dict(left_chain_config.get("end_effector") or {})
         left_end_effector_path = str(left_end_effector_config.get("frame_path", "/World/JointTest/LeftForearm/EndEffector"))
-        left_joint_names = list(left_chain_config.get("joint_names") or [])
-        if not left_joint_names:
-            left_joint_names = list(self.ik_joint_names)
+        left_ik_joint_names = list(left_chain_config.get("joint_names") or [])
+        if not left_ik_joint_names:
+            left_ik_joint_names = list(self.ik_joint_names)
+        left_controlled_joint_names = list(left_chain_config.get("controlled_joint_names") or left_ik_joint_names)
+        self.left_ik_joint_names = list(left_ik_joint_names)
+        self.left_controlled_joint_names = list(left_controlled_joint_names)
+        self.left_controlled_to_ik_indices = np.asarray(
+            [left_controlled_joint_names.index(name) for name in left_ik_joint_names],
+            dtype=np.int64,
+        )
         self.left_kinematics = VivyArmKinematics.from_json(SIM_CONFIG_PATH, chain_name="left_arm")
         self.left_position_scale = float(controller_defaults.get("position_scale", 1.0))
         self.left_world_offset = np.asarray(controller_defaults.get("world_offset", [0.0, 0.0, 0.0]), dtype=float)
@@ -235,15 +263,15 @@ class VivyTargetViewer:
         self.left_ik_max_step_deg = float(controller_defaults.get("ik_max_step_deg", 2.0))
         self.left_ik_jacobian_mode = str(controller_defaults.get("ik_jacobian_mode", "analytic"))
         self.left_neutral_joint_positions_deg = np.asarray(
-            [float(self.sim_config["joints"][name]["neutral_deg"]) for name in left_joint_names],
+            [float(self.sim_config["joints"][name]["neutral_deg"]) for name in left_ik_joint_names],
             dtype=float,
         )
         self.left_joint_weights = np.asarray(
-            [float(self.sim_config["joints"][name].get("weight", 1.0)) for name in left_joint_names],
+            [float(self.sim_config["joints"][name].get("weight", 1.0)) for name in left_ik_joint_names],
             dtype=float,
         )
         self.left_active_joint_mask = np.asarray(
-            [0.0 if bool(self.sim_config["joints"][name].get("hold_start", False)) else 1.0 for name in left_joint_names],
+            [0.0 if bool(self.sim_config["joints"][name].get("hold_start", False)) else 1.0 for name in left_ik_joint_names],
             dtype=float,
         )
 
@@ -299,7 +327,7 @@ class VivyTargetViewer:
             articulation_root_path=self.articulation_root_path,
             joint_root_path=self.joint_root_path,
             end_effector_path=left_end_effector_path,
-            joint_names=left_joint_names,
+            joint_names=left_controlled_joint_names,
         )
         self._stage_anchor_pose = None
         self._last_waiting_for_anchor = True
@@ -666,6 +694,15 @@ class VivyTargetViewer:
             jacobian_mode=self.left_ik_jacobian_mode,
         )
 
+    def _merge_left_ik_joint_targets_deg(
+        self,
+        current_controlled_targets_deg: np.ndarray,
+        proposed_ik_targets_deg: np.ndarray,
+    ) -> np.ndarray:
+        merged = np.asarray(current_controlled_targets_deg, dtype=float).copy()
+        merged[self.left_controlled_to_ik_indices] = np.asarray(proposed_ik_targets_deg, dtype=float)
+        return merged
+
     def _apply_rotation_direct_overrides(
         self,
         *,
@@ -700,6 +737,74 @@ class VivyTargetViewer:
             except (TypeError, ValueError):
                 continue
             result[index] = float(np.clip(relative_rotvec_deg[axis_index] * sign, lower, upper))
+        return result
+
+    def _apply_thumbstick_direct_overrides(
+        self,
+        *,
+        joint_names: list[str],
+        joint_targets_deg: np.ndarray,
+        hand_state: dict[str, object] | None,
+    ) -> np.ndarray:
+        result = np.asarray(joint_targets_deg, dtype=float).copy()
+        if not isinstance(hand_state, dict):
+            return result
+        thumbstick = np.asarray(hand_state.get("thumbstick", [0.0, 0.0]), dtype=float)
+        joints = dict(self.sim_config.get("joints") or {})
+        axis_map = {"x": 0, "y": 1}
+        for index, joint_name in enumerate(joint_names):
+            joint_entry = dict(joints.get(joint_name) or {})
+            direct_input = dict(joint_entry.get("direct_input") or {})
+            if str(direct_input.get("source", "none")).strip().lower() != "thumbstick":
+                continue
+            try:
+                axis_name = str(direct_input.get("axis", "x")).strip().lower()
+                axis_index = axis_map[axis_name]
+                sign = float(direct_input.get("sign", 1.0))
+                deadband = float(direct_input.get("deadband", 0.1))
+                lower = float(joint_entry.get("min_deg", result[index]))
+                upper = float(joint_entry.get("max_deg", result[index]))
+            except (KeyError, TypeError, ValueError):
+                continue
+            thumbstick_value = float(thumbstick[axis_index]) if thumbstick.size > axis_index else 0.0
+            if abs(thumbstick_value) < deadband:
+                continue
+            joint_tick_deg = float(joint_entry.get("output_max_delta_deg_per_tick", 0.0))
+            result[index] = float(np.clip(result[index] + thumbstick_value * sign * joint_tick_deg, lower, upper))
+        return result
+
+    def _apply_button_pair_direct_overrides(
+        self,
+        *,
+        joint_names: list[str],
+        joint_targets_deg: np.ndarray,
+        hand_state: dict[str, object] | None,
+    ) -> np.ndarray:
+        result = np.asarray(joint_targets_deg, dtype=float).copy()
+        if not isinstance(hand_state, dict):
+            return result
+        joints = dict(self.sim_config.get("joints") or {})
+        for index, joint_name in enumerate(joint_names):
+            joint_entry = dict(joints.get(joint_name) or {})
+            direct_input = dict(joint_entry.get("direct_input") or {})
+            if str(direct_input.get("source", "none")).strip().lower() != "button_pair":
+                continue
+            inward_source = _parse_button_or_axis_input_source(direct_input.get("inward_source", "none"))
+            outward_source = _parse_button_or_axis_input_source(direct_input.get("outward_source", "none"))
+            try:
+                sign = float(direct_input.get("sign", 1.0))
+                lower = float(joint_entry.get("min_deg", result[index]))
+                upper = float(joint_entry.get("max_deg", result[index]))
+            except (TypeError, ValueError):
+                continue
+            drive = sign * (
+                _read_direct_input_source(hand_state, outward_source)
+                - _read_direct_input_source(hand_state, inward_source)
+            )
+            if abs(drive) <= 1e-6:
+                continue
+            joint_tick_deg = float(joint_entry.get("output_max_delta_deg_per_tick", 0.0))
+            result[index] = float(np.clip(result[index] + drive * joint_tick_deg, lower, upper))
         return result
 
     def _log_head_mapping(self, head_map_result, head_state: dict) -> None:
@@ -884,8 +989,11 @@ class VivyTargetViewer:
                 left_hand_payload = left_hand
                 left_joint_targets_deg = self.left_stage_io.read_current_joint_targets_deg(stage)
                 if left_joint_targets_deg is not None:
+                    left_ik_joint_targets_deg = np.asarray(left_joint_targets_deg, dtype=float)[
+                        self.left_controlled_to_ik_indices
+                    ]
                     left_current_sim_pose = self.left_kinematics.forward_kinematics(
-                        np.asarray(left_joint_targets_deg, dtype=float)
+                        left_ik_joint_targets_deg
                     )
                     left_stage_pose = self.left_stage_io.read_stage_end_effector_pose(stage)
                     left_map_result = self.left_teleop_mapper.map_packet(
@@ -903,15 +1011,29 @@ class VivyTargetViewer:
                             "waiting_for_anchor": bool(getattr(left_map_result, "waiting_for_anchor", False)),
                         }
                         try:
-                            left_targets = self._solve_left_arm_targets(
-                                current_joint_targets_deg=np.asarray(left_joint_targets_deg, dtype=float),
+                            left_ik_targets = self._solve_left_arm_targets(
+                                current_joint_targets_deg=left_ik_joint_targets_deg,
                                 target_pose_model=np.asarray(left_map_result.target_pose, dtype=float),
+                            )
+                            left_targets = self._merge_left_ik_joint_targets_deg(
+                                np.asarray(left_joint_targets_deg, dtype=float),
+                                left_ik_targets,
                             )
                             left_targets = self._apply_rotation_direct_overrides(
                                 joint_names=list(self.left_stage_io.joint_names),
                                 joint_targets_deg=left_targets,
                                 hand_state=getattr(left_map_result, "hand_state", None),
                                 quest_anchor_rotation=self.left_teleop_mapper.quest_anchor_rotation,
+                            )
+                            left_targets = self._apply_thumbstick_direct_overrides(
+                                joint_names=list(self.left_stage_io.joint_names),
+                                joint_targets_deg=left_targets,
+                                hand_state=getattr(left_map_result, "hand_state", None),
+                            )
+                            left_targets = self._apply_button_pair_direct_overrides(
+                                joint_names=list(self.left_stage_io.joint_names),
+                                joint_targets_deg=left_targets,
+                                hand_state=getattr(left_map_result, "hand_state", None),
                             )
                             self.left_stage_io.write_joint_targets_deg(stage, left_targets)
                             left_write_event["success"] = True
