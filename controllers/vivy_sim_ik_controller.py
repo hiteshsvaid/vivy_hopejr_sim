@@ -16,7 +16,22 @@ if str(REPO_ROOT) not in sys.path:
 
 from ui.vivy_teleop_status_ui import VivyTeleopStatusUi
 from ui.teleop_debug_visuals import TeleopDebugVisuals
-from controllers.head_teleop_mapper import HeadTeleopMapper
+HEAD_TELEOP_MAPPER_PATH = Path(
+    "/home/viaan/huggingface/lerobot/src/lerobot/teleoperators/vivy/head_teleop_mapper.py"
+)
+
+
+def _load_head_teleop_mapper_class():
+    spec = importlib.util.spec_from_file_location(
+        "vivy_shared_head_teleop_mapper", HEAD_TELEOP_MAPPER_PATH
+    )
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module.HeadTeleopMapper
+
+HeadTeleopMapper = _load_head_teleop_mapper_class()
 from controllers.quest_teleop_mapper import QuestTeleopMapper
 from controllers.joint_control_policy import (
     DEFAULT_POSITION_ONLY_JOINT_CONTROL_PROFILE,
@@ -311,6 +326,8 @@ class VivySimIkController:
             ),
             pan_input_clamp_deg=float(controller_defaults.get("head_pan_input_clamp_deg", 60.0)),
             tilt_input_clamp_deg=float(controller_defaults.get("head_tilt_input_clamp_deg", 30.0)),
+            pan_output_sign=float(self.sim_config["joints"]["head_pan"].get("output_sign", -1.0)),
+            tilt_output_sign=float(self.sim_config["joints"]["head_tilt"].get("output_sign", 1.0)),
             max_delta_deg_per_tick=np.asarray(
                 [
                     float(self.sim_config["joints"]["head_pan"].get("output_max_delta_deg_per_tick", controller_defaults.get("output_max_delta_deg_per_tick", 2.0))),

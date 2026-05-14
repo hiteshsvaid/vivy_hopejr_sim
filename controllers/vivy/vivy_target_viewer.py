@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import socket
 import sys
 import time
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 from scipy.spatial.transform import Rotation
@@ -43,11 +45,6 @@ def _load_sim_config() -> dict:
 def _load_kinematics_class():
     module = _load_module("vivy_target_viewer_kinematics", KINEMATICS_PATH)
     return getattr(module, "VivyArmKinematics", module.HopeJrArmKinematics)
-
-
-def _load_head_teleop_mapper_class():
-    module = _load_module("vivy_target_viewer_head_teleop_mapper", Path("/home/viaan/vivy_hopejr_sim/controllers/head_teleop_mapper.py"))
-    return module.HeadTeleopMapper
 
 
 def _load_shared_signal_helpers():
@@ -119,11 +116,38 @@ def _load_json_file(path: Path) -> dict | None:
     return payload if isinstance(payload, dict) else None
 
 
+class ControlStateUdpReceiver:
+    def __init__(self, *, host: str, port: int):
+        self.host = str(host)
+        self.port = int(port)
+        self._socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self._socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self._socket.bind((self.host, self.port))
+        self._socket.setblocking(False)
+        self._latest: dict | None = None
+
+    def read_latest(self) -> dict | None:
+        latest_payload = None
+        while True:
+            try:
+                latest_payload, _addr = self._socket.recvfrom(1024 * 1024)
+            except BlockingIOError:
+                break
+        if latest_payload is None:
+            return self._latest
+        try:
+            payload = json.loads(latest_payload.decode("utf-8"))
+        except Exception:
+            return self._latest
+        if isinstance(payload, dict) and payload.get("type") == "vivy_control_state":
+            self._latest = payload
+        return self._latest
+
+
 class VivyTargetViewer:
     def __init__(self, *, signal_path: str | Path | None = None, interval_s: float = 0.05):
         default_signal_path, read_teleop_state = _load_shared_signal_helpers()
         VivyArmKinematics = _load_kinematics_class()
-        HeadTeleopMapper = _load_head_teleop_mapper_class()
         HopeJrStageIo = _load_stage_io_class()
         TeleopDebugVisuals = _load_visuals_class()
         VivySidePanel = _load_side_panel_class()
@@ -140,6 +164,11 @@ class VivyTargetViewer:
 
         self.sim_config = _load_sim_config()
         controller_defaults = dict(self.sim_config.get("controller_defaults") or {})
+        control_state_config = dict(controller_defaults.get("control_state") or {})
+        self.control_state_receiver = ControlStateUdpReceiver(
+            host=str(control_state_config.get("udp_host", "127.0.0.1")),
+            port=int(control_state_config.get("udp_port", 8767)),
+        )
         self.end_effector_path = controller_defaults.get("end_effector_path", "/World/JointTest/RightForearm/EndEffector")
         self.teleop_debug_root = controller_defaults.get("teleop_debug_root", "/World/JointTest/TeleopDebug")
         self.articulation_root_path = controller_defaults.get("articulation_root_path", "/World/JointTest")
@@ -192,31 +221,6 @@ class VivyTargetViewer:
             self.arm_joint_names[side] = list(controlled_joint_names_for_side)
             self.arm_end_effector_paths[side] = end_effector_path_for_side
         head_joint_names = ("head_pan", "head_tilt")
-        head_neutral_joint_targets_deg = np.asarray(
-            [float(self.sim_config["joints"][name]["neutral_deg"]) for name in head_joint_names],
-            dtype=float,
-        )
-        head_lower_joint_limits_deg = np.asarray(
-            [float(self.sim_config["joints"][name]["min_deg"]) for name in head_joint_names],
-            dtype=float,
-        )
-        head_upper_joint_limits_deg = np.asarray(
-            [float(self.sim_config["joints"][name]["max_deg"]) for name in head_joint_names],
-            dtype=float,
-        )
-        head_max_delta_deg_per_tick = np.asarray(
-            [float(self.sim_config["joints"][name].get("output_max_delta_deg_per_tick", controller_defaults.get("output_max_delta_deg_per_tick", 2.0))) for name in head_joint_names],
-            dtype=float,
-        )
-        self.head_teleop_mapper = HeadTeleopMapper(
-            head_joint_names=head_joint_names,
-            neutral_joint_targets_deg=head_neutral_joint_targets_deg,
-            lower_joint_limits_deg=head_lower_joint_limits_deg,
-            upper_joint_limits_deg=head_upper_joint_limits_deg,
-            pan_input_clamp_deg=float(controller_defaults.get("head_pan_input_clamp_deg", 60.0)),
-            tilt_input_clamp_deg=float(controller_defaults.get("head_tilt_input_clamp_deg", 30.0)),
-            max_delta_deg_per_tick=head_max_delta_deg_per_tick,
-        )
         self.head_stage_io = HopeJrStageIo(
             articulation_root_path=self.articulation_root_path,
             joint_root_path=self.joint_root_path,
@@ -675,20 +679,21 @@ class VivyTargetViewer:
         anchor_text = "n/a" if anchor is None else np.array2string(np.asarray(anchor, dtype=float), precision=2, separator=", ")
         target_text = "n/a" if target is None else np.array2string(np.asarray(target, dtype=float), precision=2, separator=", ")
         if head_map_result is None:
-            print(f"Vivy head: waiting_right_thumbclick current={current_text} anchor={anchor_text} target={target_text}")
+            print(f"Vivy head: waiting_thumbclick current={current_text} anchor={anchor_text} target={target_text}")
             return
         state = "tracked" if bool(getattr(head_map_result, "tracked", False)) else "untracked"
         if bool(getattr(head_map_result, "follow_target_enabled", False)):
             state = f"{state}/armed"
         elif bool(getattr(head_map_result, "waiting_for_anchor", False)):
-            state = f"{state}/waiting_right_thumbclick"
+            state = f"{state}/waiting_thumbclick"
         if bool(getattr(head_map_result, "tracking_lost", False)):
             state = f"{state}/lost"
         print(f"Vivy head: {state} current={current_text} anchor={anchor_text} target={target_text}")
         anchor_payload = getattr(head_map_result, "anchor_captured_payload", None)
         if isinstance(anchor_payload, dict):
+            armed_by = getattr(head_map_result, "armed_by", None) or "unknown"
             print(
-                "Vivy head: right-thumbclick armed anchor captured "
+                f"Vivy head: {armed_by}-thumbclick armed anchor captured "
                 f"pan={anchor_payload.get('head_anchor_pan_degrees')} tilt={anchor_payload.get('head_anchor_tilt_degrees')} target={anchor_payload.get('head_target_joint_targets_deg')}"
             )
 
@@ -715,6 +720,52 @@ class VivyTargetViewer:
             return head_state
         return None
 
+    def _apply_udp_control_state(self, payload: dict, panel_payload: dict, control_state: dict | None) -> None:
+        if isinstance(control_state, dict):
+            payload["control_state"] = dict(control_state)
+            payload["control_state_source"] = "udp"
+            panel_payload["control_state"] = dict(control_state)
+        else:
+            payload["control_state"] = {
+                "type": "vivy_control_state",
+                "source": "udp",
+                "status": "waiting_for_udp",
+                "right": {"enabled": False},
+                "left": {"enabled": False},
+                "head": {"enabled": False, "armed_by": None},
+            }
+            payload["control_state_source"] = "udp_waiting"
+            panel_payload["control_state"] = dict(payload["control_state"])
+            control_state = payload["control_state"]
+        for side in self.arm_sides:
+            side_state = control_state.get(side)
+            if not isinstance(side_state, dict):
+                side_state = {}
+            follow_enabled = bool(side_state.get("enabled", False))
+            payload[f"{side}_follow_target_enabled"] = follow_enabled
+            panel_payload[f"{side}_follow_target_enabled"] = follow_enabled
+            if side == "right":
+                payload["follow_target_enabled"] = follow_enabled
+                panel_payload["follow_target_enabled"] = follow_enabled
+        head_state = control_state.get("head")
+        if not isinstance(head_state, dict):
+            head_state = {}
+        head_enabled = bool(head_state.get("enabled", False))
+        payload["head_follow_target_enabled"] = head_enabled
+        payload["head_waiting_for_anchor"] = not head_enabled
+        payload["head_armed_by"] = head_state.get("armed_by")
+        panel_payload["head_follow_target_enabled"] = head_enabled
+        panel_payload["head_waiting_for_anchor"] = not head_enabled
+        panel_payload["head_armed_by"] = head_state.get("armed_by")
+        head_control = payload.get("head_control")
+        if isinstance(head_control, dict):
+            head_control = dict(head_control)
+            head_control["follow_target_enabled"] = head_enabled
+            head_control["waiting_for_anchor"] = not head_enabled
+            head_control["armed_by"] = head_state.get("armed_by")
+            head_control["event_seq"] = head_state.get("event_seq")
+            payload["head_control"] = head_control
+
     def _on_update(self, _event: object) -> None:
         now = time.monotonic()
         if now - self._last_tick_time < self.interval_s:
@@ -733,6 +784,8 @@ class VivyTargetViewer:
         real_feedback = self._read_real_feedback()
         real_joint_positions_deg = self._read_real_feedback_joint_positions_deg(real_feedback)
         panel_payload = self._inject_real_feedback_rows(payload, real_feedback)
+        control_state = self.control_state_receiver.read_latest()
+        self._apply_udp_control_state(payload, panel_payload, control_state)
         try:
             self.flow_panel.update(payload, flow_control)
         except Exception:
@@ -835,50 +888,48 @@ class VivyTargetViewer:
         head_state = None
         if stage is not None:
             head_state = self._extract_head_state(payload)
-            if isinstance(head_state, dict):
-                head_packet = {"head": dict(head_state)}
-                normalized = payload.get("normalized")
-                if isinstance(normalized, dict):
-                    head_packet["normalized"] = dict(normalized)
-                head_map_result = self.head_teleop_mapper.map_packet(head_packet)
-                if head_map_result is not None:
-                    head_write_event = {
-                        "timestamp": time.time(),
-                        "type": "head_write",
-                        "tracked": bool(getattr(head_map_result, "tracked", False)),
-                        "follow_target_enabled": bool(getattr(head_map_result, "follow_target_enabled", False)),
-                        "waiting_for_anchor": bool(getattr(head_map_result, "waiting_for_anchor", False)),
-                        "armed_by": getattr(head_map_result, "armed_by", None),
-                    }
-                    try:
-                        head_targets = np.asarray(head_map_result.target_joint_targets_deg, dtype=float)
-                        self.head_stage_io.write_joint_targets_deg(stage, head_targets)
-                        head_write_event["success"] = True
-                        head_write_event["head_joint_names"] = list(self.head_stage_io.joint_names)
-                        head_write_event["head_joint_targets_deg"] = [float(value) for value in head_targets.tolist()]
-                        print(
-                            "Vivy head: stage=written "
-                            f"head_pan={head_targets[0]:.2f} head_tilt={head_targets[1]:.2f}"
-                        )
-                    except Exception as exc:
-                        head_write_event["success"] = False
-                        head_write_event["error"] = str(exc)
-                        print(f"Vivy head: stage write failed error={exc}")
-                    try:
-                        _append_sim_write_event(SIM_WRITE_EVENTS_PATH, head_write_event)
-                    except Exception:
-                        pass
-                    self._log_head_mapping(head_map_result, head_state)
+            head_control = payload.get("head_control")
+            head_targets_payload = payload.get("head_joint_targets_deg")
+            if isinstance(head_control, dict) and isinstance(head_targets_payload, list):
+                head_write_event = {
+                    "timestamp": time.time(),
+                    "type": "head_write",
+                    "tracked": bool(head_control.get("tracked", False)),
+                    "follow_target_enabled": bool(head_control.get("follow_target_enabled", False)),
+                    "waiting_for_anchor": bool(head_control.get("waiting_for_anchor", False)),
+                    "armed_by": head_control.get("armed_by"),
+                }
+                try:
+                    head_targets = np.asarray(head_targets_payload, dtype=float)
+                    self.head_stage_io.write_joint_targets_deg(stage, head_targets)
+                    head_write_event["success"] = True
+                    head_write_event["head_joint_names"] = list(self.head_stage_io.joint_names)
+                    head_write_event["head_joint_targets_deg"] = [float(value) for value in head_targets.tolist()]
+                    print(
+                        "Vivy head: stage=written "
+                        f"head_pan={head_targets[0]:.2f} head_tilt={head_targets[1]:.2f}"
+                    )
+                except Exception as exc:
+                    head_write_event["success"] = False
+                    head_write_event["error"] = str(exc)
+                    print(f"Vivy head: stage write failed error={exc}")
+                try:
+                    _append_sim_write_event(SIM_WRITE_EVENTS_PATH, head_write_event)
+                except Exception:
+                    pass
+                self._log_head_mapping(SimpleNamespace(**head_control), head_state or {})
+            elif isinstance(head_state, dict):
+                print("Vivy head: waiting for shared head_control from fanout")
         payload["head_state"] = head_state
-        payload["head_follow_target_enabled"] = None if head_map_result is None else head_map_result.follow_target_enabled
-        payload["head_waiting_for_anchor"] = None if head_map_result is None else head_map_result.waiting_for_anchor
-        payload["head_anchor_degrees"] = None if head_map_result is None else head_map_result.head_anchor_degrees.tolist() if head_map_result.head_anchor_degrees is not None else None
-        payload["head_armed_by"] = None if head_map_result is None else head_map_result.armed_by
+        payload["head_follow_target_enabled"] = payload.get("head_follow_target_enabled")
+        payload["head_waiting_for_anchor"] = payload.get("head_waiting_for_anchor")
+        payload["head_anchor_degrees"] = payload.get("head_anchor_degrees")
+        payload["head_armed_by"] = (payload.get("head_control") or {}).get("armed_by") if isinstance(payload.get("head_control"), dict) else None
         panel_payload["head_state"] = head_state
-        panel_payload["head_follow_target_enabled"] = None if head_map_result is None else head_map_result.follow_target_enabled
-        panel_payload["head_waiting_for_anchor"] = None if head_map_result is None else head_map_result.waiting_for_anchor
-        panel_payload["head_anchor_degrees"] = None if head_map_result is None else head_map_result.head_anchor_degrees.tolist() if head_map_result.head_anchor_degrees is not None else None
-        panel_payload["head_armed_by"] = None if head_map_result is None else head_map_result.armed_by
+        panel_payload["head_follow_target_enabled"] = payload.get("head_follow_target_enabled")
+        panel_payload["head_waiting_for_anchor"] = payload.get("head_waiting_for_anchor")
+        panel_payload["head_anchor_degrees"] = payload.get("head_anchor_degrees")
+        panel_payload["head_armed_by"] = payload.get("head_armed_by")
         try:
             self.side_panel.update(panel_payload)
         except Exception:
