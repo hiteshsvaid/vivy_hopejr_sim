@@ -114,31 +114,6 @@ class VivyTeleopSidePanel:
 
                     ui.Line(style={"color": 0x55FFFFFF})
 
-                    with ui.VStack(spacing=1):
-                        with ui.VStack(spacing=0):
-                            ui.Label("ADVISORY SOURCE", style=section_style)
-                            self._labels["advisory_source"] = ui.Label("-", word_wrap=True)
-                        with ui.VStack(spacing=0):
-                            ui.Label("ADVISORY SEV", style=section_style)
-                            self._labels["advisory_severity"] = ui.Label("-", word_wrap=True)
-                        with ui.VStack(spacing=0):
-                            ui.Label("ADVISORY JOINT", style=section_style)
-                            self._labels["advisory_joint"] = ui.Label("-", word_wrap=True)
-                        with ui.VStack(spacing=0):
-                            ui.Label("ADVISORY ANGLES", style=section_style)
-                            self._labels["advisory_angles"] = ui.Label("-", word_wrap=True)
-                        with ui.VStack(spacing=0):
-                            ui.Label("ADVISORY LIMITS", style=section_style)
-                            self._labels["advisory_limits"] = ui.Label("-", word_wrap=True)
-                        with ui.VStack(spacing=0):
-                            ui.Label("ADVISORY WHY", style=section_style)
-                            self._labels["advisory_reasons"] = ui.Label("-", word_wrap=True)
-                        with ui.VStack(spacing=0):
-                            ui.Label("ADVISORY DO", style=section_style)
-                            self._labels["advisory_recommendations"] = ui.Label("-", word_wrap=True)
-
-                    ui.Line(style={"color": 0x55FFFFFF})
-
                     with ui.VStack(spacing=2):
                         with ui.VGrid(column_count=6, row_height=18, column_widths=[56, 56, 56, 56, 56, 42], spacing=6):
                             self._labels["joint_header_start"] = ui.Label("start", style=label_style)
@@ -232,9 +207,6 @@ class VivyTeleopSidePanel:
         joint_targets_deg = result.get("joint_targets_deg") or result.get("model_joint_targets_deg") or []
         joint_lower_limits_deg = result.get("joint_lower_limits_deg") or debug.get("joint_lower_limits_deg") or []
         joint_upper_limits_deg = result.get("joint_upper_limits_deg") or debug.get("joint_upper_limits_deg") or []
-        teleop_safety_advisory = debug.get("teleop_safety_advisory") or result.get("teleop_safety_advisory") or {}
-        active_advisory = teleop_safety_advisory.get("active", teleop_safety_advisory) if isinstance(teleop_safety_advisory, dict) else {}
-        advisory_snapshot = teleop_safety_advisory.get("joint_limit_snapshot", {}) if isinstance(teleop_safety_advisory, dict) else {}
         stage_error_score = debug.get("stage_error_score") or (debug.get("result") or {}).get("stage_error_score")
 
         joint_rows = []
@@ -263,23 +235,6 @@ class VivyTeleopSidePanel:
         error_text = "-" if stage_error_score is None else f"mean={float(stage_error_score.get('mean_error_norm_m', 0.0)):.4f} latest={float(stage_error_score.get('latest_error_norm_m', 0.0)):.4f} n={int(stage_error_score.get('window_size', 0))}"
         packet_text = "-" if packet_age is None else f"{packet if packet is not None else '-'} ({packet_age:.2f}s ago)"
 
-        if not active_advisory:
-            advisory_source = advisory_severity = advisory_joint = advisory_angles = advisory_limits = advisory_reasons = advisory_recommendations = "-"
-        else:
-            advisory_source = str(active_advisory.get("source_label") or active_advisory.get("source") or "-")
-            advisory_severity = str(active_advisory.get("severity", "-"))
-            advisory_joint = str(active_advisory.get("joint_name") or active_advisory.get("joint_step_abs_max_joint") or "-")
-            current_joint = advisory_snapshot.get("current_joint_deg")
-            target_joint = active_advisory.get("target_joint_deg", advisory_snapshot.get("target_joint_deg"))
-            advisory_angles = f"cur={float(current_joint):+.1f} tgt={float(target_joint):+.1f}" if current_joint is not None and target_joint is not None else "-"
-            lower_limit = active_advisory.get("lower_limit_deg", advisory_snapshot.get("lower_limit_deg"))
-            upper_limit = active_advisory.get("upper_limit_deg", advisory_snapshot.get("upper_limit_deg"))
-            lower_margin = active_advisory.get("lower_margin_deg")
-            upper_margin = active_advisory.get("upper_margin_deg")
-            advisory_limits = f"[{float(lower_limit):+.1f}, {float(upper_limit):+.1f}] lm={float(lower_margin):+.1f} um={float(upper_margin):+.1f}" if None not in (lower_limit, upper_limit, lower_margin, upper_margin) else "-"
-            advisory_reasons = ", ".join(active_advisory.get("reasons", [])) or "-"
-            advisory_recommendations = ", ".join(active_advisory.get("recommendations", [])[:2]) or "-"
-
         self._labels["status"].text = status_line
         self._labels["messages"].text = messages
         self._labels["anchor"].text = anchor
@@ -290,24 +245,6 @@ class VivyTeleopSidePanel:
         self._labels["error_score"].text = error_text
         self._labels["packet"].text = packet_text
         self._labels["mapped_delta"].text = mapped_text
-        self._labels["advisory_source"].text = advisory_source
-        self._labels["advisory_severity"].text = advisory_severity
-        self._labels["advisory_joint"].text = advisory_joint
-        self._labels["advisory_angles"].text = advisory_angles
-        self._labels["advisory_limits"].text = advisory_limits
-        self._labels["advisory_reasons"].text = advisory_reasons
-        self._labels["advisory_recommendations"].text = advisory_recommendations
-        advisory_color = self._TEXT_CRITICAL if str(active_advisory.get("severity", "")).lower() == "critical" else self._TEXT_NEUTRAL
-        for key in (
-            "advisory_source",
-            "advisory_severity",
-            "advisory_joint",
-            "advisory_angles",
-            "advisory_limits",
-            "advisory_reasons",
-            "advisory_recommendations",
-        ):
-            self._set_label_color(self._labels[key], advisory_color)
 
         for idx in range(7):
             row = joint_rows[idx] if idx < len(joint_rows) else {

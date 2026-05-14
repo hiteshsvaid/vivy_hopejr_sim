@@ -26,8 +26,6 @@ from controllers.joint_control_policy import (
 )
 from controllers.joint_target_conditioner import JointTargetConditioner
 from controllers.teleop_packet_source import TeleopPacketSource
-from controllers.guards.heuristic_safety_guard import HeuristicSafetyGuard
-from controllers.guards.joint_limit_safety_guard import JointLimitSafetyGuard
 from controllers.stage_io import HopeJrStageIo
 
 import numpy as np
@@ -205,9 +203,6 @@ class VivySimIkController:
             if lerobot_repo == DEFAULT_LEROBOT_REPO
             else lerobot_repo / "src/lerobot/robots/vivy/vivy_global_config.json"
         )
-        self.safety_guard_config = _get_config_section(self.sim_config, "safety_guards")
-        self.heuristic_safety_guard = HeuristicSafetyGuard(self.safety_guard_config.get("heuristic"))
-        self.joint_limit_safety_guard = JointLimitSafetyGuard(self.safety_guard_config.get("joint_limit"))
         self.model = self.kinematics_module.HopeJrArmKinematics.from_json(
             DEFAULT_SIM_CONFIG_PATH
             if lerobot_repo == DEFAULT_LEROBOT_REPO
@@ -938,44 +933,8 @@ class VivySimIkController:
         stage_end_effector_error = None
         if stage_end_effector_position is not None:
             stage_end_effector_error = (target_stage_position - stage_end_effector_position).tolist()
-        heuristic_safety_advisory = self.heuristic_safety_guard.evaluate(
-            mapped_delta=None if map_result.mapped_delta_model is None else map_result.mapped_delta_model,
-            stage_end_effector_error=stage_end_effector_error,
-            stage_dls_delta_deg=stage_dls_delta_deg,
-            joint_names=list(self.model.joint_names),
-        )
         lower_limits_deg = self.lower_joint_limits_deg
         upper_limits_deg = self.upper_joint_limits_deg
-        joint_limit_safety_advisory = self.joint_limit_safety_guard.evaluate(
-            joint_names=list(self.model.joint_names),
-            proposed_joint_targets_deg=solved_model_joint_targets_deg,
-            lower_limits_deg=lower_limits_deg,
-            upper_limits_deg=upper_limits_deg,
-        )
-        advisory_joint_snapshot = None
-        advisory_joint_name = joint_limit_safety_advisory.get("joint_name")
-        if advisory_joint_name in self.model.joint_names:
-            advisory_idx = self.model.joint_names.index(advisory_joint_name)
-            advisory_joint_snapshot = {
-                "joint_name": advisory_joint_name,
-                "joint_index": advisory_idx,
-                "current_joint_deg": None if stage_joint_positions_deg is None else float(stage_joint_positions_deg[advisory_idx]),
-                "target_joint_deg": None if advisory_idx >= len(solved_model_joint_targets_deg) else float(solved_model_joint_targets_deg[advisory_idx]),
-                "start_joint_deg": None if self.start_stage_joint_positions_deg is None else float(self.start_stage_joint_positions_deg[advisory_idx]),
-                "lower_limit_deg": None if advisory_idx >= len(lower_limits_deg) else float(lower_limits_deg[advisory_idx]),
-                "upper_limit_deg": None if advisory_idx >= len(upper_limits_deg) else float(upper_limits_deg[advisory_idx]),
-            }
-        all_advisories = [heuristic_safety_advisory, joint_limit_safety_advisory]
-        severity_rank = {"ok": 0, "warn": 1, "critical": 2}
-        active_advisory = max(all_advisories, key=lambda item: severity_rank.get(str(item.get("severity", "ok")), 0))
-        if limit_push_freeze is not None:
-            active_advisory = dict(limit_push_freeze)
-            all_advisories = [active_advisory, *all_advisories]
-        teleop_safety_advisory = {
-            "active": active_advisory,
-            "all": all_advisories,
-            "joint_limit_snapshot": advisory_joint_snapshot,
-        }
         stage_vs_model_joint_delta = None
         if stage_joint_positions_deg is not None:
             stage_vs_model_joint_delta = (stage_joint_positions_deg - solved_model_joint_targets_deg).tolist()
@@ -991,7 +950,6 @@ class VivySimIkController:
             "stage_dls_raw_position_error": None if stage_dls_raw_position_error is None else stage_dls_raw_position_error.tolist(),
             "stage_dls_clamped_position_error": None if stage_dls_clamped_position_error is None else stage_dls_clamped_position_error.tolist(),
             "stage_error_score": stage_error_score,
-            "teleop_safety_advisory": teleop_safety_advisory,
             "stage_dls_joint_weights": None if stage_dls_joint_weights is None else stage_dls_joint_weights.tolist(),
             "joint_target_conditioning": {
                 "max_delta_deg_per_tick": self.output_max_delta_deg_per_tick,
@@ -1041,7 +999,6 @@ class VivySimIkController:
             "current_joint_targets_deg": current_joint_targets_deg.tolist(),
             "stage_error_score": stage_error_score,
             "output_freeze": limit_push_freeze,
-            "teleop_safety_advisory": teleop_safety_advisory,
             "head_control": head_map_result,
             "result": result,
         }
