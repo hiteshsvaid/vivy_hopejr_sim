@@ -1538,7 +1538,7 @@ def Xform "World"
                 uniform token axis = "Y"
                 float drive:angular:physics:damping = 5
                 float drive:angular:physics:stiffness = 20
-                float drive:angular:physics:targetPosition = -0.8
+                float drive:angular:physics:targetPosition = -0.2
                 rel physics:body0 = </World/JointTest/LeftShoulderSupport>
                 rel physics:body1 = </World/JointTest/LeftShoulderPitch>
                 point3f physics:localPos0 = (-0.00046249424, 0.27588907, -0.04704027)
