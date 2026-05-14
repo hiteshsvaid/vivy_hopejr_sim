@@ -500,8 +500,8 @@ class VivyFlowDetailPanel:
                 "scale": None,
                 "deadband": None,
             }
-        if joint_name in {"right_wrist", "left_wrist", "right_palm"}:
-            default_axis = "y" if joint_name == "right_palm" else "x"
+        if joint_name in {"right_wrist", "left_wrist", "right_palm", "left_palm"}:
+            default_axis = "y" if joint_name in {"right_palm", "left_palm"} else "x"
             joint_entry = dict((joints or {}).get(joint_name) or {})
             direct_input = dict(joint_entry.get("direct_input") or {})
             return {
@@ -511,7 +511,7 @@ class VivyFlowDetailPanel:
                 "scale": None,
                 "deadband": float(direct_input.get("deadband", 0.1)),
             }
-        if joint_name in {"right_thumb", "right_index"}:
+        if joint_name in {"right_thumb", "right_index", "left_thumb", "left_index"}:
             joint_entry = dict((joints or {}).get(joint_name) or {})
             direct_input = dict(joint_entry.get("direct_input") or {})
             inward_source = self._format_direct_input_source_label(
@@ -562,18 +562,18 @@ class VivyFlowDetailPanel:
                     direct_input["sign"] = float(sign)
                 joint_entry["direct_input"] = direct_input
                 joints[joint_name] = joint_entry
-            elif joint_name in {"right_wrist", "left_wrist", "right_palm"}:
+            elif joint_name in {"right_wrist", "left_wrist", "right_palm", "left_palm"}:
                 joint_entry = dict(joints.get(joint_name) or {})
                 direct_input = dict(joint_entry.get("direct_input") or {})
                 direct_input.setdefault("source", "thumbstick")
-                direct_input.setdefault("axis", "y" if joint_name == "right_palm" else "x")
+                direct_input.setdefault("axis", "y" if joint_name in {"right_palm", "left_palm"} else "x")
                 if sign is not None:
                     direct_input["sign"] = float(sign)
                 if deadband is not None:
                     direct_input["deadband"] = float(deadband)
                 joint_entry["direct_input"] = direct_input
                 joints[joint_name] = joint_entry
-            elif joint_name in {"right_thumb", "right_index"}:
+            elif joint_name in {"right_thumb", "right_index", "left_thumb", "left_index"}:
                 joint_entry = dict(joints.get(joint_name) or {})
                 direct_input = dict(joint_entry.get("direct_input") or {})
                 direct_input.setdefault("source", "button_pair")
@@ -761,7 +761,7 @@ class VivyFlowDetailPanel:
                             )
                         )
                         ui.Label("n/a", width=70, style={"color": self._TEXT_NEUTRAL, "font_size": 12})
-                    elif joint_name in {"right_wrist", "left_wrist", "right_palm"}:
+                    elif joint_name in {"right_wrist", "left_wrist", "right_palm", "left_palm"}:
                         ui.Label("thumbstick", width=105, style={"color": self._TEXT_NEUTRAL, "font_size": 12})
                         ui.Label(str(direct_input["axis"]), width=75, style={"color": self._TEXT_NEUTRAL, "font_size": 12})
                         sign_field = ui.StringField(width=60)
@@ -780,7 +780,7 @@ class VivyFlowDetailPanel:
                                 deadband=float(model.get_value_as_string()),
                             )
                         )
-                    elif joint_name in {"right_thumb", "right_index"}:
+                    elif joint_name in {"right_thumb", "right_index", "left_thumb", "left_index"}:
                         ui.Label(str(direct_input["source"]), width=105, style={"color": self._TEXT_NEUTRAL, "font_size": 12})
                         ui.Label("n/a", width=75, style={"color": self._TEXT_NEUTRAL, "font_size": 12})
                         sign_field = ui.StringField(width=60)

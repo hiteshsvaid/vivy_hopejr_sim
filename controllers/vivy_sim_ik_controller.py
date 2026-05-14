@@ -426,15 +426,20 @@ class VivySimIkController:
                 current_stage_pose=left_stage_end_effector_pose,
                 anchor_joint_targets_deg=np.asarray(left_current_joint_targets_deg, dtype=float),
             )
+        arm_visuals = {}
+        if left_map_result is not None:
+            arm_visuals["left"] = {
+                "quest_mapped_position": left_map_result.quest_mapped_position_stage,
+                "sim_target_position": left_map_result.sim_target_position_stage,
+                "waiting_for_anchor": left_map_result.waiting_for_anchor,
+            }
         if map_result.waiting_for_anchor:
             self._update_teleop_debug_visuals(
                 quest_anchor_position=map_result.quest_current_position,
                 quest_current_position=map_result.quest_current_position,
                 quest_mapped_position=map_result.quest_mapped_position_stage,
                 sim_target_position=map_result.sim_target_position_stage,
-                left_quest_mapped_position=None if left_map_result is None else left_map_result.quest_mapped_position_stage,
-                left_sim_target_position=None if left_map_result is None else left_map_result.sim_target_position_stage,
-                left_waiting_for_anchor=None if left_map_result is None else left_map_result.waiting_for_anchor,
+                arm_visuals=arm_visuals,
                 actual_end_effector_position=self.stage_io.read_stage_end_effector_position(stage),
                 actual_end_effector_pose=self.stage_io.read_stage_end_effector_pose(stage),
                 waiting_for_anchor=True,
@@ -450,9 +455,7 @@ class VivySimIkController:
             quest_current_position=map_result.quest_current_position,
             quest_mapped_position=map_result.quest_mapped_position_stage,
             sim_target_position=map_result.sim_target_position_stage,
-            left_quest_mapped_position=None if left_map_result is None else left_map_result.quest_mapped_position_stage,
-            left_sim_target_position=None if left_map_result is None else left_map_result.sim_target_position_stage,
-            left_waiting_for_anchor=None if left_map_result is None else left_map_result.waiting_for_anchor,
+            arm_visuals=arm_visuals,
             actual_end_effector_position=self.stage_io.read_stage_end_effector_position(stage),
             actual_end_effector_pose=self.stage_io.read_stage_end_effector_pose(stage),
         )
@@ -496,9 +499,7 @@ class VivySimIkController:
         quest_current_position: np.ndarray,
         quest_mapped_position: np.ndarray,
         sim_target_position: np.ndarray,
-        left_quest_mapped_position: np.ndarray | None = None,
-        left_sim_target_position: np.ndarray | None = None,
-        left_waiting_for_anchor: bool | None = None,
+        arm_visuals: dict[str, dict[str, object]] | None = None,
         actual_end_effector_position: np.ndarray | None = None,
         actual_end_effector_pose: np.ndarray | None = None,
         waiting_for_anchor: bool = False,
@@ -510,9 +511,7 @@ class VivySimIkController:
             quest_current_position=quest_current_position,
             quest_mapped_position=quest_mapped_position,
             sim_target_position=sim_target_position,
-            left_quest_mapped_position=left_quest_mapped_position,
-            left_sim_target_position=left_sim_target_position,
-            left_waiting_for_anchor=waiting_for_anchor if left_waiting_for_anchor is None else bool(left_waiting_for_anchor),
+            arm_visuals=arm_visuals,
             reference_position=None if self.teleop_mapper.stage_anchor_pose is None else self.teleop_mapper.stage_anchor_pose[:3, 3],
             actual_end_effector_position=actual_end_effector_position,
             actual_end_effector_pose=actual_end_effector_pose,

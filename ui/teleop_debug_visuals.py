@@ -381,9 +381,7 @@ class TeleopDebugVisuals:
         quest_current_position: np.ndarray,
         quest_mapped_position: np.ndarray,
         sim_target_position: np.ndarray,
-        left_quest_mapped_position: np.ndarray | None = None,
-        left_sim_target_position: np.ndarray | None = None,
-        left_waiting_for_anchor: bool | None = None,
+        arm_visuals: dict[str, dict[str, object]] | None = None,
         reference_position: np.ndarray | None = None,
         actual_end_effector_position: np.ndarray | None = None,
         actual_end_effector_pose: np.ndarray | None = None,
@@ -405,25 +403,37 @@ class TeleopDebugVisuals:
         self._remove_prim_if_exists(stage, f"{self.teleop_debug_root}/RightQuestMapped")
         self._remove_prim_if_exists(stage, f"{self.teleop_debug_root}/RightSimTarget")
         self._remove_prim_if_exists(stage, f"{self.teleop_debug_root}/SimTargetCross")
-        if left_quest_mapped_position is None or left_sim_target_position is None:
-            self._remove_prim_if_exists(stage, f"{self.teleop_debug_root}/LeftQuestMapped")
-            self._remove_prim_if_exists(stage, f"{self.teleop_debug_root}/LeftSimTarget")
-            self._remove_prim_if_exists(stage, f"{self.teleop_debug_root}/LeftSimTargetCross")
         self._define_target_cross(stage, UsdGeom, Sdf, Gf, "RightSimTargetCross", sim_target_position, (1.0, 0.0, 0.0))
-        if left_quest_mapped_position is not None and left_sim_target_position is not None:
-            left_waiting = bool(waiting_for_anchor if left_waiting_for_anchor is None else left_waiting_for_anchor)
-            self._define_marker_sphere(stage, UsdGeom, Sdf, Gf, "LeftQuestMapped", left_quest_mapped_position, (0.0, 1.0, 0.0), 0.0045)
+        arm_specs = {
+            "left": {
+                "prefix": "Left",
+                "color": (0.0, 1.0, 0.0),
+            },
+        }
+        arm_visuals = arm_visuals if isinstance(arm_visuals, dict) else {}
+        for side, spec in arm_specs.items():
+            prefix = str(spec["prefix"])
+            color = spec["color"]
+            side_visual = arm_visuals.get(side) if isinstance(arm_visuals.get(side), dict) else {}
+            quest_mapped_position_side = side_visual.get("quest_mapped_position")
+            sim_target_position_side = side_visual.get("sim_target_position")
+            if quest_mapped_position_side is None or sim_target_position_side is None:
+                self._remove_prim_if_exists(stage, f"{self.teleop_debug_root}/{prefix}QuestMapped")
+                self._remove_prim_if_exists(stage, f"{self.teleop_debug_root}/{prefix}SimTarget")
+                self._remove_prim_if_exists(stage, f"{self.teleop_debug_root}/{prefix}SimTargetCross")
+                continue
+            self._define_marker_sphere(stage, UsdGeom, Sdf, Gf, f"{prefix}QuestMapped", quest_mapped_position_side, color, 0.0045)
             self._define_marker_sphere(
                 stage,
                 UsdGeom,
                 Sdf,
                 Gf,
-                "LeftSimTarget",
-                left_sim_target_position,
-                (0.0, 1.0, 0.0),
+                f"{prefix}SimTarget",
+                sim_target_position_side,
+                color,
                 0.0065,
             )
-            self._define_target_cross(stage, UsdGeom, Sdf, Gf, "LeftSimTargetCross", left_sim_target_position, (0.0, 1.0, 0.0))
+            self._define_target_cross(stage, UsdGeom, Sdf, Gf, f"{prefix}SimTargetCross", sim_target_position_side, color)
 
         if show_pitch_frames:
             self._define_pitch_frames(stage, UsdGeom, Sdf, Gf, pitch_visual)
