@@ -49,7 +49,7 @@ def _load_kinematics_class():
 
 def _load_shared_signal_helpers():
     module = _load_module("vivy_target_viewer_teleop_state", TELEOP_STATE_PATH)
-    return module.DEFAULT_TELEOP_STATE_PATH, module.read_teleop_state
+    return module.DEFAULT_TELEOP_STATE_PATH, module.TeleopStateUdpReceiver
 
 
 def _load_visuals_class():
@@ -146,14 +146,13 @@ class ControlStateUdpReceiver:
 
 class VivyTargetViewer:
     def __init__(self, *, signal_path: str | Path | None = None, interval_s: float = 0.05):
-        default_signal_path, read_teleop_state = _load_shared_signal_helpers()
+        default_signal_path, TeleopStateUdpReceiver = _load_shared_signal_helpers()
         VivyArmKinematics = _load_kinematics_class()
         HopeJrStageIo = _load_stage_io_class()
         TeleopDebugVisuals = _load_visuals_class()
         VivySidePanel = _load_side_panel_class()
         VivyFlowPanel = _load_flow_panel_class()
         VivyFlowDetailPanel = _load_flow_detail_panel_class()
-        self._read_teleop_state = read_teleop_state
         self.signal_path = Path(default_signal_path if signal_path is None else signal_path)
         self.interval_s = float(interval_s)
         self._last_tick_time = 0.0
@@ -165,6 +164,11 @@ class VivyTargetViewer:
         self.sim_config = _load_sim_config()
         controller_defaults = dict(self.sim_config.get("controller_defaults") or {})
         control_state_config = dict(controller_defaults.get("control_state") or {})
+        target_state_config = dict(controller_defaults.get("target_state") or {})
+        self.target_state_receiver = TeleopStateUdpReceiver(
+            host=str(target_state_config.get("udp_host", "127.0.0.1")),
+            port=int(target_state_config.get("sim_udp_port", 8771)),
+        )
         self.control_state_receiver = ControlStateUdpReceiver(
             host=str(control_state_config.get("udp_host", "127.0.0.1")),
             port=int(control_state_config.get("udp_port", 8767)),
@@ -777,7 +781,7 @@ class VivyTargetViewer:
         if stage is None or stage_pose is None:
             return
 
-        payload = self._read_teleop_state(self.signal_path)
+        payload = self.target_state_receiver.read_latest()
         if not isinstance(payload, dict):
             return
         flow_control = _read_flow_control()
