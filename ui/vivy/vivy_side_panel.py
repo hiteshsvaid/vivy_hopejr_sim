@@ -161,6 +161,34 @@ class VivySidePanel:
         now_monotonic = time.monotonic()
         recording_status = str(payload.get("recording_status") or "").strip() or None
         recording_name = str(payload.get("recording_name") or "").strip() or None
+        startup_neutral_active = bool(payload.get("startup_neutral", False))
+        startup_state = {
+            "neutral_seen": startup_neutral_active,
+            "handshake_complete": not startup_neutral_active,
+            "source_mode": str(payload.get("source_mode") or "").strip(),
+        }
+        previous_startup = self._last_event_state.get("Startup")
+        if previous_startup is None:
+            self._push_event("Startup: Waiting on neutral handshake", level="info", timestamp=timestamp)
+            if startup_neutral_active:
+                self._push_event("Startup: Neutral published", level="good", timestamp=timestamp)
+                startup_state["neutral_seen"] = True
+        else:
+            neutral_seen = bool(previous_startup.get("neutral_seen", False))
+            handshake_complete = bool(previous_startup.get("handshake_complete", False))
+            if startup_neutral_active and not neutral_seen:
+                self._push_event("Startup: Neutral published", level="good", timestamp=timestamp)
+                startup_state["neutral_seen"] = True
+                startup_state["handshake_complete"] = handshake_complete
+            elif not startup_neutral_active and neutral_seen and not handshake_complete:
+                self._push_event("Startup: Neutral handshake complete", level="good", timestamp=timestamp)
+                startup_state["neutral_seen"] = True
+                startup_state["handshake_complete"] = True
+            else:
+                startup_state["neutral_seen"] = neutral_seen or startup_neutral_active
+                startup_state["handshake_complete"] = handshake_complete or (not startup_neutral_active and neutral_seen)
+        self._last_event_state["Startup"] = startup_state
+
         hand_sources = {
             "Right": {
                 "waiting_for_anchor": bool(payload.get("waiting_for_anchor", True)),
