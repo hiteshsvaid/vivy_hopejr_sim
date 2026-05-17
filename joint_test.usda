@@ -1477,7 +1477,7 @@ def Xform "World"
             {
                 float drive:angular:physics:damping = 5
                 float drive:angular:physics:stiffness = 20
-                float drive:angular:physics:targetPosition = -1.6
+                float drive:angular:physics:targetPosition = -0.4
                 uniform token physics:axis = "Z"
                 rel physics:body0 = </World/JointTest/Head>
                 rel physics:body1 = </World/JointTest/HeadPanTiltAssembly>
@@ -1497,7 +1497,7 @@ def Xform "World"
             {
                 float drive:angular:physics:damping = 5
                 float drive:angular:physics:stiffness = 20
-                float drive:angular:physics:targetPosition = 51.7
+                float drive:angular:physics:targetPosition = 0
                 uniform token physics:axis = "Y"
                 rel physics:body0 = </World/JointTest/HeadPanTiltAssembly>
                 rel physics:body1 = </World/JointTest/HeadTiltCameraHolderAssembly>
@@ -1610,7 +1610,7 @@ def Xform "World"
                 uniform token axis = "Y"
                 float drive:angular:physics:damping = 5
                 float drive:angular:physics:stiffness = 20
-                float drive:angular:physics:targetPosition = -14
+                float drive:angular:physics:targetPosition = 0.1
                 rel physics:body0 = </World/JointTest/LeftUpperArm>
                 rel physics:body1 = </World/JointTest/LeftUpperElbow>
                 point3f physics:localPos0 = (-0.00030501818, 0.32475215, -0.15661305)
@@ -1646,7 +1646,7 @@ def Xform "World"
                 uniform token axis = "Y"
                 float drive:angular:physics:damping = 5
                 float drive:angular:physics:stiffness = 20
-                float drive:angular:physics:targetPosition = -35.4
+                float drive:angular:physics:targetPosition = -45.7
                 rel physics:body0 = </World/JointTest/LeftUpperElbow>
                 rel physics:body1 = </World/JointTest/LeftLowerElbow>
                 point3f physics:localPos0 = (0.03842352, 0.31881973, -0.24804)
@@ -1663,7 +1663,7 @@ def Xform "World"
             {
                 float drive:angular:physics:damping = 5
                 float drive:angular:physics:stiffness = 20
-                float drive:angular:physics:targetPosition = -4.4
+                float drive:angular:physics:targetPosition = -2.7
                 uniform token physics:axis = "X"
                 rel physics:body0 = </World/JointTest/LeftLowerElbow>
                 rel physics:body1 = </World/JointTest/LeftForearm>
@@ -1721,7 +1721,7 @@ def Xform "World"
             {
                 float drive:angular:physics:damping = 5
                 float drive:angular:physics:stiffness = 20
-                float drive:angular:physics:targetPosition = 40
+                float drive:angular:physics:targetPosition = -44.9
                 uniform token physics:axis = "Y"
                 rel physics:body0 = </World/JointTest/LeftPalm>
                 rel physics:body1 = </World/JointTest/LeftThumb>
@@ -1739,7 +1739,7 @@ def Xform "World"
             {
                 float drive:angular:physics:damping = 5
                 float drive:angular:physics:stiffness = 20
-                float drive:angular:physics:targetPosition = 0
+                float drive:angular:physics:targetPosition = -37.9
                 uniform token physics:axis = "Y"
                 rel physics:body0 = </World/JointTest/LeftPalm>
                 rel physics:body1 = </World/JointTest/LeftIndex>

@@ -11,7 +11,6 @@ class VivySidePanel:
     _TEXT_GOOD = 0xFF67C26F
     _TEXT_BAD = 0xFFD96C6C
     _TEXT_WARN = 0xFFE0BF66
-    _BUS_STALE_EVENT_DELAY_S = 2.0
 
     def __init__(self, *, width: int = 460, height: int = 540):
         self.width = width
@@ -24,9 +23,6 @@ class VivySidePanel:
         self._event_history: list[dict[str, Any]] = []
         self._event_batch: list[dict[str, Any]] | None = None
         self._event_sequence = 0
-        self._last_event_state: dict[str, dict[str, Any]] = {}
-        self._bus_stale_since_monotonic: float | None = None
-        self._bus_stale_event_logged = False
 
     def _dock_window(self, ui_module: Any) -> None:
         if self._window is None or self._docked:
@@ -197,247 +193,26 @@ class VivySidePanel:
     def _update_event_history(
         self,
         payload: dict[str, Any],
-        *,
-        bus_live: bool,
-        bus_status: str,
     ) -> None:
         timestamp = payload.get("timestamp")
         timestamp_ns = payload.get("timestamp_ns")
-        now_monotonic = time.monotonic()
-        recording_status = str(payload.get("recording_status") or "").strip() or None
-        recording_name = str(payload.get("recording_name") or "").strip() or None
-        startup_neutral_active = bool(payload.get("startup_neutral", False))
-        startup_state = {
-            "neutral_seen": startup_neutral_active,
-            "neutral_ready_logged": startup_neutral_active,
-            "handshake_complete": not startup_neutral_active,
-            "source_mode": str(payload.get("source_mode") or "").strip(),
-        }
-        previous_startup = self._last_event_state.get("Startup")
-        if previous_startup is None:
-            self._push_event(
-                "Startup: Waiting on neutral handshake",
-                level="info",
-                timestamp=timestamp,
-                timestamp_ns=timestamp_ns,
-            )
-            if startup_neutral_active:
-                self._push_event(
-                    "Startup: Neutral published",
-                    level="good",
-                    timestamp=timestamp,
-                    timestamp_ns=timestamp_ns,
-                )
-                startup_state["neutral_seen"] = True
-                self._push_event(
-                    "Startup: Right/left/head neutral ready",
-                    level="good",
-                    timestamp=timestamp,
-                    timestamp_ns=timestamp_ns,
-                )
+        event_messages = payload.get("event_messages")
+        if isinstance(event_messages, list):
+            source_events = [event for event in event_messages if isinstance(event, dict)]
         else:
-            neutral_seen = bool(previous_startup.get("neutral_seen", False))
-            neutral_ready_logged = bool(previous_startup.get("neutral_ready_logged", False))
-            handshake_complete = bool(previous_startup.get("handshake_complete", False))
-            if startup_neutral_active and not neutral_seen:
-                self._push_event(
-                    "Startup: Neutral published",
-                    level="good",
-                    timestamp=timestamp,
-                    timestamp_ns=timestamp_ns,
-                )
-                startup_state["neutral_seen"] = True
-                startup_state["handshake_complete"] = handshake_complete
-                if not neutral_ready_logged:
-                    self._push_event(
-                        "Startup: Right/left/head neutral ready",
-                        level="good",
-                        timestamp=timestamp,
-                        timestamp_ns=timestamp_ns,
-                    )
-            elif not startup_neutral_active and neutral_seen and not handshake_complete:
-                self._push_event(
-                    "Startup: Neutral handshake complete",
-                    level="good",
-                    timestamp=timestamp,
-                    timestamp_ns=timestamp_ns,
-                )
-                startup_state["neutral_seen"] = True
-                startup_state["handshake_complete"] = True
-            else:
-                startup_state["neutral_seen"] = neutral_seen or startup_neutral_active
-                startup_state["handshake_complete"] = handshake_complete or (not startup_neutral_active and neutral_seen)
-                startup_state["neutral_ready_logged"] = neutral_ready_logged or startup_neutral_active
-        self._last_event_state["Startup"] = startup_state
-
-        hand_sources = {
-            "Right": {
-                "waiting_for_anchor": bool(payload.get("waiting_for_anchor", True)),
-                "anchor_captured": payload.get("quest_anchor_position") is not None,
-                "freeze_active": bool(payload.get("freeze_active", False)),
-                "freeze_joint_name": str(payload.get("freeze_joint_name") or "").strip() or None,
-                "follow_target_enabled": bool(payload.get("follow_target_enabled", False)),
-            }
-        }
-        left_waiting_for_anchor = payload.get("left_waiting_for_anchor")
-        left_follow_target_enabled = payload.get("left_follow_target_enabled")
-        left_hand_state = payload.get("left_hand_state")
-        if left_waiting_for_anchor is not None or left_follow_target_enabled is not None or isinstance(left_hand_state, dict):
-            hand_sources["Left"] = {
-                "waiting_for_anchor": bool(left_waiting_for_anchor if left_waiting_for_anchor is not None else True),
-                "anchor_captured": left_follow_target_enabled is not None,
-                "freeze_active": False,
-                "freeze_joint_name": None,
-                "follow_target_enabled": bool(left_follow_target_enabled) if left_follow_target_enabled is not None else False,
-            }
-
-        head_waiting_for_anchor = payload.get("head_waiting_for_anchor")
-        head_follow_target_enabled = payload.get("head_follow_target_enabled")
-        head_state = payload.get("head_state")
-        head_armed_by = payload.get("head_armed_by")
-        if head_waiting_for_anchor is not None or head_follow_target_enabled is not None or isinstance(head_state, dict):
-            hand_sources["Head"] = {
-                "waiting_for_anchor": bool(head_waiting_for_anchor if head_waiting_for_anchor is not None else True),
-                "anchor_captured": head_follow_target_enabled is not None,
-                "freeze_active": False,
-                "freeze_joint_name": None,
-                "follow_target_enabled": bool(head_follow_target_enabled) if head_follow_target_enabled is not None else False,
-                "armed_by": str(head_armed_by).strip().lower() if isinstance(head_armed_by, str) and str(head_armed_by).strip() else None,
-            }
-
-        for hand_label, state in hand_sources.items():
-            previous = self._last_event_state.get(hand_label)
-            source_prefix = f"{hand_label}: "
-            if previous is None:
-                if hand_label == "Right" and bus_live:
-                    self._bus_stale_since_monotonic = None
-                    self._bus_stale_event_logged = False
-                elif hand_label == "Right":
-                    self._bus_stale_since_monotonic = now_monotonic
-                    self._bus_stale_event_logged = False
-                if not startup_neutral_active:
-                    self._push_event(
-                        source_prefix + ("Startup neutral" if state["waiting_for_anchor"] else "Startup live"),
-                        level="info",
-                        timestamp=timestamp,
-                        timestamp_ns=timestamp_ns,
-                    )
-            else:
-                if state["waiting_for_anchor"] and not bool(previous.get("waiting_for_anchor", True)):
-                    self._push_event(
-                        source_prefix + "Going to neutral",
-                        level="warn",
-                        timestamp=timestamp,
-                        timestamp_ns=timestamp_ns,
-                    )
-                elif not state["waiting_for_anchor"] and bool(previous.get("waiting_for_anchor", True)):
-                    self._push_event(
-                        source_prefix + "Anchor captured",
-                        level="good",
-                        timestamp=timestamp,
-                        timestamp_ns=timestamp_ns,
-                    )
-                elif state["anchor_captured"] and not bool(previous.get("anchor_captured", False)):
-                    self._push_event(
-                        source_prefix + "Anchor captured",
-                        level="good",
-                        timestamp=timestamp,
-                        timestamp_ns=timestamp_ns,
-                    )
-
-                if state["freeze_active"] and not bool(previous.get("freeze_active", False)):
-                    joint_text = "" if state["freeze_joint_name"] is None else f" on {state['freeze_joint_name']}"
-                    self._push_event(
-                        source_prefix + f"Limit freeze engaged{joint_text}",
-                        level="bad",
-                        timestamp=timestamp,
-                        timestamp_ns=timestamp_ns,
-                    )
-                elif not state["freeze_active"] and bool(previous.get("freeze_active", False)):
-                    self._push_event(
-                        source_prefix + "Limit freeze cleared",
-                        level="good",
-                        timestamp=timestamp,
-                        timestamp_ns=timestamp_ns,
-                    )
-
-                if state["follow_target_enabled"] and not bool(previous.get("follow_target_enabled", False)):
-                    self._push_event(
-                        source_prefix + "Motion tracking on",
-                        level="good",
-                        timestamp=timestamp,
-                        timestamp_ns=timestamp_ns,
-                    )
-                elif not state["follow_target_enabled"] and bool(previous.get("follow_target_enabled", False)):
-                    self._push_event(
-                        source_prefix + "Motion tracking off",
-                        level="warn",
-                        timestamp=timestamp,
-                        timestamp_ns=timestamp_ns,
-                    )
-
-                if hand_label == "Head" and state.get("armed_by") != previous.get("armed_by") and state.get("armed_by") is not None:
-                    self._push_event(
-                        source_prefix + f"Armed by {state['armed_by']}",
-                        level="info",
-                        timestamp=timestamp,
-                        timestamp_ns=timestamp_ns,
-                    )
-
-                if hand_label == "Right":
-                    stale_was_logged = self._bus_stale_event_logged
-                    if bus_live:
-                        self._bus_stale_since_monotonic = None
-                        self._bus_stale_event_logged = False
-                    elif bool(previous.get("bus_live", False)) and self._bus_stale_since_monotonic is None:
-                        self._bus_stale_since_monotonic = now_monotonic
-
-                    if bus_live and not bool(previous.get("bus_live", False)) and stale_was_logged:
-                        self._push_event(
-                            source_prefix + f"Bus live ({bus_status})",
-                            level="good",
-                            timestamp=timestamp,
-                            timestamp_ns=timestamp_ns,
-                        )
-                    elif (
-                        not bus_live
-                        and self._bus_stale_since_monotonic is not None
-                        and not self._bus_stale_event_logged
-                        and (now_monotonic - self._bus_stale_since_monotonic) >= self._BUS_STALE_EVENT_DELAY_S
-                    ):
-                        self._push_event(
-                            source_prefix + f"Bus stale ({bus_status})",
-                            level="warn",
-                            timestamp=timestamp,
-                            timestamp_ns=timestamp_ns,
-                        )
-                        self._bus_stale_event_logged = True
-
-                if hand_label == "Right" and recording_status != previous.get("recording_status"):
-                    if recording_status == "recording":
-                        name_text = "" if not recording_name else f" {recording_name}"
-                        self._push_event(
-                            source_prefix + f"Recording started{name_text}",
-                            level="good",
-                            timestamp=timestamp,
-                            timestamp_ns=timestamp_ns,
-                        )
-                    elif recording_status == "recording_ended":
-                        name_text = "" if not recording_name else f" {recording_name}"
-                        self._push_event(
-                            source_prefix + f"Recording stopped{name_text}",
-                            level="warn",
-                            timestamp=timestamp,
-                            timestamp_ns=timestamp_ns,
-                        )
-                    elif recording_status == "waiting_for_a" and recording_name:
-                        self._push_event(
-                            source_prefix + f"Recording armed {recording_name}",
-                            level="info",
-                            timestamp=timestamp,
-                            timestamp_ns=timestamp_ns,
-                        )
-            self._last_event_state[hand_label] = state
+            source_events = []
+        if not source_events and str(payload.get("event_message") or "").strip():
+            source_events = [payload]
+        for source_event in source_events:
+            event_message = str(source_event.get("event_message") or "").strip()
+            if not event_message:
+                continue
+            self._push_event(
+                event_message,
+                level=str(source_event.get("event_level") or "info"),
+                timestamp=source_event.get("timestamp", timestamp),
+                timestamp_ns=source_event.get("timestamp_ns", timestamp_ns),
+            )
 
     def _event_style(self, level: str) -> dict[str, int]:
         color = self._TEXT_NEUTRAL
@@ -479,7 +254,7 @@ class VivySidePanel:
         bus_status = str(payload.get("real_feedback_status") or ("live" if bus_live else "stale"))
         self._begin_event_batch()
         try:
-            self._update_event_history(payload, bus_live=bus_live, bus_status=bus_status)
+            self._update_event_history(payload)
         finally:
             self._flush_event_batch()
         self._labels["state_bus"].text = bus_status

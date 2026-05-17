@@ -169,6 +169,11 @@ class VivyTargetViewer:
             host=str(target_state_config.get("udp_host", "127.0.0.1")),
             port=int(target_state_config.get("sim_udp_port", 8771)),
         )
+        self.vivy_event_receiver = TeleopStateUdpReceiver(
+            host=str(target_state_config.get("udp_host", "127.0.0.1")),
+            port=int(target_state_config.get("event_udp_port", 8777)),
+            message_type="vivy_event",
+        )
         self.control_state_receiver = ControlStateUdpReceiver(
             host=str(control_state_config.get("udp_host", "127.0.0.1")),
             port=int(control_state_config.get("udp_port", 8767)),
@@ -271,6 +276,7 @@ class VivyTargetViewer:
         self._last_panel_real_feedback_arrival_time: float | None = None
         self._last_bus_hz: float | None = None
         self._last_stage_joint_positions_deg: np.ndarray | None = None
+        self._seen_vivy_event_keys: set[tuple[int | None, str]] = set()
 
     def _ensure_panels_created(self) -> None:
         for panel in (self.side_panel, self.flow_panel, self.flow_detail_panel):
@@ -387,6 +393,23 @@ class VivyTargetViewer:
         self._last_panel_real_feedback_arrival_time = arrival_now
         self._last_bus_hz = hz
         return hz
+
+    def _read_vivy_event_messages(self) -> list[dict[str, object]]:
+        events: list[dict[str, object]] = []
+        for event in self.vivy_event_receiver.read_all():
+            message = str(event.get("event_message") or "").strip()
+            if not message:
+                continue
+            try:
+                timestamp_ns = int(event.get("timestamp_ns"))
+            except (TypeError, ValueError):
+                timestamp_ns = None
+            key = (timestamp_ns, message)
+            if key in self._seen_vivy_event_keys:
+                continue
+            self._seen_vivy_event_keys.add(key)
+            events.append(event)
+        return events
 
     @staticmethod
     def _coerce_timestamp(payload: dict[str, object] | None) -> float | None:
@@ -783,11 +806,24 @@ class VivyTargetViewer:
 
         payload = self.target_state_receiver.read_latest()
         if not isinstance(payload, dict):
+            vivy_events = self._read_vivy_event_messages()
+            if vivy_events:
+                try:
+                    self.side_panel.update({"event_messages": vivy_events})
+                except Exception as exc:
+                    print(f"Vivy side panel event-only update failed: {exc}")
             return
         flow_control = _read_flow_control()
         real_feedback = self._read_real_feedback()
         real_joint_positions_deg = self._read_real_feedback_joint_positions_deg(real_feedback)
         panel_payload = self._inject_real_feedback_rows(payload, real_feedback)
+        vivy_events = self._read_vivy_event_messages()
+        if vivy_events:
+            existing_events = panel_payload.get("event_messages")
+            if isinstance(existing_events, list):
+                panel_payload["event_messages"] = [*vivy_events, *existing_events]
+            else:
+                panel_payload["event_messages"] = vivy_events
         control_state = self.control_state_receiver.read_latest()
         self._apply_udp_control_state(payload, panel_payload, control_state)
         try:
@@ -936,8 +972,8 @@ class VivyTargetViewer:
         panel_payload["head_armed_by"] = payload.get("head_armed_by")
         try:
             self.side_panel.update(panel_payload)
-        except Exception:
-            pass
+        except Exception as exc:
+            print(f"Vivy side panel update failed: {exc}")
         show_pitch_frames = bool(flow_control.get("show_pitch_frames", False))
         pitch_visual = self._build_pitch_visual(stage) if show_pitch_frames else None
         arm_visuals = {}
