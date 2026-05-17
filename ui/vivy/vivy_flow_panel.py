@@ -46,12 +46,12 @@ class VivyFlowPanel:
         "teleop_state": [],
         "ik": ["joint_targets", "target"],
         "joint_targets": [],
-        "target": ["real", "log"],
+        "target": ["real", "sim_output"],
         "sim": ["sim_input", "sim_joint_targets"],
         "sim_input": [],
         "sim_joint_targets": [],
         "real": [],
-        "log": [],
+        "sim_output": [],
     }
 
     _PARENTS = {
@@ -63,7 +63,7 @@ class VivyFlowPanel:
         "joint_targets": "ik",
         "target": "ik",
         "real": "target",
-        "log": "target",
+        "sim_output": "target",
         "sim_input": "sim",
         "sim_joint_targets": "sim",
     }
@@ -78,7 +78,7 @@ class VivyFlowPanel:
         "joint_targets": 3,
         "target": 3,
         "real": 4,
-        "log": 4,
+        "sim_output": 4,
         "sim_input": 3,
         "sim_joint_targets": 3,
     }
@@ -97,7 +97,7 @@ class VivyFlowPanel:
         "ik": GRAPH_ICON_DIR / "type_function_noBorder_dark.svg",
         "target": GRAPH_ICON_DIR / "type_io_noBorder_dark.svg",
         "real": GRAPH_ICON_DIR / "type_io_noBorder_dark.svg",
-        "log": GRAPH_ICON_DIR / "type_debug_noBorder_dark.svg",
+        "sim_output": GRAPH_ICON_DIR / "type_rendering_noBorder_dark.svg",
         "sim": GRAPH_ICON_DIR / "type_rendering_noBorder_dark.svg",
     }
 
@@ -274,7 +274,7 @@ class VivyFlowPanel:
                         "joint_targets",
                         "target",
                         "real",
-                        "log",
+                        "sim_output",
                         "sim",
                         "sim_input",
                         "sim_joint_targets",
@@ -338,9 +338,9 @@ class VivyFlowPanel:
         source_active = bool(hand)
         state_active = payload.get("target_pose_model") is not None
         sim_view_enabled = bool(flow_state.get("sim_view_enabled", True))
-        sim_branch_active = bool(flow_state.get("sim_target_view", False))
-        robot_branch_active = target == "real" and robot_output == "arm"
-        log_branch_active = target == "real" and robot_output == "log"
+        sim_branch_active = sim_view_enabled
+        robot_branch_active = target == "arm" and robot_output == "arm"
+        sim_output_branch_active = target == "sim" and robot_output == "sim"
 
         self._set_row("root", "Vivy Teleop", "neutral", selected == "root", flow_state)
         self._set_row(
@@ -352,11 +352,11 @@ class VivyFlowPanel:
         )
         self._set_row("processor", "quest_signal_processor", "active" if source_active else "inactive", selected == "processor", flow_state)
         self._set_row("teleop_state", "Out: Teleop State", "active" if state_active or source_active else "inactive", selected == "teleop_state", flow_state)
-        self._set_row("ik", "IK  (quest_ik_arm)", "warn" if freeze_active else ("active" if target == "real" else "inactive"), selected == "ik", flow_state)
+        self._set_row("ik", "IK  (quest_ik_arm)", "warn" if freeze_active else ("active" if target in {"arm", "sim"} else "inactive"), selected == "ik", flow_state)
         self._set_row("sim", f"Sim View  {'ON' if sim_view_enabled else 'OFF'}", "active" if sim_branch_active and sim_view_enabled else "inactive", selected == "sim", flow_state)
-        self._set_row("joint_targets", "Out: Joint Targets", "warn" if freeze_active else ("active" if target == "real" else "inactive"), selected == "joint_targets", flow_state)
-        self._set_row("target", "vivy_target_sink", "warn" if freeze_active else ("active" if target == "real" else "inactive"), selected == "target", flow_state)
+        self._set_row("joint_targets", "Out: Joint Targets", "warn" if freeze_active else ("active" if target in {"arm", "sim"} else "inactive"), selected == "joint_targets", flow_state)
+        self._set_row("target", "vivy_target_sink", "warn" if freeze_active else ("active" if target in {"arm", "sim"} else "inactive"), selected == "target", flow_state)
         self._set_row("real", "Real Arm", "warn" if freeze_active else ("active" if robot_branch_active else "inactive"), selected == "real", flow_state)
-        self._set_row("log", "Log Sink", "active" if log_branch_active else "inactive", selected == "log", flow_state)
+        self._set_row("sim_output", "Sim Output", "active" if sim_output_branch_active else "inactive", selected == "sim_output", flow_state)
         self._set_row("sim_input", "In: Teleop State", "active" if state_active or source_active else "inactive", selected == "sim_input", flow_state)
-        self._set_row("sim_joint_targets", "In: Joint Targets", "warn" if freeze_active else ("active" if target == "real" else "inactive"), selected == "sim_joint_targets", flow_state)
+        self._set_row("sim_joint_targets", "In: Joint Targets", "warn" if freeze_active else ("active" if target in {"arm", "sim"} else "inactive"), selected == "sim_joint_targets", flow_state)

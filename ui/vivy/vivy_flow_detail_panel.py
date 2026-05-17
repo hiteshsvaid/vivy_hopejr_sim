@@ -965,9 +965,9 @@ class VivyFlowDetailPanel:
                 "world_transform": "Applies scale and world-frame rotation.",
                 "target_pose": "Builds the target pose used for downstream consumers.",
                 "joint_targets": "Final IK output: computed joint-angle targets for downstream consumers.",
-                "target": "Consumes joint-angle targets for real/log sinks",
+                "target": "Consumes joint-angle targets for arm/sim sinks",
                 "real": "Hardware sink branch",
-                "log": f"log sink branch output={robot_output}",
+                "sim_output": f"sim sink branch output={robot_output}",
                 "sim_input": "Red-dot / target visualization from teleop state.",
                 "sim_joint_targets": "Arm motion from IK joint targets.",
             }.get(selected, "Select a node from the flow tree.")
