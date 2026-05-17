@@ -44,9 +44,9 @@ class VivyFlowPanel:
         "quest": ["processor", "ik", "sim"],
         "processor": ["teleop_state"],
         "teleop_state": [],
-        "ik": ["joint_targets", "fanout"],
+        "ik": ["joint_targets", "target"],
         "joint_targets": [],
-        "fanout": ["real", "log"],
+        "target": ["real", "log"],
         "sim": ["sim_input", "sim_joint_targets"],
         "sim_input": [],
         "sim_joint_targets": [],
@@ -61,9 +61,9 @@ class VivyFlowPanel:
         "ik": "quest",
         "sim": "quest",
         "joint_targets": "ik",
-        "fanout": "ik",
-        "real": "fanout",
-        "log": "fanout",
+        "target": "ik",
+        "real": "target",
+        "log": "target",
         "sim_input": "sim",
         "sim_joint_targets": "sim",
     }
@@ -76,7 +76,7 @@ class VivyFlowPanel:
         "ik": 2,
         "sim": 2,
         "joint_targets": 3,
-        "fanout": 3,
+        "target": 3,
         "real": 4,
         "log": 4,
         "sim_input": 3,
@@ -95,7 +95,7 @@ class VivyFlowPanel:
         "quest": GRAPH_ICON_DIR / "type_input_noBorder_dark.svg",
         "processor": GRAPH_ICON_DIR / "type_script_noBorder_dark.svg",
         "ik": GRAPH_ICON_DIR / "type_function_noBorder_dark.svg",
-        "fanout": GRAPH_ICON_DIR / "type_io_noBorder_dark.svg",
+        "target": GRAPH_ICON_DIR / "type_io_noBorder_dark.svg",
         "real": GRAPH_ICON_DIR / "type_io_noBorder_dark.svg",
         "log": GRAPH_ICON_DIR / "type_debug_noBorder_dark.svg",
         "sim": GRAPH_ICON_DIR / "type_rendering_noBorder_dark.svg",
@@ -272,7 +272,7 @@ class VivyFlowPanel:
                         "teleop_state",
                         "ik",
                         "joint_targets",
-                        "fanout",
+                        "target",
                         "real",
                         "log",
                         "sim",
@@ -355,7 +355,7 @@ class VivyFlowPanel:
         self._set_row("ik", "IK  (quest_ik_arm)", "warn" if freeze_active else ("active" if target == "real" else "inactive"), selected == "ik", flow_state)
         self._set_row("sim", f"Sim View  {'ON' if sim_view_enabled else 'OFF'}", "active" if sim_branch_active and sim_view_enabled else "inactive", selected == "sim", flow_state)
         self._set_row("joint_targets", "Out: Joint Targets", "warn" if freeze_active else ("active" if target == "real" else "inactive"), selected == "joint_targets", flow_state)
-        self._set_row("fanout", "fanout_target_arm", "warn" if freeze_active else ("active" if target == "real" else "inactive"), selected == "fanout", flow_state)
+        self._set_row("target", "vivy_target_sink", "warn" if freeze_active else ("active" if target == "real" else "inactive"), selected == "target", flow_state)
         self._set_row("real", "Real Arm", "warn" if freeze_active else ("active" if robot_branch_active else "inactive"), selected == "real", flow_state)
         self._set_row("log", "Log Sink", "active" if log_branch_active else "inactive", selected == "log", flow_state)
         self._set_row("sim_input", "In: Teleop State", "active" if state_active or source_active else "inactive", selected == "sim_input", flow_state)

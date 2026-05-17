@@ -14,7 +14,7 @@ from scipy.spatial.transform import Rotation
 
 SIM_CONFIG_PATH = Path("/home/viaan/huggingface/lerobot/src/lerobot/robots/vivy/vivy_global_config.json")
 KINEMATICS_PATH = Path("/home/viaan/huggingface/lerobot/src/lerobot/robots/vivy/vivy_arm_kinematics.py")
-TELEOP_STATE_PATH = Path("/home/viaan/huggingface/lerobot/src/lerobot/robots/vivy/fanout/teleop_state.py")
+TELEOP_STATE_PATH = Path("/home/viaan/huggingface/lerobot/src/lerobot/robots/vivy/target_stream/teleop_state.py")
 TELEOP_DEBUG_VISUALS_PATH = Path("/home/viaan/vivy_hopejr_sim/ui/teleop_debug_visuals.py")
 STAGE_IO_PATH = Path("/home/viaan/vivy_hopejr_sim/controllers/stage_io.py")
 VIVY_SIDE_PANEL_PATH = Path("/home/viaan/vivy_hopejr_sim/ui/vivy/vivy_side_panel.py")
@@ -461,7 +461,7 @@ class VivyTargetViewer:
         write_event = {
             "timestamp": time.time(),
             "type": f"{side}_write",
-            "source": "fanout",
+            "source": "target",
             "tracked": bool((hand_state or {}).get("is_tracked", False)),
             "follow_target_enabled": bool(follow_target_enabled),
             "waiting_for_anchor": bool(waiting_for_anchor),
@@ -469,7 +469,7 @@ class VivyTargetViewer:
         try:
             if list(joint_names) != list(stage_io.joint_names):
                 raise RuntimeError(
-                    f"{side} joint name mismatch: fanout={joint_names} stage={list(stage_io.joint_names)}"
+                    f"{side} joint name mismatch: target={joint_names} stage={list(stage_io.joint_names)}"
                 )
             targets = np.asarray(joint_targets_deg, dtype=float)
             if targets.shape != (len(stage_io.joint_names),):
@@ -923,7 +923,7 @@ class VivyTargetViewer:
                     pass
                 self._log_head_mapping(SimpleNamespace(**head_control), head_state or {})
             elif isinstance(head_state, dict):
-                print("Vivy head: waiting for shared head_control from fanout")
+                print("Vivy head: waiting for shared head_control from target")
         payload["head_state"] = head_state
         payload["head_follow_target_enabled"] = payload.get("head_follow_target_enabled")
         payload["head_waiting_for_anchor"] = payload.get("head_waiting_for_anchor")
