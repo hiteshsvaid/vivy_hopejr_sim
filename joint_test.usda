@@ -1174,9 +1174,11 @@ def Xform "World"
 
             def Xform "Visuals"
             {
+                token visibility = "inherited"
                 float3 xformOp:rotateXYZ = (180, 0, 0)
                 float3 xformOp:scale = (0.001, 0.001, 0.001)
-                uniform token[] xformOpOrder = ["xformOp:rotateXYZ", "xformOp:scale"]
+                double3 xformOp:translate = (0.012470512170474568, -2.626371342628886e-15, 0.03219305867346017)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ", "xformOp:scale"]
 
                 def Xform "arm_v2_palm_new_right_clone" (
                     references = @./assets/usd/arm_v2-palm_new_right_clone_visual.usd@
@@ -1210,23 +1212,9 @@ def Xform "World"
                     rel physics:simulationOwner
                     double size = 1
                     token visibility = "invisible"
-                    quatf xformOp:orient = (-0.007238255, 0.9260871, 0.017065201, -0.3768543)
+                    quatf xformOp:orient = (0.0055259624, 0.9199546, -0.01214051, -0.39179784)
                     float3 xformOp:scale = (0.018284814, 0.038801305, 0.09120325)
-                    float3 xformOp:translate = (0.23521025, -0.11994455, -0.4106498)
-                    uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
-                }
-
-                def Cube "WristServo" (
-                    prepend apiSchemas = ["PhysicsCollisionAPI"]
-                )
-                {
-                    float3[] extent = [(-0.5, -0.5, -0.5), (0.5, 0.5, 0.5)]
-                    rel physics:simulationOwner
-                    double size = 1
-                    token visibility = "invisible"
-                    quatf xformOp:orient = (0.27945542, -0.2763446, -0.66441774, -0.6356787)
-                    float3 xformOp:scale = (0.024201743, 0.02631742, 0.028039312)
-                    float3 xformOp:translate = (0.18483363, -0.11885001, -0.39920864)
+                    float3 xformOp:translate = (0.24525724, -0.11783045, -0.42054588)
                     uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
                 }
 
@@ -1238,9 +1226,9 @@ def Xform "World"
                     rel physics:simulationOwner
                     double size = 1
                     token visibility = "invisible"
-                    quatf xformOp:orient = (0.93635887, -0.0158533, 0.3503166, 0.016094105)
+                    quatf xformOp:orient = (0.9173271, -0.016651295, 0.39749295, 0.015266688)
                     float3 xformOp:scale = (0.042448, 0.03, 0.019608686)
-                    float3 xformOp:translate = (0.22470315, -0.11906294, -0.44352803)
+                    float3 xformOp:translate = (0.23566824, -0.118786186, -0.4530756)
                     uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
                 }
 
@@ -1254,7 +1242,7 @@ def Xform "World"
                     token visibility = "invisible"
                     quatf xformOp:orient = (0.9267341, 0.010910169, -0.37552646, -0.0049783057)
                     float3 xformOp:scale = (0.020972595, 0.03, 0.039433338)
-                    float3 xformOp:translate = (0.26995528, -0.11892712, -0.4002677)
+                    float3 xformOp:translate = (0.2802645, -0.11868303, -0.4108965)
                     uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
                 }
             }
@@ -1323,7 +1311,8 @@ def Xform "World"
             {
                 float3 xformOp:rotateXYZ = (180, 0, 0)
                 float3 xformOp:scale = (0.001, 0.001, 0.001)
-                uniform token[] xformOpOrder = ["xformOp:rotateXYZ", "xformOp:scale"]
+                double3 xformOp:translate = (0.013977850098609246, -6.966649479522857e-15, 0.03128827740562884)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ", "xformOp:scale"]
 
                 def Xform "arm_v2_thumb_clone" (
                     references = @./assets/usd/arm_v2-thumb_clone_visual.usd@
@@ -1413,7 +1402,8 @@ def Xform "World"
             {
                 float3 xformOp:rotateXYZ = (180, 0, 0)
                 float3 xformOp:scale = (0.001, 0.001, 0.001)
-                uniform token[] xformOpOrder = ["xformOp:rotateXYZ", "xformOp:scale"]
+                double3 xformOp:translate = (0.01495277151013838, 9.5513874587283e-15, 0.028637899202924255)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ", "xformOp:scale"]
 
                 def Xform "arm_v2_index_clone" (
                     references = @./assets/usd/arm_v2-index_clone_visual.usd@
@@ -1801,8 +1791,8 @@ def Xform "World"
                 rel physics:body1 = </World/JointTest/RightWrist>
                 float physics:breakForce = 3.4028235e38
                 float physics:breakTorque = 3.4028235e38
-                point3f physics:localPos0 = (0.18658559, -0.12001365, -0.3526458)
-                point3f physics:localPos1 = (0.18658552, -0.120013535, -0.3526456)
+                point3f physics:localPos0 = (0.18178202, -0.12019165, -0.35770756)
+                point3f physics:localPos1 = (0.18178195, -0.12019153, -0.35770735)
                 quatf physics:localRot0 = (0.9112755, -0.11682665, -0.39319512, -0.036415026)
                 quatf physics:localRot1 = (0.91127574, -0.11682541, -0.3931949, -0.036415055)
                 float physics:lowerLimit = -30.172441
@@ -1819,8 +1809,8 @@ def Xform "World"
                 uniform token physics:axis = "Y"
                 rel physics:body0 = </World/JointTest/RightWrist>
                 rel physics:body1 = </World/JointTest/RightPalm>
-                point3f physics:localPos0 = (0.18683325, -0.09497089, -0.39638165)
-                point3f physics:localPos1 = (0.1868333, -0.094970986, -0.39638168)
+                point3f physics:localPos0 = (0.19994426, -0.0989862, -0.42236665)
+                point3f physics:localPos1 = (0.21449627, -0.101465404, -0.38890824)
                 quatf physics:localRot0 = (0.99265, 0.0285437, 0.11539604, -0.022695491)
                 quatf physics:localRot1 = (0.99264985, 0.028543014, 0.115396835, -0.022696394)
                 float physics:lowerLimit = -70.645424
@@ -1837,8 +1827,8 @@ def Xform "World"
                 uniform token physics:axis = "Y"
                 rel physics:body0 = </World/JointTest/RightPalm>
                 rel physics:body1 = </World/JointTest/RightThumb>
-                point3f physics:localPos0 = (0.23349442, -0.09778478, -0.45210323)
-                point3f physics:localPos1 = (0.23349442, -0.09778475, -0.45210323)
+                point3f physics:localPos0 = (0.25549036, -0.09230409, -0.43000412)
+                point3f physics:localPos1 = (0.25711298, -0.09225898, -0.4317477)
                 quatf physics:localRot0 = (0.9964513, 0.012107542, 0.08327842, 0.0016886563)
                 quatf physics:localRot1 = (0.9964514, 0.012108011, 0.08327804, 0.0016889471)
                 float physics:lowerLimit = -49.082954
@@ -1855,8 +1845,8 @@ def Xform "World"
                 uniform token physics:axis = "Y"
                 rel physics:body0 = </World/JointTest/RightPalm>
                 rel physics:body1 = </World/JointTest/RightIndex>
-                point3f physics:localPos0 = (0.27701327, -0.09952547, -0.40806836)
-                point3f physics:localPos1 = (0.2770133, -0.099525444, -0.40806836)
+                point3f physics:localPos0 = (0.30015615, -0.09305957, -0.3869114)
+                point3f physics:localPos1 = (0.3031602, -0.09302078, -0.3907789)
                 quatf physics:localRot0 = (0.9903057, -0.011475503, 0.13742168, 0.016678296)
                 quatf physics:localRot1 = (0.9903057, -0.011475579, 0.13742182, 0.016678197)
                 float physics:lowerLimit = -94.20118
