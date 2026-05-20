@@ -20,6 +20,9 @@ STAGE_IO_PATH = Path("/home/viaan/vivy_hopejr_sim/controllers/stage_io.py")
 VIVY_SIDE_PANEL_PATH = Path("/home/viaan/vivy_hopejr_sim/ui/vivy/vivy_side_panel.py")
 VIVY_FLOW_PANEL_PATH = Path("/home/viaan/vivy_hopejr_sim/ui/vivy/vivy_flow_panel.py")
 VIVY_FLOW_DETAIL_PANEL_PATH = Path("/home/viaan/vivy_hopejr_sim/ui/vivy/vivy_flow_detail_panel.py")
+CALIBRATION_PREVIEW_CONTROL_PATH = Path(
+    "/home/viaan/vivy_hopejr_sim/controllers/vivy/calibration_preview_control.py"
+)
 FLOW_CONTROL_PATH = Path("/tmp/vivy_flow_control.json")
 STAGE_FEEDBACK_PATH = Path("/tmp/vivy_stage_feedback.json")
 REAL_FEEDBACK_PATH = Path("/tmp/vivy_real_feedback.json")
@@ -75,6 +78,14 @@ def _load_flow_panel_class():
 def _load_flow_detail_panel_class():
     module = _load_module("vivy_flow_detail_panel", VIVY_FLOW_DETAIL_PANEL_PATH)
     return module.VivyFlowDetailPanel
+
+
+_CALIBRATION_PREVIEW_CONTROL = _load_module(
+    "vivy_calibration_preview_control",
+    CALIBRATION_PREVIEW_CONTROL_PATH,
+)
+build_calibration_preview_control_state = _CALIBRATION_PREVIEW_CONTROL.build_calibration_preview_control_state
+is_calibration_preview_payload = _CALIBRATION_PREVIEW_CONTROL.is_calibration_preview_payload
 
 
 def _read_flow_control(path: Path = FLOW_CONTROL_PATH) -> dict:
@@ -748,6 +759,13 @@ class VivyTargetViewer:
         return None
 
     def _apply_udp_control_state(self, payload: dict, panel_payload: dict, control_state: dict | None) -> None:
+        if is_calibration_preview_payload(payload):
+            preview_control_state = build_calibration_preview_control_state()
+            payload["control_state"] = preview_control_state
+            payload["control_state_source"] = "calibration_preview"
+            panel_payload["control_state"] = dict(preview_control_state)
+            panel_payload["control_state_source"] = "calibration_preview"
+            return
         if isinstance(control_state, dict):
             payload["control_state"] = dict(control_state)
             payload["control_state_source"] = "udp"
