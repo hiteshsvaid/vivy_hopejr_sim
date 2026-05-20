@@ -23,6 +23,9 @@ VIVY_FLOW_DETAIL_PANEL_PATH = Path("/home/viaan/vivy_hopejr_sim/ui/vivy/vivy_flo
 CALIBRATION_PREVIEW_CONTROL_PATH = Path(
     "/home/viaan/vivy_hopejr_sim/controllers/vivy/calibration_preview_control.py"
 )
+CALIBRATION_LIMIT_FEEDBACK_PATH = Path(
+    "/home/viaan/vivy_hopejr_sim/controllers/vivy/calibration_limit_feedback.py"
+)
 FLOW_CONTROL_PATH = Path("/tmp/vivy_flow_control.json")
 STAGE_FEEDBACK_PATH = Path("/tmp/vivy_stage_feedback.json")
 REAL_FEEDBACK_PATH = Path("/tmp/vivy_real_feedback.json")
@@ -86,6 +89,12 @@ _CALIBRATION_PREVIEW_CONTROL = _load_module(
 )
 build_calibration_preview_control_state = _CALIBRATION_PREVIEW_CONTROL.build_calibration_preview_control_state
 is_calibration_preview_payload = _CALIBRATION_PREVIEW_CONTROL.is_calibration_preview_payload
+_CALIBRATION_LIMIT_FEEDBACK = _load_module(
+    "vivy_calibration_limit_feedback",
+    CALIBRATION_LIMIT_FEEDBACK_PATH,
+)
+CalibrationLimitFeedbackPublisher = _CALIBRATION_LIMIT_FEEDBACK.CalibrationLimitFeedbackPublisher
+detect_limit_hits = _CALIBRATION_LIMIT_FEEDBACK.detect_limit_hits
 
 
 def _read_flow_control(path: Path = FLOW_CONTROL_PATH) -> dict:
@@ -218,6 +227,18 @@ class VivyTargetViewer:
         self.stage_max_joint_positions_deg = np.asarray(
             [float(self.sim_config["joints"][name]["max_deg"]) for name in self.stage_joint_names],
             dtype=float,
+        )
+        self.limits_by_joint = {
+            name: {
+                "min": float(config["min_deg"]),
+                "max": float(config["max_deg"]),
+            }
+            for name, config in self.sim_config["joints"].items()
+        }
+        calibration_feedback_config = dict(controller_defaults.get("calibration_limit_feedback") or {})
+        self.calibration_limit_feedback_publisher = CalibrationLimitFeedbackPublisher(
+            host=str(calibration_feedback_config.get("udp_host", "127.0.0.1")),
+            port=int(calibration_feedback_config.get("udp_port", 8778)),
         )
         ik_chains = dict(self.sim_config.get("ik_chains") or {})
         self.arm_sides = ("right", "left")
@@ -510,6 +531,26 @@ class VivyTargetViewer:
                 raise RuntimeError(
                     f"{side} target shape mismatch: {targets.shape} expected {(len(stage_io.joint_names),)}"
                 )
+            if is_calibration_preview_payload(payload):
+                stage_limits_by_joint = stage_io.read_joint_limits_deg(stage)
+                if stage_limits_by_joint:
+                    limit_hits = detect_limit_hits(
+                        joint_names=list(joint_names),
+                        requested_deg=[float(value) for value in targets.tolist()],
+                        limits_by_joint=stage_limits_by_joint,
+                    )
+                    feedback_payload = self.calibration_limit_feedback_publisher.publish_status(
+                        hits=limit_hits,
+                        limits_by_joint=stage_limits_by_joint,
+                        limit_source="isaac_stage",
+                    )
+                    if feedback_payload is not None:
+                        write_event["calibration_limit_feedback"] = feedback_payload
+                else:
+                    write_event["calibration_limit_feedback"] = {
+                        "success": False,
+                        "reason": "isaac_stage_joint_limits_unavailable",
+                    }
             stage_io.write_joint_targets_deg(stage, targets)
             write_event["success"] = True
             write_event[f"{side}_joint_names"] = list(stage_io.joint_names)

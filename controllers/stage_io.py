@@ -183,6 +183,33 @@ class HopeJrStageIo:
             joint_positions.append(float(state_value))
         return np.asarray(joint_positions, dtype=float)
 
+    def read_joint_limits_deg(self, stage) -> dict[str, tuple[float, float]]:
+        if stage is None:
+            return {}
+
+        limits: dict[str, tuple[float, float]] = {}
+        for joint_name in self.joint_names:
+            prim = stage.GetPrimAtPath(f"{self.joint_root_path}/{joint_name}")
+            if not prim.IsValid():
+                continue
+            min_value = None
+            max_value = None
+            for min_attr_name, max_attr_name in (
+                ("physics:lowerLimit", "physics:upperLimit"),
+                ("lowerLimit", "upperLimit"),
+            ):
+                min_attr = prim.GetAttribute(min_attr_name)
+                max_attr = prim.GetAttribute(max_attr_name)
+                if min_attr.IsValid() and max_attr.IsValid():
+                    min_value = min_attr.Get()
+                    max_value = max_attr.Get()
+                    if min_value is not None and max_value is not None:
+                        break
+            if min_value is None or max_value is None:
+                continue
+            limits[joint_name] = (float(min_value), float(max_value))
+        return limits
+
     def compute_end_effector_jacobian(self, stage, *, body_name: str = "RightForearm") -> np.ndarray | None:
         articulation = self._get_articulation()
         joint_indices = self._get_articulation_joint_indices()
