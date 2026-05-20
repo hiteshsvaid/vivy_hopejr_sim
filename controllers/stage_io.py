@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import numpy as np
 
 
@@ -209,6 +211,82 @@ class HopeJrStageIo:
                 continue
             limits[joint_name] = (float(min_value), float(max_value))
         return limits
+
+    def write_joint_limits_deg(self, stage, limits_by_joint: dict[str, tuple[float, float]]) -> dict[str, tuple[float, float]]:
+        if stage is None:
+            return {}
+
+        applied: dict[str, tuple[float, float]] = {}
+        for joint_name, limits in limits_by_joint.items():
+            if joint_name not in self.joint_names:
+                continue
+            prim = stage.GetPrimAtPath(f"{self.joint_root_path}/{joint_name}")
+            if not prim.IsValid():
+                continue
+            min_deg, max_deg = float(limits[0]), float(limits[1])
+            self._set_joint_limit_attrs(stage, prim, min_deg, max_deg)
+            applied[joint_name] = (min_deg, max_deg)
+        return applied
+
+    def _find_joint_source_layer(self, stage, prim):
+        prim_stack = list(prim.GetPrimStack())
+        if not prim_stack:
+            return stage.GetRootLayer()
+
+        for prim_spec in prim_stack:
+            layer = getattr(prim_spec, "layer", None)
+            if layer is None:
+                continue
+            identifier = str(getattr(layer, "identifier", ""))
+            if Path(identifier).name == "joint_test.usda":
+                return layer
+
+        for prim_spec in prim_stack:
+            layer = getattr(prim_spec, "layer", None)
+            if layer is not None and not getattr(layer, "anonymous", False):
+                return layer
+        return stage.GetRootLayer()
+
+    def _set_joint_limit_attrs(self, stage, prim, min_deg: float, max_deg: float) -> None:
+        source_layer = self._find_joint_source_layer(stage, prim)
+        if source_layer is None:
+            raise RuntimeError(f"Cannot author limits for {prim.GetPath()}: source layer unavailable")
+
+        prim_spec = source_layer.GetPrimAtPath(prim.GetPath())
+        if prim_spec is None:
+            raise RuntimeError(f"Cannot author limits for {prim.GetPath()}: prim is not in {source_layer.identifier}")
+
+        lower_attr = prim_spec.attributes.get("physics:lowerLimit")
+        if lower_attr is None:
+            from pxr import Sdf
+
+            lower_attr = Sdf.AttributeSpec(prim_spec, "physics:lowerLimit", Sdf.ValueTypeNames.Float)
+        upper_attr = prim_spec.attributes.get("physics:upperLimit")
+        if upper_attr is None:
+            from pxr import Sdf
+
+            upper_attr = Sdf.AttributeSpec(prim_spec, "physics:upperLimit", Sdf.ValueTypeNames.Float)
+        lower_attr.default = min_deg
+        upper_attr.default = max_deg
+
+    def save_stage(self, stage) -> None:
+        if stage is None:
+            raise RuntimeError("Cannot save stage: stage is unavailable")
+        saved = False
+        for layer in stage.GetUsedLayers():
+            if Path(str(getattr(layer, "identifier", ""))).name != "joint_test.usda":
+                continue
+            if getattr(layer, "dirty", False):
+                layer.Save()
+                saved = True
+        if saved:
+            return
+        root_layer = stage.GetRootLayer()
+        if root_layer is None:
+            raise RuntimeError("Cannot save stage: root layer is unavailable")
+        if Path(str(getattr(root_layer, "identifier", ""))).name != "joint_test.usda":
+            raise RuntimeError("Cannot save stage: no dirty joint_test.usda source layer found")
+        root_layer.Save()
 
     def compute_end_effector_jacobian(self, stage, *, body_name: str = "RightForearm") -> np.ndarray | None:
         articulation = self._get_articulation()

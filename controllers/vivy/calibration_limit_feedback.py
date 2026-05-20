@@ -71,6 +71,7 @@ def build_limit_feedback_payload(
     sequence: int,
     limits_by_joint: Mapping[str, LimitSpec] | None = None,
     limit_source: str = "unknown",
+    limit_update_status: Mapping[str, object] | None = None,
     timestamp_ns: int | None = None,
 ) -> dict:
     timestamp_ns = time.time_ns() if timestamp_ns is None else int(timestamp_ns)
@@ -78,7 +79,7 @@ def build_limit_feedback_payload(
     for joint_name, limit in (limits_by_joint or {}).items():
         min_deg, max_deg = _coerce_limit(limit)
         joint_limits.append({"joint_name": str(joint_name), "min_deg": min_deg, "max_deg": max_deg})
-    return {
+    payload = {
         "type": "vivy_calibration_limit_feedback",
         "source_mode": "calibration_preview",
         "timestamp": timestamp_ns / 1_000_000_000.0,
@@ -88,6 +89,9 @@ def build_limit_feedback_payload(
         "joint_limits": joint_limits,
         "limit_source": str(limit_source),
     }
+    if limit_update_status is not None:
+        payload["limit_update_status"] = dict(limit_update_status)
+    return payload
 
 
 class CalibrationLimitFeedbackPublisher:
@@ -116,16 +120,18 @@ class CalibrationLimitFeedbackPublisher:
         hits: Iterable[dict],
         limits_by_joint: Mapping[str, LimitSpec] | None = None,
         limit_source: str = "unknown",
+        limit_update_status: Mapping[str, object] | None = None,
     ) -> dict | None:
         hit_list = [dict(hit) for hit in hits]
         limit_map = dict(limits_by_joint or {})
-        if not hit_list and not limit_map:
+        if not hit_list and not limit_map and not limit_update_status:
             return None
         self._sequence += 1
         payload = build_limit_feedback_payload(
             hits=hit_list,
             limits_by_joint=limit_map,
             limit_source=limit_source,
+            limit_update_status=limit_update_status,
             sequence=self._sequence,
         )
         self._socket.sendto(json.dumps(payload).encode("utf-8"), (self.host, self.port))

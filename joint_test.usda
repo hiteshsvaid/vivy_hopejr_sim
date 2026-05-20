@@ -1840,7 +1840,7 @@ def Xform "World"
                 quatf physics:localRot0 = (0.99265, 0.0285437, 0.11539604, -0.022695491)
                 quatf physics:localRot1 = (0.99264985, 0.028543014, 0.115396835, -0.022696394)
                 float physics:lowerLimit = -70.645424
-                float physics:upperLimit = 80.41309
+                float physics:upperLimit = 83.2
             }
 
             def PhysicsRevoluteJoint "right_thumb" (
@@ -1858,7 +1858,7 @@ def Xform "World"
                 quatf physics:localRot0 = (0.9964513, 0.012107542, 0.08327842, 0.0016886563)
                 quatf physics:localRot1 = (0.9964514, 0.012108011, 0.08327804, 0.0016889471)
                 float physics:lowerLimit = -49.082954
-                float physics:upperLimit = 73.418655
+                float physics:upperLimit = 76.8
             }
 
             def PhysicsRevoluteJoint "right_index" (
@@ -1876,7 +1876,7 @@ def Xform "World"
                 quatf physics:localRot0 = (0.9903057, -0.011475503, 0.13742168, 0.016678296)
                 quatf physics:localRot1 = (0.9903057, -0.011475579, 0.13742182, 0.016678197)
                 float physics:lowerLimit = -94.20118
-                float physics:upperLimit = 38.103348
+                float physics:upperLimit = 41.6
             }
         }
 
@@ -2005,3 +2005,4 @@ def "Render" (
         }
     }
 }
+

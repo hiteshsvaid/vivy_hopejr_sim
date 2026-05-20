@@ -88,6 +88,8 @@ _CALIBRATION_PREVIEW_CONTROL = _load_module(
     CALIBRATION_PREVIEW_CONTROL_PATH,
 )
 build_calibration_preview_control_state = _CALIBRATION_PREVIEW_CONTROL.build_calibration_preview_control_state
+extract_calibration_limit_updates = _CALIBRATION_PREVIEW_CONTROL.extract_calibration_limit_updates
+is_calibration_limit_request = _CALIBRATION_PREVIEW_CONTROL.is_calibration_limit_request
 is_calibration_preview_payload = _CALIBRATION_PREVIEW_CONTROL.is_calibration_preview_payload
 _CALIBRATION_LIMIT_FEEDBACK = _load_module(
     "vivy_calibration_limit_feedback",
@@ -309,6 +311,7 @@ class VivyTargetViewer:
         self._last_bus_hz: float | None = None
         self._last_stage_joint_positions_deg: np.ndarray | None = None
         self._seen_vivy_event_keys: set[tuple[int | None, str]] = set()
+        self._calibration_initial_limits_published = False
 
     def _ensure_panels_created(self) -> None:
         for panel in (self.side_panel, self.flow_panel, self.flow_detail_panel):
@@ -532,6 +535,12 @@ class VivyTargetViewer:
                     f"{side} target shape mismatch: {targets.shape} expected {(len(stage_io.joint_names),)}"
                 )
             if is_calibration_preview_payload(payload):
+                limit_updates = extract_calibration_limit_updates(payload)
+                if limit_updates:
+                    write_event["calibration_limit_updates"] = {
+                        joint_name: list(limits)
+                        for joint_name, limits in stage_io.write_joint_limits_deg(stage, limit_updates).items()
+                    }
                 stage_limits_by_joint = stage_io.read_joint_limits_deg(stage)
                 if stage_limits_by_joint:
                     limit_hits = detect_limit_hits(
@@ -539,13 +548,17 @@ class VivyTargetViewer:
                         requested_deg=[float(value) for value in targets.tolist()],
                         limits_by_joint=stage_limits_by_joint,
                     )
-                    feedback_payload = self.calibration_limit_feedback_publisher.publish_status(
-                        hits=limit_hits,
-                        limits_by_joint=stage_limits_by_joint,
-                        limit_source="isaac_stage",
-                    )
-                    if feedback_payload is not None:
-                        write_event["calibration_limit_feedback"] = feedback_payload
+                    publish_limits = not self._calibration_initial_limits_published
+                    if publish_limits or limit_hits:
+                        feedback_payload = self.calibration_limit_feedback_publisher.publish_status(
+                            hits=limit_hits,
+                            limits_by_joint=stage_limits_by_joint if publish_limits else None,
+                            limit_source="isaac_stage",
+                        )
+                        if feedback_payload is not None:
+                            write_event["calibration_limit_feedback"] = feedback_payload
+                        if publish_limits:
+                            self._calibration_initial_limits_published = True
                 else:
                     write_event["calibration_limit_feedback"] = {
                         "success": False,
@@ -567,6 +580,81 @@ class VivyTargetViewer:
         except Exception:
             pass
         return write_event
+
+    def _apply_calibration_limit_updates(self, stage, payload: dict) -> dict | None:
+        if stage is None or not is_calibration_preview_payload(payload):
+            return None
+        limit_updates = extract_calibration_limit_updates(payload)
+        if not limit_updates:
+            return None
+
+        applied: dict[str, tuple[float, float]] = {}
+        for stage_io in [*self.arm_stage_ios.values(), self.head_stage_io]:
+            applied.update(stage_io.write_joint_limits_deg(stage, limit_updates))
+        save_error = None
+        if applied:
+            try:
+                self.stage_io.save_stage(stage)
+            except Exception as exc:
+                save_error = str(exc)
+        stage_limits_by_joint: dict[str, tuple[float, float]] = {}
+        for stage_io in [*self.arm_stage_ios.values(), self.head_stage_io]:
+            stage_limits_by_joint.update(stage_io.read_joint_limits_deg(stage))
+        update_status = {
+            "success": bool(applied) and save_error is None,
+            "updated_joints": list(applied),
+            "saved_stage": save_error is None if applied else False,
+        }
+        if save_error is not None:
+            update_status["error"] = save_error
+        feedback_payload = self.calibration_limit_feedback_publisher.publish_status(
+            hits=[],
+            limits_by_joint=stage_limits_by_joint,
+            limit_source="isaac_stage",
+            limit_update_status=update_status,
+        )
+        event = {
+            "timestamp": time.time(),
+            "type": "calibration_limit_update",
+            "success": bool(update_status["success"]),
+            "requested": {joint_name: list(limits) for joint_name, limits in limit_updates.items()},
+            "applied": {joint_name: list(limits) for joint_name, limits in applied.items()},
+        }
+        if save_error is not None:
+            event["error"] = save_error
+        if feedback_payload is not None:
+            event["calibration_limit_feedback"] = feedback_payload
+        try:
+            _append_sim_write_event(SIM_WRITE_EVENTS_PATH, event)
+        except Exception:
+            pass
+        return event
+
+    def _publish_calibration_limit_snapshot(self, stage, payload: dict) -> dict | None:
+        if stage is None or not is_calibration_limit_request(payload):
+            return None
+        stage_limits_by_joint: dict[str, tuple[float, float]] = {}
+        for stage_io in [*self.arm_stage_ios.values(), self.head_stage_io]:
+            stage_limits_by_joint.update(stage_io.read_joint_limits_deg(stage))
+        feedback_payload = self.calibration_limit_feedback_publisher.publish_status(
+            hits=[],
+            limits_by_joint=stage_limits_by_joint,
+            limit_source="isaac_stage",
+        )
+        self._calibration_initial_limits_published = True
+        event = {
+            "timestamp": time.time(),
+            "type": "calibration_limit_snapshot",
+            "success": bool(feedback_payload),
+            "joint_count": len(stage_limits_by_joint),
+        }
+        if feedback_payload is not None:
+            event["calibration_limit_feedback"] = feedback_payload
+        try:
+            _append_sim_write_event(SIM_WRITE_EVENTS_PATH, event)
+        except Exception:
+            pass
+        return event
 
     def _collect_arm_payloads(self, payload: dict) -> dict[str, dict[str, object]]:
         arm_payloads: dict[str, dict[str, object]] = {}
@@ -949,6 +1037,9 @@ class VivyTargetViewer:
             self._last_signal_timestamp = signal_timestamp
         else:
             return
+
+        self._publish_calibration_limit_snapshot(stage, payload)
+        self._apply_calibration_limit_updates(stage, payload)
 
         for side in self.arm_sides:
             if side == "right" and (stage_write_blocked or real_joint_positions_deg is not None):

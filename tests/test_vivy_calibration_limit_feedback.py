@@ -6,12 +6,15 @@ from pathlib import Path
 
 ROOT = Path("/home/viaan/vivy_hopejr_sim")
 sys.path.insert(0, str(ROOT / "controllers" / "vivy"))
+sys.path.insert(0, str(ROOT / "controllers"))
 
 from calibration_limit_feedback import (  # noqa: E402
     CalibrationLimitFeedbackPublisher,
     build_limit_feedback_payload,
     detect_limit_hits,
 )
+from calibration_preview_control import extract_calibration_limit_updates, is_calibration_limit_request  # noqa: E402
+from stage_io import HopeJrStageIo  # noqa: E402
 
 
 def test_inside_limits_has_no_hits() -> None:
@@ -108,6 +111,23 @@ def test_build_limit_feedback_payload() -> None:
         raise AssertionError(f"unexpected joint limits payload: {payload['joint_limits']}")
 
 
+def test_build_limit_feedback_payload_with_update_status() -> None:
+    payload = build_limit_feedback_payload(
+        hits=[],
+        limits_by_joint={"right_wrist": {"min": -92.5, "max": 83.0}},
+        limit_source="isaac_stage",
+        limit_update_status={"success": True, "saved_stage": True, "updated_joints": ["right_wrist"]},
+        sequence=4,
+        timestamp_ns=124_000_000_000,
+    )
+    if payload["limit_update_status"] != {
+        "success": True,
+        "saved_stage": True,
+        "updated_joints": ["right_wrist"],
+    }:
+        raise AssertionError(f"unexpected update status: {payload['limit_update_status']}")
+
+
 class FakeSocket:
     def __init__(self) -> None:
         self.sent: list[tuple[bytes, tuple[str, int]]] = []
@@ -167,6 +187,146 @@ def test_publisher_sends_limits_without_hits() -> None:
         raise AssertionError(f"expected one UDP send, got {fake_socket.sent}")
 
 
+def test_extract_calibration_limit_updates() -> None:
+    updates = extract_calibration_limit_updates(
+        {
+            "calibration_limit_updates": [
+                {"joint_name": "right_wrist", "min_deg": -92.5, "max_deg": 83.0},
+                {"joint_name": "right_palm", "min_deg": 10.0, "max_deg": -10.0},
+                {"joint_name": 123, "min_deg": -1.0, "max_deg": 1.0},
+            ]
+        }
+    )
+    if updates != {"right_wrist": (-92.5, 83.0)}:
+        raise AssertionError(f"unexpected extracted limit updates: {updates}")
+
+
+def test_is_calibration_limit_request() -> None:
+    if not is_calibration_limit_request(
+        {"source_mode": "calibration_preview", "calibration_limit_request": True}
+    ):
+        raise AssertionError("expected calibration limit request to be detected")
+    if is_calibration_limit_request({"source_mode": "calibration_preview"}):
+        raise AssertionError("request flag should be required")
+
+
+class FakeLayer:
+    def __init__(self, identifier: str, *, dirty: bool = False) -> None:
+        self.identifier = identifier
+        self.anonymous = False
+        self.dirty = dirty
+        self.saved = False
+        self.prims = {}
+
+    def Save(self) -> None:
+        self.saved = True
+        self.dirty = False
+
+    def GetPrimAtPath(self, path):
+        return self.prims.get(str(path))
+
+
+class FakePrimSpec:
+    def __init__(self, layer: FakeLayer) -> None:
+        self.layer = layer
+
+
+class FakePrim:
+    def __init__(self, layers: list[FakeLayer]) -> None:
+        self.layers = layers
+
+    def GetPrimStack(self) -> list[FakePrimSpec]:
+        return [FakePrimSpec(layer) for layer in self.layers]
+
+    def GetPath(self) -> str:
+        return "/World/JointTest/Joints/right_wrist"
+
+
+class FakeAttributeSpec:
+    def __init__(self) -> None:
+        self.default = None
+
+
+class FakeAttributes(dict):
+    def get(self, name: str):
+        return super().get(name)
+
+
+class FakePrimSpecForWrite:
+    def __init__(self) -> None:
+        self.attributes = FakeAttributes(
+            {
+                "physics:lowerLimit": FakeAttributeSpec(),
+                "physics:upperLimit": FakeAttributeSpec(),
+            }
+        )
+
+
+class FakeStage:
+    def __init__(self, root_layer: FakeLayer, used_layers: list[FakeLayer]) -> None:
+        self.root_layer = root_layer
+        self.used_layers = used_layers
+
+    def GetRootLayer(self) -> FakeLayer:
+        return self.root_layer
+
+    def GetUsedLayers(self) -> list[FakeLayer]:
+        return self.used_layers
+
+
+def test_stage_io_prefers_joint_test_source_layer() -> None:
+    root_layer = FakeLayer("/tmp/vivy_stage.usda")
+    joint_layer = FakeLayer("/tmp/joint_test.usda")
+    stage_io = HopeJrStageIo(
+        articulation_root_path="/World/JointTest",
+        joint_root_path="/World/JointTest/Joints",
+        end_effector_path="/World/JointTest/RightPalm",
+        joint_names=["right_wrist"],
+    )
+    chosen = stage_io._find_joint_source_layer(FakeStage(root_layer, [root_layer, joint_layer]), FakePrim([root_layer, joint_layer]))
+    if chosen is not joint_layer:
+        raise AssertionError(f"expected joint_test.usda source layer, got {chosen.identifier}")
+
+
+def test_stage_io_saves_only_joint_test_layer() -> None:
+    root_layer = FakeLayer("/tmp/vivy_stage.usda", dirty=True)
+    joint_layer = FakeLayer("/tmp/joint_test.usda", dirty=True)
+    stage_io = HopeJrStageIo(
+        articulation_root_path="/World/JointTest",
+        joint_root_path="/World/JointTest/Joints",
+        end_effector_path="/World/JointTest/RightPalm",
+        joint_names=["right_wrist"],
+    )
+    stage_io.save_stage(FakeStage(root_layer, [root_layer, joint_layer]))
+    if not joint_layer.saved:
+        raise AssertionError("expected joint_test.usda layer to be saved")
+    if root_layer.saved:
+        raise AssertionError("root/session layer should not be saved for calibration limit updates")
+
+
+def test_stage_io_writes_joint_limits_to_source_layer_spec() -> None:
+    root_layer = FakeLayer("/tmp/vivy_stage.usda")
+    joint_layer = FakeLayer("/tmp/joint_test.usda")
+    prim_spec = FakePrimSpecForWrite()
+    joint_layer.prims["/World/JointTest/Joints/right_wrist"] = prim_spec
+    stage_io = HopeJrStageIo(
+        articulation_root_path="/World/JointTest",
+        joint_root_path="/World/JointTest/Joints",
+        end_effector_path="/World/JointTest/RightPalm",
+        joint_names=["right_wrist"],
+    )
+    stage_io._set_joint_limit_attrs(
+        FakeStage(root_layer, [root_layer, joint_layer]),
+        FakePrim([root_layer, joint_layer]),
+        -92.5,
+        83.0,
+    )
+    if prim_spec.attributes["physics:lowerLimit"].default != -92.5:
+        raise AssertionError("expected lower limit to be authored on source layer prim spec")
+    if prim_spec.attributes["physics:upperLimit"].default != 83.0:
+        raise AssertionError("expected upper limit to be authored on source layer prim spec")
+
+
 def main() -> int:
     test_inside_limits_has_no_hits()
     test_below_min_reports_min_hit()
@@ -174,8 +334,14 @@ def main() -> int:
     test_at_limit_reports_hit()
     test_multiple_joints_reports_only_hits()
     test_build_limit_feedback_payload()
+    test_build_limit_feedback_payload_with_update_status()
     test_publisher_skips_empty_hits_and_sends_limit_hits()
     test_publisher_sends_limits_without_hits()
+    test_extract_calibration_limit_updates()
+    test_is_calibration_limit_request()
+    test_stage_io_prefers_joint_test_source_layer()
+    test_stage_io_saves_only_joint_test_layer()
+    test_stage_io_writes_joint_limits_to_source_layer_spec()
     print("[vivy-smoke] Vivy calibration limit feedback tests ok")
     return 0
 
