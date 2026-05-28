@@ -17,9 +17,6 @@ KINEMATICS_PATH = Path("/home/viaan/huggingface/lerobot/src/lerobot/robots/vivy/
 TELEOP_STATE_PATH = Path("/home/viaan/huggingface/lerobot/src/lerobot/robots/vivy/target_stream/teleop_state.py")
 TELEOP_DEBUG_VISUALS_PATH = Path("/home/viaan/vivy_hopejr_sim/ui/teleop_debug_visuals.py")
 STAGE_IO_PATH = Path("/home/viaan/vivy_hopejr_sim/controllers/stage_io.py")
-VIVY_SIDE_PANEL_PATH = Path("/home/viaan/vivy_hopejr_sim/ui/vivy/vivy_side_panel.py")
-VIVY_FLOW_PANEL_PATH = Path("/home/viaan/vivy_hopejr_sim/ui/vivy/vivy_flow_panel.py")
-VIVY_FLOW_DETAIL_PANEL_PATH = Path("/home/viaan/vivy_hopejr_sim/ui/vivy/vivy_flow_detail_panel.py")
 CALIBRATION_PREVIEW_CONTROL_PATH = Path(
     "/home/viaan/vivy_hopejr_sim/controllers/vivy/calibration_preview_control.py"
 )
@@ -66,21 +63,6 @@ def _load_visuals_class():
 def _load_stage_io_class():
     module = _load_module("vivy_target_viewer_stage_io", STAGE_IO_PATH)
     return module.HopeJrStageIo
-
-
-def _load_side_panel_class():
-    module = _load_module("vivy_side_panel", VIVY_SIDE_PANEL_PATH)
-    return module.VivySidePanel
-
-
-def _load_flow_panel_class():
-    module = _load_module("vivy_flow_panel", VIVY_FLOW_PANEL_PATH)
-    return module.VivyFlowPanel
-
-
-def _load_flow_detail_panel_class():
-    module = _load_module("vivy_flow_detail_panel", VIVY_FLOW_DETAIL_PANEL_PATH)
-    return module.VivyFlowDetailPanel
 
 
 _CALIBRATION_PREVIEW_CONTROL = _load_module(
@@ -172,9 +154,6 @@ class VivyTargetViewer:
         VivyArmKinematics = _load_kinematics_class()
         HopeJrStageIo = _load_stage_io_class()
         TeleopDebugVisuals = _load_visuals_class()
-        VivySidePanel = _load_side_panel_class()
-        VivyFlowPanel = _load_flow_panel_class()
-        VivyFlowDetailPanel = _load_flow_detail_panel_class()
         self.signal_path = Path(default_signal_path if signal_path is None else signal_path)
         self.interval_s = float(interval_s)
         self._last_tick_time = 0.0
@@ -190,11 +169,6 @@ class VivyTargetViewer:
         self.target_state_receiver = TeleopStateUdpReceiver(
             host=str(target_state_config.get("udp_host", "127.0.0.1")),
             port=int(target_state_config.get("sim_udp_port", 8771)),
-        )
-        self.vivy_event_receiver = TeleopStateUdpReceiver(
-            host=str(target_state_config.get("udp_host", "127.0.0.1")),
-            port=int(target_state_config.get("event_udp_port", 8777)),
-            message_type="vivy_event",
         )
         self.control_state_receiver = ControlStateUdpReceiver(
             host=str(control_state_config.get("udp_host", "127.0.0.1")),
@@ -297,10 +271,6 @@ class VivyTargetViewer:
             )
         self.stage_io = self.arm_stage_ios["right"]
         self.visuals = TeleopDebugVisuals(teleop_debug_root=self.teleop_debug_root, enabled=True)
-        self.side_panel = VivySidePanel()
-        self.flow_panel = VivyFlowPanel()
-        self.flow_detail_panel = VivyFlowDetailPanel()
-        self._ensure_panels_created()
         self._joint_write_ready = False
         self._last_joint_write_warn_time = 0.0
         self._waiting_anchor_neutral_applied = False
@@ -310,16 +280,7 @@ class VivyTargetViewer:
         self._last_panel_real_feedback_arrival_time: float | None = None
         self._last_bus_hz: float | None = None
         self._last_stage_joint_positions_deg: np.ndarray | None = None
-        self._seen_vivy_event_keys: set[tuple[int | None, str]] = set()
         self._calibration_initial_limits_published = False
-
-    def _ensure_panels_created(self) -> None:
-        for panel in (self.side_panel, self.flow_panel, self.flow_detail_panel):
-            try:
-                panel._ensure_window()
-            except Exception:
-                pass
-
 
     def _read_real_feedback(self) -> dict[str, object] | None:
         payload = _load_json_file(REAL_FEEDBACK_PATH)
@@ -428,23 +389,6 @@ class VivyTargetViewer:
         self._last_panel_real_feedback_arrival_time = arrival_now
         self._last_bus_hz = hz
         return hz
-
-    def _read_vivy_event_messages(self) -> list[dict[str, object]]:
-        events: list[dict[str, object]] = []
-        for event in self.vivy_event_receiver.read_all():
-            message = str(event.get("event_message") or "").strip()
-            if not message:
-                continue
-            try:
-                timestamp_ns = int(event.get("timestamp_ns"))
-            except (TypeError, ValueError):
-                timestamp_ns = None
-            key = (timestamp_ns, message)
-            if key in self._seen_vivy_event_keys:
-                continue
-            self._seen_vivy_event_keys.add(key)
-            events.append(event)
-        return events
 
     @staticmethod
     def _coerce_timestamp(payload: dict[str, object] | None) -> float | None:
@@ -953,34 +897,13 @@ class VivyTargetViewer:
 
         payload = self.target_state_receiver.read_latest()
         if not isinstance(payload, dict):
-            vivy_events = self._read_vivy_event_messages()
-            if vivy_events:
-                try:
-                    self.side_panel.update({"event_messages": vivy_events})
-                except Exception as exc:
-                    print(f"Vivy side panel event-only update failed: {exc}")
             return
         flow_control = _read_flow_control()
         real_feedback = self._read_real_feedback()
         real_joint_positions_deg = self._read_real_feedback_joint_positions_deg(real_feedback)
         panel_payload = self._inject_real_feedback_rows(payload, real_feedback)
-        vivy_events = self._read_vivy_event_messages()
-        if vivy_events:
-            existing_events = panel_payload.get("event_messages")
-            if isinstance(existing_events, list):
-                panel_payload["event_messages"] = [*vivy_events, *existing_events]
-            else:
-                panel_payload["event_messages"] = vivy_events
         control_state = self.control_state_receiver.read_latest()
         self._apply_udp_control_state(payload, panel_payload, control_state)
-        try:
-            self.flow_panel.update(payload, flow_control)
-        except Exception:
-            pass
-        try:
-            self.flow_detail_panel.update(payload, flow_control)
-        except Exception:
-            pass
 
         stage_joint_positions_deg = self.stage_io.read_stage_joint_positions_deg(stage)
         if stage_joint_positions_deg is not None:
@@ -1120,10 +1043,6 @@ class VivyTargetViewer:
         panel_payload["head_waiting_for_anchor"] = payload.get("head_waiting_for_anchor")
         panel_payload["head_anchor_degrees"] = payload.get("head_anchor_degrees")
         panel_payload["head_armed_by"] = payload.get("head_armed_by")
-        try:
-            self.side_panel.update(panel_payload)
-        except Exception as exc:
-            print(f"Vivy side panel update failed: {exc}")
         show_pitch_frames = bool(flow_control.get("show_pitch_frames", False))
         pitch_visual = self._build_pitch_visual(stage) if show_pitch_frames else None
         arm_visuals = {}
